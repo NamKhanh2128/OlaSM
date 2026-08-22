@@ -7,6 +7,9 @@ Agent coding mới nên bắt đầu tại
 [`docs/LIVEKIT_TEAM_SETUP.md`](docs/LIVEKIT_TEAM_SETUP.md) và
 [`docs/PHASE4_EVALUATION_PLAN.md`](docs/PHASE4_EVALUATION_PLAN.md).
 
+Thành viên mới muốn cài và chạy từ đầu nên dùng
+[`docs/DEVELOPER_SETUP.md`](docs/DEVELOPER_SETUP.md).
+
 Kiến trúc tổng thể: [`docs/MVP_ARCHITECTURE.md`](docs/MVP_ARCHITECTURE.md) ·
 Runtime truth: [`docs/PROJECT_SOURCE_OF_TRUTH.md`](docs/PROJECT_SOURCE_OF_TRUTH.md)
 
@@ -21,11 +24,15 @@ Yêu cầu: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js/npm và FFmpe
 ```bash
 uv sync
 cp .env.example .env
-uv run alembic upgrade head
 
 cd src/frontend
 npm ci
 ```
+
+Sau khi copy `.env`, chọn profile trong
+[`docs/DEVELOPER_SETUP.md`](docs/DEVELOPER_SETUP.md). Chỉ chạy
+`uv run alembic upgrade head` khi dùng profile development có database persistence;
+profile `APP_ENV=test` để smoke nhanh không cần migration.
 
 Chạy hai terminal:
 
@@ -90,7 +97,7 @@ Copy `.env.example` thành `.env`; không commit secret.
 | `APP_ENV` | Luôn có | `development`, `test` hoặc `production` |
 | `DATABASE_URL` | Luôn có | SQLite local hoặc PostgreSQL runtime URL |
 | `DATABASE_URL_MIGRATIONS` | Supabase/PostgreSQL | Connection riêng cho Alembic |
-| `AGENT_LLM_ENABLED` | Chat/booking qua LLM | `true` |
+| `AGENT_LLM_ENABLED` | Chat/booking qua LLM | Mặc định `false`; bật khi đã có provider key |
 | `AGENT_LLM_MODEL` | Chat/booking qua LLM | Model hỗ trợ tool calling |
 | `AGENT_LLM_BASE_URL` | LLM | OpenAI endpoint hoặc OpenRouter endpoint |
 | `OPENAI_API_KEY` | Core Agent hoặc LiveKit provider OpenAI | Không thay thế bằng OpenRouter key |

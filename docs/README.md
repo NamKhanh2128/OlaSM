@@ -4,13 +4,14 @@ Cập nhật: **2026-08-20** · Trạng thái: `CURRENT`.
 
 ## Đọc theo thứ tự
 
-1. [CODING_AGENT_HANDOFF.md](CODING_AGENT_HANDOFF.md) — trạng thái LiveKit và việc tiếp theo.
-2. [LIVEKIT_TEAM_SETUP.md](LIVEKIT_TEAM_SETUP.md) — cài, chạy, test và troubleshooting.
-3. [LIVEKIT_MIGRATION_IMPLEMENTATION.md](LIVEKIT_MIGRATION_IMPLEMENTATION.md) — kiến trúc/implementation record.
-4. [PHASE4_EVALUATION_PLAN.md](PHASE4_EVALUATION_PLAN.md) — reliability, benchmark và cutover.
-5. [PROJECT_SOURCE_OF_TRUTH.md](PROJECT_SOURCE_OF_TRUTH.md) — trạng thái toàn project/external blockers.
-6. [PRODUCT_BRIEF.md](PRODUCT_BRIEF.md), [PRD_AloSM_Voice.md](PRD_AloSM_Voice.md), [MVP.md](MVP.md) — product requirements.
-7. [../mustdo.md](../mustdo.md) — việc bắt buộc cần owner/hạ tầng.
+1. [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md) — setup `.env`, dependency và chạy local từ đầu.
+2. [CODING_AGENT_HANDOFF.md](CODING_AGENT_HANDOFF.md) — trạng thái LiveKit và việc tiếp theo.
+3. [LIVEKIT_TEAM_SETUP.md](LIVEKIT_TEAM_SETUP.md) — cài, chạy, test và troubleshooting.
+4. [LIVEKIT_MIGRATION_IMPLEMENTATION.md](LIVEKIT_MIGRATION_IMPLEMENTATION.md) — kiến trúc/implementation record.
+5. [PHASE4_EVALUATION_PLAN.md](PHASE4_EVALUATION_PLAN.md) — reliability, benchmark và cutover.
+6. [PROJECT_SOURCE_OF_TRUTH.md](PROJECT_SOURCE_OF_TRUTH.md) — trạng thái toàn project/external blockers.
+7. [PRODUCT_BRIEF.md](PRODUCT_BRIEF.md), [PRD_AloSM_Voice.md](PRD_AloSM_Voice.md), [MVP.md](MVP.md) — product requirements.
+8. [../mustdo.md](../mustdo.md) — việc bắt buộc cần owner/hạ tầng.
 
 Scope mentor gốc được giữ tại [GSM-08_VOICE_AGENT_SCOPE.md](GSM-08_VOICE_AGENT_SCOPE.md).
 
