@@ -16,6 +16,24 @@ from src.voice_agent.tasks.booking import (
 from src.voice_agent.tools import PlaceToolsService
 
 
+class _CancellationService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, str]] = []
+
+    async def cancel_booking_durable(
+        self, booking_id: str, idempotency_key: str, user_id: str | None = None
+    ) -> dict[str, object] | None:
+        assert user_id is not None
+        self.calls.append((booking_id, idempotency_key, user_id))
+        return {
+            "booking_id": booking_id,
+            "status": "CANCELLED",
+            "estimated_fare": 100_000,
+            "currency": "VND",
+            "eta_minutes": 25,
+        }
+
+
 class _QuoteService:
     async def estimate(self, **_: object) -> QuoteSnapshot:
         return QuoteSnapshot(
@@ -184,6 +202,75 @@ async def test_parent_booking_status_never_invents_a_booking_id() -> None:
     assert '"created": false' in status
     assert '"booking_id": null' in status
     assert "Chuyến chưa được tạo" in status
+
+
+@pytest.mark.asyncio
+async def test_cancel_booking_uses_llm_decision_before_backend_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    userdata.booking_draft.booking = booking_module.BookingResult(
+        booking_id="book-1",
+        status="SEARCHING_DRIVER",
+        estimated_fare=100_000,
+        currency="VND",
+        eta_minutes=25,
+    )
+    backend = _CancellationService()
+    agent = AloSMAgent(session_data=userdata, bookings=booking_module.BookingToolsService(backend))
+    agent._activity = SimpleNamespace(session=SimpleNamespace(userdata=userdata))  # type: ignore[assignment]
+    monkeypatch.setattr("src.voice_agent.agent.publish_booking_state", _noop_publish)
+
+    await agent.on_user_turn_completed(
+        llm.ChatContext.empty(),
+        llm.ChatMessage(role="user", content=["Tôi muốn hủy chuyến"]),
+    )
+    first = await agent.cancel_booking("Khách yêu cầu hủy chuyến", confirmation_decision="request")
+
+    assert backend.calls == []
+    assert "xác nhận" in first.lower()
+    assert userdata.booking_draft.cancellation_confirmation_booking_id == "book-1"
+
+    await agent.on_user_turn_completed(
+        llm.ChatContext.empty(),
+        llm.ChatMessage(role="user", content=["Ừ"]),
+    )
+    ambiguous = await agent.cancel_booking("Khách trả lời không rõ", confirmation_decision="request")
+    assert backend.calls == []
+    assert '"confirmation_required": true' in ambiguous
+
+    await agent.on_user_turn_completed(
+        llm.ChatContext.empty(),
+        llm.ChatMessage(role="user", content=["Không hủy"]),
+    )
+    declined = await agent.cancel_booking("Khách từ chối", confirmation_decision="decline")
+    assert '"cancelled": false' in declined
+    assert userdata.booking_draft.cancellation_confirmation_booking_id is None
+    assert backend.calls == []
+
+    await agent.on_user_turn_completed(
+        llm.ChatContext.empty(),
+        llm.ChatMessage(role="user", content=["Tôi vẫn muốn hủy"]),
+    )
+    await agent.cancel_booking("Khách yêu cầu lại", confirmation_decision="request")
+
+    await agent.on_user_turn_completed(
+        llm.ChatContext.empty(),
+        llm.ChatMessage(role="user", content=["Có, hủy chuyến này"]),
+    )
+    second = await agent.cancel_booking("Khách xác nhận hủy chuyến", confirmation_decision="confirm")
+
+    assert backend.calls == [("book-1", "session:cancel_booking:book-1", "user")]
+    assert "\"cancelled\": true" in second
+
+
+async def _noop_publish(*_: object) -> None:
+    return None
 
 
 def test_recovered_booking_is_available_to_the_parent_agent_without_full_history() -> None:
