@@ -5,7 +5,9 @@ export interface RideSession {
   session_id: string;
   status: string;
   channel: string;
-  created_at: string;
+  created_at?: string;
+  has_resumable_voice_state?: boolean;
+  voice_session_terminal?: boolean;
 }
 
 export interface BookingFieldProgress {
@@ -40,6 +42,13 @@ export interface RideTurn {
   state: Record<string, unknown> & {
     booking_progress?: BookingProgress | null;
     booking_lifecycle_status?: BookingLifecycleStatus | null;
+    // "RIDE_BOOKING" + "CONFIRM" (xem src/agents/schemas.py::WorkflowType,
+    // src/agents/workflows/booking_models.py::BookingStep) — tín hiệu THẬT, chính
+    // xác nhất để biết agent đang chờ xác nhận đặt xe (dùng để tự mở
+    // BookingConfirmationModal), đáng tin hơn suy luận gián tiếp từ
+    // booking_progress.missing_field.
+    current_workflow?: string | null;
+    current_step?: string | null;
   };
   booking?: RideBooking | null;
 }
@@ -76,6 +85,13 @@ export function endRideSession(sessionId: string): Promise<unknown> {
     method: "POST",
     headers: authHeader(),
     body: JSON.stringify({ reason: "USER_ENDED" }),
+  });
+}
+
+export function resetRideConversation(sessionId: string): Promise<{ session_id: string; status: string; reset_at: string }> {
+  return fetchApi(`/api/v1/sessions/${sessionId}/reset`, {
+    method: "POST",
+    headers: authHeader(),
   });
 }
 

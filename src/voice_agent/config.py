@@ -1,0 +1,178 @@
+"""Configuration contract for the LiveKit-native voice runtime."""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class LiveKitVoiceSettings(BaseSettings):
+    """Configuration for the production LiveKit voice runtime."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    livekit_url: str = ""
+    livekit_api_key: SecretStr = SecretStr("")
+    livekit_api_secret: SecretStr = SecretStr("")
+    livekit_agent_name: str = "alosm-voice"
+
+    # STT is billed and authenticated directly with ElevenLabs. LiveKit remains
+    # the RTC transport, rather than proxying this request through Inference.
+    livekit_stt_model: str = ""
+    livekit_stt_language: str = "vi"
+    livekit_stt_provider: Literal["elevenlabs", "deepgram", "google"] = "elevenlabs"
+    eleven_api_key: SecretStr = SecretStr("")
+    google_cloud_project: str = ""
+    google_stt_location: str = "asia-southeast1"
+    livekit_llm_provider: Literal["livekit", "openai"] = "livekit"
+    livekit_llm_model: str = ""
+    openai_api_key: SecretStr = SecretStr("")
+    livekit_tts_provider: Literal["google", "livekit", "openai"] = "google"
+    livekit_tts_model: str = ""
+    livekit_tts_voice: str = ""
+    livekit_tts_language: str = "vi"
+    # Generative Gemini TTS can exceed LiveKit's 10-second default during a
+    # cold start. One retry plus a Google Chirp fallback keeps the call audible.
+    livekit_tts_timeout_seconds: float = Field(default=30, ge=5, le=60)
+    livekit_tts_max_retries: int = Field(default=1, ge=0, le=3)
+    livekit_tts_retry_interval_seconds: float = Field(default=0.5, ge=0, le=10)
+    livekit_google_tts_fallback_model: str = "chirp_3"
+    livekit_google_tts_fallback_voice: str = "vi-VN-Chirp3-HD-Autonoe"
+
+    # ElevenLabs Scribe realtime owns end-of-speech for user turns. The local
+    # Silero VAD remains in AgentSession for interruption/barge-in detection.
+    livekit_turn_detection: Literal["stt", "vad"] = "stt"
+    # Scribe server VAD is enabled whenever ElevenLabs is the STT provider.
+    # Keep these separately configurable for Vietnamese address-pause tests.
+    livekit_stt_server_vad_silence_threshold_seconds: float = Field(default=1.0, ge=0.25, le=5)
+    livekit_stt_server_vad_threshold: float = Field(default=0.4, ge=0, le=1)
+    livekit_stt_server_vad_min_speech_duration_ms: int = Field(default=250, ge=50, le=5000)
+    livekit_stt_server_vad_min_silence_duration_ms: int = Field(default=1000, ge=250, le=10000)
+    # Keep the Phase 2 baseline on LiveKit's VAD interruption path. Adaptive is
+    # still framework-native, but it consumes a separate Cloud quota and must be
+    # enabled only for an explicit benchmark/deployment decision.
+    livekit_interruption_mode: Literal["vad", "adaptive"] = "vad"
+    # In STT turn mode this is the small post-provider endpointing guard, not
+    # the primary end-of-speech detector. ElevenLabs server VAD owns that job.
+    livekit_endpointing_mode: Literal["fixed", "dynamic"] = "fixed"
+    livekit_endpointing_min_delay_seconds: float = Field(default=0.25, ge=0.25, le=3)
+    livekit_endpointing_max_delay_seconds: float = Field(default=1.0, ge=0.5, le=5)
+    livekit_interruption_min_duration_seconds: float = Field(default=0.5, ge=0, le=5)
+    # Do not wait for a slow STT interim before stopping agent playback. VAD has
+    # already established sustained speech for min_duration; LiveKit's current
+    # recommended turn-taking baseline also uses zero words here.
+    livekit_interruption_min_words: int = Field(default=0, ge=0, le=10)
+    # Native LiveKit diagnostic: emit user_transcription_timeout when VAD saw
+    # speech but STT produced no non-empty final transcript after speech ended.
+    # This observes the existing pipeline; it does not alter endpointing.
+    livekit_transcription_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
+
+    # Privacy-safe defaults. Enabling persistence requires an explicit policy and
+    # consent decision; it is never inferred from selecting the LiveKit runtime.
+    livekit_record_audio: bool = False
+    livekit_record_transcript: bool = False
+    livekit_record_traces: bool = False
+    livekit_record_logs: bool = False
+
+    # Local/session diagnostics. JSONL and transcript content are separate
+    # opt-ins so production keeps the privacy-safe default.
+    livekit_debug_event_log: bool = False
+    livekit_debug_transcripts: bool = False
+    livekit_debug_log_dir: Path = Path("logs/livekit")
+
+    livekit_connection_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    livekit_token_ttl_seconds: int = Field(default=600, ge=60, le=3600)
+    livekit_critical_confidence_threshold: float = Field(default=0.65, ge=0, le=1)
+    # LiveKit dev mode otherwise keeps zero warm job processes, adding a process
+    # spawn to the first participant-to-agent dispatch path.
+    livekit_num_idle_processes: int = Field(default=1, ge=0, le=16)
+    # Restore is bounded so a remote DB outage cannot block RTC startup forever.
+    livekit_state_restore_timeout_seconds: float = Field(default=20.0, gt=0, le=60)
+    # Keep LiveKit's default room grace period so a browser can finish native
+    # reconnect or explicitly resume the durable application session. Immediate
+    # room deletion is useful for isolated smoke environments, not product calls.
+    livekit_delete_room_on_close: bool = False
+
+    def configuration_errors(self) -> list[str]:
+        """Validate LiveKit itself without depending on the rollout switch."""
+
+        required = {
+            "LIVEKIT_URL_REQUIRED": self.livekit_url,
+            "LIVEKIT_API_KEY_REQUIRED": self.livekit_api_key.get_secret_value(),
+            "LIVEKIT_API_SECRET_REQUIRED": self.livekit_api_secret.get_secret_value(),
+            "LIVEKIT_AGENT_NAME_REQUIRED": self.livekit_agent_name,
+            "LIVEKIT_STT_PROVIDER_REQUIRED": self.livekit_stt_provider,
+            "LIVEKIT_STT_MODEL_REQUIRED": self.livekit_stt_model,
+            "LIVEKIT_LLM_MODEL_REQUIRED": self.livekit_llm_model,
+            "LIVEKIT_TTS_MODEL_REQUIRED": self.livekit_tts_model,
+            "LIVEKIT_TTS_VOICE_REQUIRED": self.livekit_tts_voice,
+        }
+        errors = [code for code, value in required.items() if not value.strip()]
+        if self.livekit_url and not self.livekit_url.startswith(("ws://", "wss://")):
+            errors.append("LIVEKIT_URL_MUST_USE_WS")
+        if self.livekit_endpointing_max_delay_seconds < self.livekit_endpointing_min_delay_seconds:
+            errors.append("LIVEKIT_ENDPOINTING_MAX_MUST_NOT_BE_LOWER_THAN_MIN")
+        if self.livekit_debug_transcripts and not self.livekit_debug_event_log:
+            errors.append("LIVEKIT_DEBUG_TRANSCRIPTS_REQUIRES_EVENT_LOG")
+        if self.livekit_stt_provider == "google" and not self.google_cloud_project.strip():
+            errors.append("GOOGLE_CLOUD_PROJECT_REQUIRED_FOR_GOOGLE_STT")
+        if self.livekit_stt_provider == "google" and not self.google_stt_location.strip():
+            errors.append("GOOGLE_STT_LOCATION_REQUIRED_FOR_GOOGLE_STT")
+        if self.livekit_stt_provider == "elevenlabs" and not self.eleven_api_key.get_secret_value().strip():
+            errors.append("ELEVEN_API_KEY_REQUIRED_FOR_ELEVENLABS_STT")
+        if (
+            self.livekit_llm_provider == "openai" or self.livekit_tts_provider == "openai"
+        ) and not self.openai_api_key.get_secret_value().strip():
+            errors.append("OPENAI_API_KEY_REQUIRED_FOR_OPENAI_PROVIDER")
+        return errors
+
+    def stt_configuration_errors(self) -> list[str]:
+        """Validate the standalone LiveKit STT path used by offline evaluation."""
+
+        required = {
+            "LIVEKIT_STT_PROVIDER_REQUIRED": self.livekit_stt_provider,
+            "LIVEKIT_STT_MODEL_REQUIRED": self.livekit_stt_model,
+            "LIVEKIT_STT_LANGUAGE_REQUIRED": self.livekit_stt_language,
+        }
+        errors = [code for code, value in required.items() if not value.strip()]
+        if self.livekit_stt_provider == "elevenlabs":
+            if not self.eleven_api_key.get_secret_value().strip():
+                errors.append("ELEVEN_API_KEY_REQUIRED_FOR_ELEVENLABS_STT")
+        elif self.livekit_stt_provider == "google":
+            if not self.google_cloud_project.strip():
+                errors.append("GOOGLE_CLOUD_PROJECT_REQUIRED_FOR_GOOGLE_STT")
+            if not self.google_stt_location.strip():
+                errors.append("GOOGLE_STT_LOCATION_REQUIRED_FOR_GOOGLE_STT")
+        else:
+            if not self.livekit_api_key.get_secret_value().strip():
+                errors.append("LIVEKIT_API_KEY_REQUIRED")
+            if not self.livekit_api_secret.get_secret_value().strip():
+                errors.append("LIVEKIT_API_SECRET_REQUIRED")
+        return errors
+
+    def require_configured(self) -> None:
+        """Fail before an explicitly requested token/worker operation."""
+
+        errors = self.configuration_errors()
+        if errors:
+            raise ValueError("LiveKit voice configuration is not ready: " + ", ".join(errors))
+
+    def require_stt_configured(self) -> None:
+        """Fail before a standalone STT benchmark without requiring LLM/TTS."""
+
+        errors = self.stt_configuration_errors()
+        if errors:
+            raise ValueError("LiveKit STT configuration is not ready: " + ", ".join(errors))
+
+
+@lru_cache
+def get_livekit_voice_settings() -> LiveKitVoiceSettings:
+    return LiveKitVoiceSettings()

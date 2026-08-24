@@ -1,63 +1,8 @@
 # AGENTS.md — Coding Principles for Agentic AI Track
 
-Đề: Các cột thông tin chính (Cột 1 & Cột 2)
-STT / Mã: 124 | GSM-08
-
-Tên dự án / Mảng: KD VH Dịch vụ gọi xe X – Ứng dụng gọi xe X (Dịch vụ gọi xe X)
-
-Chi tiết nội dung trong các ô:
-1. Mô tả & Vấn đề (Ảnh 1):
-Tên tính năng / Giải pháp:
-
-AI Agent Tổng đài giọng nói đặt xe & tra cứu Dịch vụ gọi xe X
-
-📍 Thực trạng:
-
-Nhiều khách (đặc biệt lớn tuổi) quen gọi tổng đài đặt xe; nhân viên trực điện thoại tốn nguồn lực, giờ cao điểm nghẽn máy.
-
-🎯 Vấn đề:
-
-Cần AI Agent giọng nói (voice) tiếp nhận cuộc gọi: nghe yêu cầu đặt xe/tra cứu chuyến/hỏi cước, xác nhận điểm đón-đến bằng lời, gọi tool đặt xe và đọc xác nhận, chuyển người thật khi cần.
-
-🔒 Ràng buộc:
-
-HITL/chuyển tổng đài viên khi nhận diện kém hoặc yêu cầu phức tạp; bảo mật ghi âm & PII; độ chính xác STT tiếng Việt & xác nhận địa chỉ; độ trễ hội thoại thấp (barge-in), kiểm soát chi phí STT/TTS.
-
-2. Công nghệ & Phạm vi triển khai (Ảnh 2):
-Stack công nghệ:
-
-STT tiếng Việt (Whisper/PhoWhisper) + TTS (ElevenLabs/Google) + LLM + LangGraph
-
-tool geocoding (Mapbox/Google Places) xác nhận địa chỉ
-
-PostgreSQL chuyến
-
-backend FastAPI + WebRTC/WebSocket streaming
-
-frontend React (web call)
-
-deploy Fly.io.
-
-Phạm vi chức năng:
-
-Cơ bản:
-
-Web call deploy, đăng nhập khách & tổng đài viên
-
-Luồng thoại đặt xe + xác nhận địa chỉ + đọc kết quả
-
-Transcript & memory hội thoại.
-
-Nâng cao:
-
-Barge-in & xử lý ngắt lời
-
-HITL chuyển người thật kèm ngữ cảnh
-
-Cảnh báo độ tin cậy nhận dạng thấp
-
-Fallback sang nhập tay khi STT lỗi và guardrail PII.
-
+> **CURRENT INSTRUCTION** — Quy tắc làm việc trong `src/agents/docs/`. Product scope nằm tại
+> `docs/PRD_AloSM_Voice.md`; runtime truth nằm tại `docs/PROJECT_SOURCE_OF_TRUTH.md` và
+> `src/agents/README.md`. Không dùng brief, stack hoặc kế hoạch lịch sử để suy ra implementation.
 ## 1. Vai trò của coding agent
 
 Bạn đang hỗ trợ phát triển **Agentic AI / LLM Agent** cho hệ thống Voice AI Ride-Hailing.
@@ -76,7 +21,7 @@ Mục tiêu:
 
 ## 2. Architecture bắt buộc phải giữ
 
-Luồng tổng quát:
+Luồng production bắt buộc:
 
 ```text
 Voice/STT
@@ -84,10 +29,10 @@ Voice/STT
 Backend
    ↓ AgentInput + AgentState
 LLMAgent
+   ↓ instructions + typed state + semantic tools
+ModelDrivenAgent
    ↓
-Router
-   ↓
-Business Workflow
+Deterministic policy / guardrails
    ↓
 AgentAction
    ↓
@@ -104,7 +49,7 @@ Agent
 → Backend gọi API/tool thật
 → ToolResult
 → Agent
-→ đúng workflow đang chờ
+→ typed result reducer
 → action tiếp theo
 ```
 
@@ -176,38 +121,37 @@ Nếu cần thêm field mới:
 
 ## 5. Phân chia trách nhiệm
 
-### Router / Orchestrator
+### Model / Orchestrator
 
-Router trả lời:
+Model-driven orchestrator trả lời:
 
-> Request này thuộc workflow nào hoặc cần tiếp tục workflow nào?
+> Người dùng muốn gì, cần trả lời hay chọn semantic tool nào tiếp theo?
 
-Router được phép:
-- classify intent;
-- ưu tiên `current_workflow`;
-- route `ToolResult`;
-- xử lý unknown/fallback ở mức tổng quát.
+Orchestrator được phép:
+- hiểu intent/slot/correction theo toàn bộ typed context;
+- trả lời smalltalk ngắn gọn;
+- chọn semantic tool;
+- route correlated `ToolResult` về reducer tương ứng.
 
-Router **không** được:
-- thu thập pickup/destination;
-- xác nhận booking;
-- diễn giải business result của tool;
-- viết logic chi tiết của Booking/Trip/FAQ.
+Orchestrator **không** được:
+- tự tạo business facts hoặc external tool result;
+- tự truyền place ID/fare/booking ID không có trong state;
+- vượt qua confirmation/policy để tạo side effect;
+- thực thi HTTP, database, Voice hoặc Backend service.
 
-### Business Workflow
+### Typed state / deterministic policy
 
-Workflow trả lời:
+Policy trả lời:
 
-> Trong workflow hiện tại, bước nghiệp vụ tiếp theo là gì?
+> Semantic action model chọn có hợp lệ với state hiện tại không, và ToolCall cụ
+> thể phải được dựng thế nào?
 
-Workflow chịu trách nhiệm:
-- đọc input + state;
-- xác định missing data;
-- quyết định hỏi user;
-- quyết định cần tool;
-- xử lý `ToolResult` của chính workflow;
-- cập nhật step;
-- hoàn thành / retry / handoff theo policy.
+Policy chịu trách nhiệm validation, dependent-field invalidation, explicit
+confirmation, correlation/idempotency, typed result reduction và dựng external
+tool params từ state. Không parse lại câu người dùng bằng regex/FSM.
+
+`legacy/` chứa router/FSM/NLU/repair cũ cho regression migration; không thêm
+feature production mới vào đó.
 
 ### Tool layer
 
@@ -263,7 +207,11 @@ Feedback/rating kém không cần realtime có thể thuộc ticket/review flow 
 
 ---
 
-## 7. Feature ownership
+## 7. Feature ownership nội bộ Agent
+
+Các mã F1–F8 dưới đây là tên workstream kỹ thuật cũ của riêng `src/agents`, không phải mã
+feature F1–F9 trong PRD sản phẩm v1.2. Khi viết tài liệu mới, ưu tiên tên miền chức năng để
+tránh nhầm hai taxonomy.
 
 Implementation hiện được chia thành:
 
@@ -289,11 +237,11 @@ Khi được giao feature:
 Các file sau ảnh hưởng nhiều feature:
 
 ```text
-src/agents/schemas.py
-src/agents/state.py
+src/agents/contracts/schemas.py
+src/agents/contracts/state.py
 src/agents/agent.py
-src/agents/workflows/base.py
-src/agents/tools/base.py
+src/agents/core/agent.py
+src/agents/tools/schemas.py
 ```
 
 Không tự ý:
@@ -369,34 +317,10 @@ Không coi task hoàn thành nếu làm hỏng test baseline mà chưa giải th
 
 ## 11. Git / PR discipline
 
-Track integration branch:
-
-```text
-feature/agentic-ai
-```
-
-Feature branch phải branch từ `feature/agentic-ai`.
-
-Flow:
-
-```text
-feat/<feature-name>
-    ↓ PR
-feature/agentic-ai
-    ↓ integration test
-develop
-    ↓ system test
-main
-```
-
-PR phải:
-- chỉ chứa scope của feature;
-- không trộn refactor không liên quan;
-- mô tả behavior thay đổi;
-- nêu state transition nếu có;
-- có tests;
-- target `feature/agentic-ai`.
-
+- Dùng branch/target được task hoặc repository hiện hành chỉ định; không hard-code branch lịch sử.
+- PR chỉ chứa scope cần thiết, mô tả behavior/state transition và có test phù hợp.
+- Không trộn refactor không liên quan hoặc thay shared contract mà không nêu impact.
+- Không tự commit, push, mở PR hoặc đổi branch nếu người dùng/lead chưa yêu cầu.
 ---
 
 ## 12. Nguyên tắc khi hỗ trợ lead
@@ -445,19 +369,19 @@ Tránh:
 
 ## 14. Trạng thái hiện tại
 
-Core Agent F1–F8 đã implemented, gồm multi-turn workflows, typed tool lifecycle,
-conversation history/context/rewrite, repair/interruption, grounded FAQ,
-production guardrails và offline readiness evaluation.
+Core Agent F1–F8 đã implemented bằng model/tool loop, typed tool lifecycle,
+conversation history, grounded FAQ, deterministic policy/guardrails và offline
+readiness evaluation. Router/FSM/NLU/repair cũ chỉ còn trong `legacy/`.
 
-Current offline baseline:
-- 342 tests passed, 5 real-provider tests skipped theo opt-in policy;
-- Ruff passed;
-- Python compile passed;
-- readiness-v1 đạt các configured gates.
+Current verification ngày 2026-08-16:
+- full suite: `325 passed, 5 skipped`;
+- Ruff và Python compile pass;
+- frontend lint, typecheck và production build pass;
+- scripted-model conversation safety regressions đạt các configured gates.
 
 External executors, production persistence/knowledge ingestion và Voice Runtime
 không nằm trong `src/agents`. Dùng `CORE_AGENT_STATUS.md` làm trạng thái/DoD hiện
-hành; các implementation/completion plan chỉ mô tả thiết kế và lịch sử phase.
+hành; quyết định hoặc kế hoạch đã thay thế chỉ được truy vết qua Git history.
 
 ---
 

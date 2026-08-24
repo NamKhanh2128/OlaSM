@@ -2,6 +2,9 @@ import pytest
 from pydantic import ValidationError
 
 from src.agents.agent import LLMAgent
+from src.agents.core.booking import BookingData, BookingStep
+from src.agents.legacy.workflows.faq_models import FAQStep
+from src.agents.legacy.workflows.trip_lookup_models import TripLookupStep
 from src.agents.schemas import (
     ActionType,
     AgentInput,
@@ -12,9 +15,6 @@ from src.agents.schemas import (
 )
 from src.agents.state import AgentState, ConfirmationStatus
 from src.agents.state_types import InterruptedWorkflow, InterruptionReason
-from src.agents.workflows.booking_models import BookingData, BookingStep
-from src.agents.workflows.faq_models import FAQStep
-from src.agents.workflows.trip_lookup_models import TripLookupStep
 
 
 def apply_action(state: AgentState, action) -> AgentState:
@@ -26,10 +26,6 @@ def complete_locations() -> BookingData:
         {
             "pickup": {"place_id": "p1", "display_name": "Hồ Gươm"},
             "destination": {"place_id": "d1", "display_name": "Times City"},
-            "vehicle_type": "CAR_4",
-            "fare_estimate_id": "fare-001",
-            "estimated_fare_amount": 75000,
-            "estimated_currency": "VND",
         }
     )
 
@@ -109,10 +105,7 @@ async def test_pause_and_resume_restore_exact_booking_step_and_control_state():
     assert paused_state.interrupted_workflow is not None
     assert paused_state.interrupted_workflow.workflow is WorkflowType.RIDE_BOOKING
     assert paused_state.interrupted_workflow.step == BookingStep.CONFIRM
-    assert (
-        paused_state.interrupted_workflow.confirmation
-        is ConfirmationStatus.AWAITING_CONFIRMATION
-    )
+    assert paused_state.interrupted_workflow.confirmation is ConfirmationStatus.AWAITING_CONFIRMATION
     assert paused_state.interrupted_workflow.retry_count == 1
     assert "booking" in paused_state.collected_data
 
@@ -339,7 +332,8 @@ async def test_booking_faq_interruption_answer_and_resume_full_workflow():
     )
 
     assert confirmation.action_type is ActionType.ASK_USER
-    assert confirmation.state_updates["current_step"] == BookingStep.CONFIRM
+    assert confirmation.state_updates["current_step"] == BookingStep.COLLECT_VEHICLE
+    assert "bao nhiêu người" in (confirmation.message or "").casefold()
 
 
 @pytest.mark.asyncio

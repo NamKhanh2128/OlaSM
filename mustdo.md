@@ -1,207 +1,359 @@
-# MUST DO
+# MUST DO — thao tác owner/hạ tầng còn lại
 
-Việc dưới đây **không thể** hoàn thành chỉ bằng code trong repo này — cần quyết định
-sản phẩm/kiến trúc từ team, hoặc credential/tài khoản bên ngoài. Đây là kết quả rà
-soát toàn bộ Frontend ↔ Backend ngày 13/08/2026 (xem báo cáo đầy đủ trong hội thoại /
-`capnhat.md`). Mọi phần **có thể** tự code được đã được code trực tiếp, không đưa vào
-đây (xem danh sách "Đã implement/fix" trong báo cáo cuối).
+Cập nhật **2026-08-16** cho migration head `0004_maps_places_routes` (persistence/quote: `9e9b6f420a9a`). Phần persistence, repository, quote integrity, snapshot, test và script nghiệm thu đã được AI triển khai. Những mục dưới đây cần quyền thay đổi database live, tài khoản hạ tầng hoặc phê duyệt nghiệp vụ; không thể hợp lệ hóa chỉ bằng code.
 
----
+## P0.1 — Phê duyệt và áp dụng migration PostgreSQL live
 
-## 1. ~~Các trang UI "đa trang" chưa được route tới~~ — ĐÃ GIẢI QUYẾT (13/08/2026)
+**Tại sao bạn phải làm:** database Supabase live đang ở `0002_handoff_operations`; thao tác đổi schema, bật RLS và revoke quyền là mutation bền vững. Phiên AI chỉ được phép đọc/check, không được phép tự áp dụng khi chưa có phê duyệt live rõ ràng.
 
-**Cập nhật:** Theo yêu cầu trực tiếp của user ("lấy lại code tất cả các trang của
-frontend các màn bị cho là rác và tự động hoàn thiện toàn bộ cả fe và be tương ứng"),
-6 trang này đã được route lại vào `app/router/index.tsx` (lồng trong `AppLayout` —
-Sidebar/Topbar/MobileNav, vốn đã được build sẵn cho đúng việc này) và nối vào dữ liệu
-BE thật (không còn `MOCK_*`/`setTimeout` giả):
+1. Mở Supabase Dashboard → project đúng môi trường → **Database → Backups**.
+2. Xác nhận có backup gần nhất hoặc PITR; ghi lại timestamp và người chịu trách nhiệm. Nếu đang dùng plan không có PITR, export backup bằng công cụ chính thức của Supabase/Postgres và thử đọc file backup.
+3. Thông báo maintenance window; tạm dừng deploy/worker đang ghi DB.
+4. Trong terminal tại root project, kiểm tra đúng branch và revision:
 
-- **HomePage** — tên chào thật + 2 chuyến gần đây thật.
-- **BookingPage** — "Xác nhận đặt xe" đi qua đúng dialogue engine thật (Core Agent) đã
-  test kỹ, không xây đường đặt xe riêng.
-- **TrackingPage** — poll `GET /api/v1/trips/status` mỗi 4s, tài xế/trạng thái mô
-  phỏng ổn định (seed theo booking_id, không random mỗi lần gọi như code cũ).
-- **ActivityPage** — `GET /api/v1/bookings` thật, đã xoá `mockData.ts`.
-- **ProfilePage** — tên/SĐT/role thật từ `/auth/me`.
-- **PaymentPage (Cài đặt)** — `GET/PUT /api/v1/users/me/settings` thật, đổi mật khẩu
-  thật qua `POST /api/v1/auth/change-password`.
-
-`/login` và `/assistant` giữ nguyên đứng riêng (không đổi, tránh rủi ro không cần
-thiết cho trang đang được người khác phát triển tích cực). `feature/customer-call-ui`
-(nhánh remote riêng, `frontend/` — `CustomerUI.tsx`/`OperatorUI.tsx`) **không bị đụng
-tới** — vẫn là hướng đi độc lập của team, không liên quan tới `src/frontend/`.
-
-### Còn lại — cần quyết định/thao tác thủ công (không tự code được)
-
-1. **Ví AloSM Pay / thẻ thanh toán** (`ProfilePage`) — chưa có khái niệm ví/thanh toán
-   nào ở Backend. Hiện hiển thị trạng thái rỗng trung thực ("Chưa liên kết phương thức
-   thanh toán nào") thay vì số dư/thẻ giả. Cần Payment Gateway thật — xem mục 2 bên
-   dưới.
-2. **Ưu đãi/coupon** (`ProfilePage`) — tương tự, chưa có hệ thống coupon/loyalty nào.
-   Hiện hiển thị trạng thái rỗng trung thực. Cần quyết định nghiệp vụ (loại ưu đãi,
-   điều kiện áp dụng) trước khi code được.
-3. **2FA thật** (`PaymentPage`) — toggle đã persist lựa chọn thật qua API, nhưng
-   **CHƯA enforce** ở bước đăng nhập (cần TOTP hoặc SMS OTP — xem mục 4 bên dưới). UI
-   đã ghi rõ "sắp ra mắt", không giả vờ đã bảo mật hơn.
-
-### Cách kiểm tra
-
-Đã verify: đăng nhập → vào từng trang (Home/Booking/Tracking/Activity/Payment/
-Profile) qua Sidebar, xác nhận dữ liệu hiển thị đến từ API thật (đã test trực tiếp
-qua curl với server đang chạy thật, không phải chỉ unit test). Muốn tự kiểm tra lại:
-mở Network tab khi dùng các trang này, xác nhận có request thật tới `/api/v1/bookings`,
-`/api/v1/trips/status`, `/api/v1/users/me/settings` — không còn `MOCK_*`/`mockData.ts`.
-
----
-
-## 2. Payment Gateway thật (VNPay / MoMo / Stripe...)
-
-### Vì sao chưa thể tự làm
-
-Chỉ cần thiết **nếu** team chọn hồi sinh `PaymentPage`/ví AloSM Pay ở mục 1. Cần tài
-khoản merchant thật (VNPay/MoMo cho thị trường VN, hoặc Stripe quốc tế) — không thể
-tạo bằng code.
-
-### Cần làm
-
-1. Đăng ký tài khoản merchant (VNPay: https://sandbox.vnpayment.vn/devreg/ để lấy
-   sandbox trước; MoMo: https://business.momo.vn/).
-2. Lấy `Merchant ID`/`Secret Key` (VNPay) hoặc `Partner Code`/`Access Key`/`Secret Key`
-   (MoMo) ở chế độ **sandbox** trước khi lên production.
-3. Thêm vào `.env`:
+   ```powershell
+   git branch --show-current
+   .\.venv\Scripts\python.exe -m alembic heads
+   .\.venv\Scripts\python.exe -m alembic current
    ```
-   VNPAY_MERCHANT_ID=
-   VNPAY_SECRET_KEY=
-   VNPAY_RETURN_URL=http://localhost:5173/payment/callback
+
+   Expected: branch `feature/voice-ai`, head `0004_maps_places_routes`, current `0002_handoff_operations`.
+5. Cấp phê duyệt rõ ràng cho mutation database live, sau đó chạy:
+
+   ```powershell
+   .\.venv\Scripts\python.exe -m alembic upgrade head
+   .\.venv\Scripts\python.exe -m alembic current
+   .\.venv\Scripts\python.exe -m alembic check
    ```
-4. Code liên quan (sẽ cần tạo mới): `src/backend/services/payment_service.py`,
-   `src/backend/api/routes/payments.py`.
 
-### Cách kiểm tra
+6. Expected: current `0004_maps_places_routes (head)`; check báo `No new upgrade operations detected`.
+7. Nếu lỗi: dừng ngay; không `stamp head`, không sửa tay schema, không chạy lại bằng credential mạnh hơn. Lưu lỗi/revision và restore theo runbook nếu migration đã commit một phần.
 
-Thực hiện 1 giao dịch sandbox, xác nhận callback cập nhật đúng trạng thái booking.
+**Bằng chứng đóng mục:** backup/PITR timestamp, output current/check, người phê duyệt, môi trường và thời gian thực hiện.
 
----
+## P0.2 — Chạy acceptance PostgreSQL thật
 
-## 3. GPS / Maps Provider thật cho Tracking
+Sau khi P0.1 pass:
 
-### Vì sao chưa thể tự làm
+```powershell
+.\.venv\Scripts\python.exe scripts\verify_postgres_persistence.py
+```
 
-`TrackingPage` cần vị trí tài xế theo thời gian thực. Không có tài xế/app tài xế thật
-trong phạm vi capstone này → cần quyết định: **mô phỏng nâng cao** (code được, không
-cần key ngoài — có thể tự làm nếu team yêu cầu) hay **tích hợp Maps provider thật**
-(Google Maps Platform / Mapbox — cần API key + billing).
+Expected đủ năm dòng `PASS`: PostgreSQL persistence, quote tamper rejection, concurrent idempotency, restart readback và RLS. Script dùng record riêng có suffix ngẫu nhiên, không mock và tự dọn chính xác dữ liệu nó tạo.
 
-### Cần làm (nếu chọn tích hợp thật)
+Tiếp theo chạy hai API instance cùng `DATABASE_URL`, gửi đồng thời cùng `quote_id` + `Idempotency-Key`, rồi query xác nhận chỉ một booking/outbox event. Lưu request IDs và row counts làm artifact.
 
-1. Tạo project tại https://console.cloud.google.com/, bật **Maps JavaScript API** +
-   **Directions API**, tạo API key, giới hạn theo domain.
-2. Thêm vào `.env`: `GOOGLE_MAPS_API_KEY=`
-3. Thêm vào `.env.example` tương ứng (không commit key thật).
+**Không đóng mục nếu:** script bị skip, chạy SQLite, sửa script để bỏ assertion, hoặc chỉ thấy API 200 mà không kiểm tra row DB.
 
-### Cách kiểm tra
+## P0.3 — Tách runtime role least-privilege khỏi migration owner
 
-Mở `TrackingPage`, xác nhận marker tài xế di chuyển theo dữ liệu thật/API thật, không
-còn `top-1/2 left-1/3` cố định như hiện tại.
+1. Trong Supabase SQL Editor hoặc quy trình DBA, tạo login role riêng cho app runtime; không dùng `postgres`/owner và không cấp `BYPASSRLS`, `CREATEDB`, `CREATEROLE`.
+2. Cấp `CONNECT`, `USAGE` schema và đúng quyền `SELECT/INSERT/UPDATE` cần thiết cho các bảng runtime; cấp sequence usage cho bảng autoincrement. Không cấp `ALTER`, `DROP`, `CREATE`.
+3. Giữ `DATABASE_URL_MIGRATIONS` ở secret riêng chỉ CI migration/DBA truy cập. Đổi `DATABASE_URL` sang runtime role qua Supavisor transaction pooler.
+4. Restart canary và chạy health/login/session/quote/booking/cancel/handoff.
+5. Xác minh:
 
----
-
-## 4. SMS/Email Provider cho 2FA & thông báo thật
-
-### Vì sao chưa thể tự làm
-
-`PaymentPage` có toggle "Xác thực 2 yếu tố (2FA)" và "Email/SMS Notifications" — hiện
-chỉ là state React cục bộ. Bật 2FA/thông báo thật qua SMS cần nhà cung cấp (Twilio/
-eSMS/Speed SMS cho VN); qua Email cần SMTP hoặc SendGrid/Mailgun.
-
-### Cần làm
-
-1. Đăng ký 1 trong các dịch vụ trên, lấy API key.
-2. Thêm vào `.env`:
+   ```sql
+   SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolbypassrls
+   FROM pg_roles WHERE rolname = '<runtime_role>';
    ```
-   SMS_PROVIDER_API_KEY=
-   SMTP_HOST=
-   SMTP_PORT=
-   SMTP_USER=
-   SMTP_PASSWORD=
-   ```
-3. (2FA dạng TOTP — vd Google Authenticator — **không cần dịch vụ ngoài**, có thể tự
-   code bằng thư viện `pyotp` nếu team muốn ưu tiên việc này trước SMS/Email thật —
-   nói rõ nếu muốn tôi làm tiếp phần này.)
 
-### Cách kiểm tra
+   Tất cả cờ đặc quyền phải `false`.
+6. Supabase Dashboard → **Database → Advisors → Security** và **Performance**; xử lý toàn bộ finding P0/P1, đặc biệt RLS, exposed tables, missing FK index và duplicate index.
 
-Bật 2FA/thông báo, xác nhận nhận được mã/thông báo thật qua kênh đã cấu hình.
+**Lưu ý auth:** dự án dùng custom auth qua backend, không được tạo policy giả dựa trên `auth.uid()`. Nếu muốn dùng Supabase Data API/Auth về sau, phải thiết kế tenant/owner policies riêng và có security review.
 
----
+## P0.4 — Backup, restore, retention và secret rotation
 
-## 5. Database thật — ĐÃ CHỌN Supabase, hạ tầng đã xong, còn 2 việc cần bạn
+1. Chọn retention cho account/token, session/transcript, location, quote/booking, call/handoff và audit/outbox; có Legal/Privacy approval.
+2. Tạo backup theo lịch và cảnh báo backup failure.
+3. Restore backup vào project/database cô lập, chạy Alembic current, FK/orphan checks, row counts và smoke API; ghi RTO/RPO thực tế.
+4. Đưa `DATABASE_URL`, `DATABASE_URL_MIGRATIONS`, `QUOTE_SIGNING_KEY`, `FIELD_ENCRYPTION_KEY` vào secret manager; xóa bản rò rỉ khỏi kênh chat/log và rotate credential đã từng chia sẻ.
+5. Rotate quote key chỉ sau khi quote dùng key cũ hết TTL hoặc đã có key ring/version.
+6. Rotate field encryption key bằng batch decrypt-old/encrypt-new có checkpoint/rollback; không thay thẳng vì TOTP ciphertext cũ sẽ không giải mã được.
 
-### Đã tự làm (code + verify thật, xem `docs/database_supabase.md` để có thiết kế đầy đủ + ERD)
+**Bằng chứng đóng mục:** restore report, RTO/RPO, retention matrix, secret references (không phải secret value), rotation/canary report.
 
-- `src/backend/db/base.py`, `src/backend/db/models.py` — engine async + 8 ORM model
-  (`users`, `auth_tokens`, `ride_sessions`, `bookings`, `trips`, `handoffs`, `calls`,
-  `conversation_events`), tuned sẵn cho Supabase Transaction Pooler (tắt prepared
-  statement cache — tránh lỗi kinh điển asyncpg + Supavisor).
-- `alembic.ini` + `migrations/` — migration đầu tiên. Đã verify thật: `alembic upgrade
-  head` chạy được, `alembic check` báo khớp 100% với models, insert/query round-trip
-  qua async engine thật chạy đúng (tất cả trên SQLite local, không cần Supabase để
-  verify hạ tầng).
-- `requirements.txt`: thêm `asyncpg`, `aiosqlite`.
-- `.env.example`: thêm `DATABASE_URL`/`DATABASE_URL_MIGRATIONS` mẫu cho Supabase.
+## P0.5 — Dữ liệu nghiệp vụ để quote trở thành production
 
-### Còn lại — cần bạn (không thể tự làm)
+Code hiện cố ý lưu nhãn `DEMO`. Finance/Product/Ops phải cung cấp và ký duyệt:
 
-1. **Tạo project Supabase thật** (cần tài khoản) — làm theo đúng 5 bước ở
-   `docs/database_supabase.md` mục 4: đăng ký → tạo project → lấy 2 connection string
-   (Transaction pooler cổng 6543 + Direct connection cổng 5432) → điền vào `.env` →
-   chạy `python -m alembic upgrade head`.
+1. vehicle catalog thật (capacity, luggage, accessibility);
+2. bảng giá theo region/version/effective date, minimum fare, tier/km/time/wait/cancel/no-show, surcharge và rounding;
+3. Maps/Route provider, service area và quyền lưu place/coordinate/polyline;
+4. voucher eligibility, budget, stackability, ranking và version;
+5. Fleet/Dispatch API, timeout/unknown-outcome reconciliation và SLA;
+6. golden cases có input route/time/vehicle/voucher và expected breakdown/tổng tiền.
 
-### Việc tiếp theo (tôi sẽ làm, không phải việc của bạn) — nối service vào DB
+Sau khi nhận artifact: tạo **version mới** trạng thái `APPROVED`, không sửa catalog DEMO tại chỗ; chạy đối soát golden cases qua quote API và booking snapshot; Finance/Product ký kết quả.
 
-`AuthService`/`SessionService`/`BookingService`/`TripService` hiện **vẫn** lưu bằng
-dict RAM, chưa gọi tới `src/backend/db/*` — hạ tầng đã sẵn sàng nhưng chưa "nối dây".
-Tạm hoãn bước này vì đúng lúc rà soát thì phát hiện các file service đó (đặc biệt
-`auth_service.py`, `api/routes/sessions.py`, `api/routes/voice.py`) đang có thay đổi
-khác diễn ra song song từ nhánh `test_speech_model` — nối DB ngay lúc này dễ đụng
-việc đang dở của người khác. Sẽ làm ngay khi việc đó ổn định.
-
-### Cách kiểm tra
-
-Sau khi có Supabase + chạy migration: vào tab **Table Editor** trên dashboard Supabase,
-xác nhận thấy đủ 8 bảng. Sau khi service được nối dây (bước tiếp theo): restart server,
-xác nhận user/session/booking vẫn còn sau khi restart (thay vì mất sạch như hiện tại).
+**Bằng chứng đóng mục:** source checksum, owner/approver, effective period, rollback version, golden-case report và provider credentials trong secret manager.
 
 ---
+# MUST DO — đầu vào bên ngoài bắt buộc
 
-## 6. OPENAI_API_KEY thật (bật LLM hiểu ngôn ngữ tự nhiên cho Agentic Core)
+Cập nhật: **2026-08-16**.
 
-### Vì sao chưa thể tự làm
+File này chỉ chứa những việc không thể hoàn tất bằng code trong repository vì cần tài khoản,
+credential, dữ liệu nghiệp vụ chính thức, hạ tầng vận hành hoặc phê duyệt của con người. Các lỗi
+code, test, UI, schema và luồng Agent không được đẩy vào đây.
 
-`AGENT_LLM_ENABLED=false` mặc định — khi tắt, hệ thống dùng `RuleBasedUnderstanding`
-(rule-based, không cần key, đã hoạt động). Bật `AGENT_LLM_ENABLED=true` để dùng
-`OpenAIUnderstandingAdapter` (`src/agents/understanding/openai.py`) cần
-`OPENAI_API_KEY` thật của team — không thể tạo hộ.
+Nguồn điều phối: `docs/PROJECT_SOURCE_OF_TRUTH.md`. Để tránh làm sai dependency, owner nên đóng
+các nhóm theo thứ tự: **(1)** xoay secret + chọn owner/pháp lý, **(2)** production DB,
+**(3)** Maps và dữ liệu business, **(4)** booking/dispatch, **(5)** telephony/handoff,
+**(6)** ASR/TTS release gates, **(7)** payment/notification, **(8)** security/load/DR/go-live.
+Một mục chỉ được đóng khi có artifact verify, ngày chạy và người chịu trách nhiệm; có credential
+không đồng nghĩa tích hợp đã sẵn sàng production.
 
-### Cần làm
+## 1. Chọn và cấp quyền cho Maps / geocoding / routing
 
-1. Lấy key tại https://platform.openai.com/api-keys.
-2. Điền vào `.env`: `OPENAI_API_KEY=sk-...` và `AGENT_LLM_ENABLED=true`.
+Cần chủ dự án quyết định một nhà cung cấp production và cấp credential hợp lệ:
 
-### Cách kiểm tra
+- Google Maps Platform, Mapbox, Goong hoặc VietMap; hoặc hạ tầng tự host Nominatim + OSRM.
+- Xác nhận quyền lưu `place_id`, địa chỉ, tọa độ và polyline theo điều khoản của nhà cung cấp.
+- Cấp API key theo từng môi trường, giới hạn domain/IP/quota và bật cảnh báo chi phí.
+- Cung cấp polygon vùng phục vụ thật của AloSM.
 
-Gửi 1 câu hỏi lệch chuẩn (vd nói ngọng/thiếu chữ) qua `AssistantPage`, xác nhận log
-backend cho thấy `OpenAIUnderstandingAdapter` được gọi (không rơi vào fallback rule).
+Biến môi trường dự kiến (chỉ điền provider được chọn):
 
----
+```env
+MAPS_PROVIDER=
+MAPS_API_KEY=
+MAPS_BASE_URL=
+MAPS_SERVICE_AREA_ID=
+```
 
-## Tổng kết mức ưu tiên
+Tiêu chí nghiệm thu bên ngoài: tìm kiếm và reverse-geocode địa chỉ Việt Nam thật; route trả
+`distance_meters`, `duration_seconds`, polyline; key bị giới hạn đúng môi trường; có quota alert.
 
-| # | Việc | Có bắt buộc để demo hiện tại chạy được không? |
-|---|------|------------------------------------------------|
-| 1 | Quyết định số phận trang đa-trang | Không — flow chat/voice hiện tại đã chạy đủ, không phụ thuộc |
-| 2 | Payment Gateway thật | Không — chỉ cần nếu hồi sinh mục 1 |
-| 3 | Maps Provider thật | Không — như trên |
-| 4 | SMS/Email/2FA thật | Không — toggle demo, không chặn luồng chính |
-| 5 | Database thật | Không cho demo/capstone — **có** trước khi lên production thật |
-| 6 | OPENAI_API_KEY thật | Không — rule-based fallback đã hoạt động tốt |
+## 2. Cung cấp dữ liệu nghiệp vụ AloSM đã phê duyệt
+
+Business/Product/Ops phải cung cấp phiên bản có hiệu lực, owner và ngày hiệu lực cho:
+
+- danh mục loại xe, sức chứa, hành lý và accessibility;
+- bảng giá mở cửa, giá/km, giá/phút, phí chờ, phí hủy, giá tối thiểu và surge;
+- voucher/promotion: điều kiện, ngân sách, phạm vi, stackability, thời hạn và thứ tự tối ưu;
+- vùng phục vụ, fleet/driver availability và quy tắc dispatch;
+- pháp nhân, hotline, email, địa chỉ liên hệ AloSM; retention/xóa/export và đầu mối xử lý quyền dữ liệu;
+- SLA/giờ hoạt động cho từng hàng đợi tổng đài.
+
+Không được lấy giá/voucher của GreenSM/Grab/Be làm dữ liệu AloSM production nếu chưa có phê
+duyệt bằng văn bản. Dữ liệu mẫu hiện tại chỉ dùng demo và được liệt kê trong
+`src/agents/DATAFINDING.md`.
+
+Tiêu chí nghiệm thu bên ngoài: mỗi dataset có `owner`, `version`, `effective_from`, cơ chế thu hồi
+và một bộ case đối soát do business ký duyệt.
+
+### 2.1 Phê duyệt catalog giá DEMO được nhập ngày 2026-08-16
+
+Catalog `data/pricing/hanoi_demo_2026-08-16.yaml` đã được code hóa, validate và test nhưng chưa được
+phép dùng như giá AloSM production. Finance/Product/Legal phải:
+
+1. Xác nhận hoặc thay thế giá Bike `13.200đ/2 km`, `4.200đ/km` và ý nghĩa `275đ/phút`.
+2. Phê duyệt bảng giá riêng cho `CAR_7`; mức hiện tại là suy diễn Car 4 + khoảng 15%, không phải loại xe
+   GreenSM công bố chính thức.
+3. Xác nhận `per_minute` là thời gian di chuyển hay phí chờ; định nghĩa làm tròn, thời điểm bắt đầu/kết
+   thúc và trường hợp đồng thời với `waiting_per_hour`.
+4. Phê duyệt từng surcharge, múi giờ, ngày lễ, số lần/điểm dừng và thứ tự cộng phí; xác nhận khác biệt
+   phụ phí Bike ban đêm trong nguồn người dùng với trang GreenSM công khai.
+5. Legal/Product ký chính sách hủy, hoàn tiền/no-show; cung cấp trạng thái tài xế và mốc thời gian làm
+   bằng chứng trước khi backend được phép thu phí.
+6. Giao artifact có chữ ký gồm `version`, `effective_from/to`, region, owner, approver, rollback version
+   và các golden cases. Sau phê duyệt mới tạo catalog trạng thái `APPROVED`; không sửa nhãn DEMO tại chỗ.
+
+Verify: Finance đối soát golden cases qua API, kiểm tra quote/booking audit giữ nguyên pricing version,
+kiểm thử timezone/rounding/boundary và ký biên bản release. Risk nếu bỏ qua: báo sai giá, thu sai phí,
+khiếu nại và vi phạm nghĩa vụ công bố giá.
+
+### 2.2 Xác minh pháp nhân và đầu mối liên hệ AloSM
+
+Chủ dự án đã tự phê duyệt policy catalog phiên bản `2026-08-16`; phần nội dung vận hành, RAG,
+registration consent, cookie choice và voice consent đã được tích hợp. Tuy nhiên bản nguồn giữ nguyên
+415 lần tham chiếu Green SM/GSM và không chứa AloSM. Trước public production, owner phải cung cấp và
+xác minh: tên pháp nhân AloSM, mã đăng ký, địa chỉ, hotline, email hỗ trợ, email/DPO xử lý quyền dữ liệu
+và kênh khiếu nại. Không được dùng thông tin Green SM/GSM thay thế.
+
+Expected artifact: legal contact sheet có owner/approver/effective date. Verify qua cuộc gọi/email test
+và legal sign-off; sau đó cập nhật một policy version mới, không sửa ngược catalog `2026-08-16`.
+## 3. Hạ tầng dữ liệu production cần owner/hạ tầng
+
+Kết nối Supabase/Postgres và Alembic đã được kiểm tra thật ngày 2026-08-16: `current` khớp
+`0002_handoff_operations` trong lần kiểm tra read-only; code head hiện là `0004_maps_places_routes` và cần thực hiện P0.1/P0.2 trước khi cập nhật trạng thái live. Không cần tạo lại project chỉ để
+chứng minh database hoạt động.
+
+Phần còn cần con người/hạ tầng:
+
+- tạo/tách project hoặc schema dev, staging và prod theo chính sách tổ chức;
+- đưa `DATABASE_URL` và `DATABASE_URL_MIGRATIONS` vào secret manager, xoay password theo lịch;
+- chọn/cấp Redis nếu cần distributed lock, rate limit hoặc worker coordination;
+- chọn Supabase plan, cấu hình backup/PITR và thực hiện restore drill thật;
+- phê duyệt retention/xóa/export cho transcript, audio, vị trí, phone hash và audit event;
+- chỉ bật Supabase Data API cho bảng cần thiết; cấp explicit grant và ownership RLS đã review.
+
+```env
+DATABASE_URL=
+DATABASE_URL_MIGRATIONS=
+REDIS_URL=
+```
+
+Expected artifact: inventory môi trường, secret references, backup/PITR policy, restore report, retention
+approval và Redis decision. Verify bằng restore vào môi trường cô lập, Alembic revision, FK integrity,
+row counts và multi-instance test. Việc wire repository trong code không thuộc `mustdo.md` và không
+được chuyển sang đây.
+## 4. Telephony, streaming voice và kênh chuyển người thật
+
+Để “gọi điện” và transfer thật cần nhà cung cấp telephony/SIP và đích vận hành:
+
+- mua/đăng ký số điện thoại hoặc SIP trunk;
+- cấp webhook signing secret, credential gọi ra/vào và cấu hình recording consent;
+- cung cấp queue/extension cho `SAFETY_OPERATOR`, `SPECIALIST_OPERATOR`,
+  `CUSTOMER_CARE_OPERATOR`, `OPERATIONS_OPERATOR`, `GENERAL_OPERATOR`;
+- xác nhận fallback khi không có tổng đài viên, timeout, ngoài giờ và cuộc gọi bị rớt;
+- chọn STT/TTS production và cấp key/quota nếu không dùng provider local.
+
+```env
+TELEPHONY_PROVIDER=
+TELEPHONY_ACCOUNT_ID=
+TELEPHONY_SECRET=
+TELEPHONY_FROM_NUMBER=
+TELEPHONY_WEBHOOK_SECRET=
+STT_PROVIDER=
+STT_API_KEY=
+TTS_PROVIDER=
+TTS_API_KEY=
+```
+
+Tiêu chí nghiệm thu bên ngoài: cuộc gọi thật vào/ra, barge-in, reconnect, transfer có context,
+không đọc PII nội bộ, đo được latency STT/Agent/TTS và ghi nhận consent.
+
+## 5. LLM/OpenRouter production access
+
+Pipeline LLM hiện dùng OpenRouter qua giao thức OpenAI-compatible, tách credential khỏi OpenAI Speech:
+
+```env
+OPENROUTER_API_KEY=
+AGENT_LLM_MODEL=openai/gpt-5.6-luna-pro
+AGENT_LLM_BASE_URL=https://openrouter.ai/api/v1
+AGENT_LLM_ENABLED=true
+VOICE_TRANSCRIPT_REWRITE_MODEL=openai/gpt-5.6-luna-pro
+VOICE_TRANSCRIPT_REWRITE_BASE_URL=https://openrouter.ai/api/v1
+```
+
+Trạng thái kiểm tra thật ngày 2026-08-16: credential OpenRouter hoạt động, model catalog xác nhận
+`openai/gpt-5.6-luna-pro` hỗ trợ Structured Outputs, và `scripts/live_voice_rewrite_check.py`
+đã pass 5/5 case thật. Request được giới hạn output token để tránh OpenRouter từ chối `402` do dự
+trù output tối đa.
+
+Việc owner vẫn phải làm:
+
+- Thu hồi và tạo lại OpenRouter key đã từng được gửi trong hội thoại; cập nhật key mới chỉ qua secret
+  manager hoặc `.env` cục bộ, không commit.
+- Cấp budget/rate limit và cảnh báo chi phí cho staging/production.
+- Phê duyệt retention/data controls cho transcript. Pipeline đặt `store=false`, mask số/email/ID và
+  không gửi lịch sử hội thoại; phần ngôn ngữ và địa danh còn lại vẫn phải gửi để sửa lỗi STT.
+- Duy trì credential riêng cho Speech-to-Text/Text-to-Speech. `OPENROUTER_API_KEY` không được dùng
+  thay `OPENAI_API_KEY`; WebSocket ASR có thể dùng `GROQ_API_KEY`.
+- Cấp OpenAI Speech key hợp lệ nếu dùng `/voice/turn` với `gpt-4o-transcribe`, hoặc cấu hình speech
+  provider production khác đã được phê duyệt.
+
+Sau khi xoay key, bắt buộc chạy lại gate thật:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/live_voice_rewrite_check.py
+```
+
+## 6. Payment và notification thật
+Chỉ triển khai giao dịch/hoàn tiền/gửi SMS-email production sau khi có:
+
+- merchant sandbox + production của VNPay/MoMo/Stripe hoặc provider được chọn;
+- webhook secret, callback domain, chính sách reconciliation/refund;
+- tài khoản SMS/email, sender đã xác minh và template được duyệt.
+
+```env
+PAYMENT_PROVIDER=
+PAYMENT_MERCHANT_ID=
+PAYMENT_SECRET=
+PAYMENT_WEBHOOK_SECRET=
+SMS_PROVIDER_API_KEY=
+SMTP_HOST=
+SMTP_USER=
+SMTP_PASSWORD=
+```
+
+Tiêu chí nghiệm thu bên ngoài: webhook được xác minh chữ ký và idempotent; sandbox reconciliation
+pass; notification có opt-in/opt-out và không rò PII.
+
+## 7. Phê duyệt an toàn, pháp lý và vận hành
+
+Con người có thẩm quyền phải phê duyệt:
+
+- playbook tai nạn, đe dọa, quấy rối, tài xế say và số khẩn cấp theo khu vực;
+- nội dung bot được phép nói, đặc biệt không hứa bồi thường/hoàn tiền hay kết luận trách nhiệm;
+- consent ghi âm, retention, quyền xóa/truy xuất dữ liệu và phân quyền operator;
+- pentest, load test, disaster recovery và go-live checklist;
+- bộ transcript đã ẩn danh dùng làm eval, gồm giọng vùng miền và lỗi ASR thực tế.
+- cung cấp ít nhất một fixture PCM16 mono 16 kHz có giọng nói thật, consent và ground-truth; cấu hình `VOICE_LIVE_PCM16_FIXTURE` để chạy full WebSocket integration test.
+
+Tiêu chí nghiệm thu bên ngoài: có người chịu trách nhiệm, ngày phê duyệt, SLA và diễn tập handoff
+khẩn cấp trước go-live.
+## 8. ZipFormer ASR — việc bắt buộc cần con người/hạ tầng
+
+### 8.1 Phê duyệt giấy phép trước commercial production
+
+1. **Việc làm:** Legal/Product owner xác nhận quyền dùng `hynt/Zipformer-30M-RNNT-6000h` hoặc chọn model thay thế.
+2. **Tại sao:** model card hiện ghi `CC-BY-NC-ND-4.0`, không được tự coi là phù hợp dịch vụ thương mại.
+3. **Ở đâu:** hồ sơ third-party software/model và quyết định go-live của dự án.
+4. **Thao tác:** lưu văn bản phê duyệt cùng model ID, revision và phạm vi sử dụng; nếu không được duyệt, thay artifact/config rồi chạy lại toàn bộ gate ASR.
+5. **Expected:** có owner, ngày phê duyệt và bằng chứng quyền sử dụng.
+6. **Verify:** audit release artifact khớp model/revision/license đã duyệt.
+7. **Risk:** vi phạm giấy phép và phải dừng dịch vụ.
+
+### 8.2 Xác minh Docker bằng daemon có quyền hoạt động
+
+1. **Việc làm:** build và chạy container thật trên máy có Docker daemon.
+2. **Tại sao:** máy hiện tại có Docker CLI nhưng `com.docker.service` dừng; tài khoản phiên này không có quyền start service, nên chưa thể trung thực đánh dấu Docker build/run pass.
+3. **Ở đâu:** Docker Desktop hoặc CI runner của dự án.
+4. **Command:** `docker build -t alosm-zipformer .`; sau đó `docker run --rm -p 8000:8000 --env-file .env alosm-zipformer`.
+5. **Expected:** build tải artifact đúng SHA-256; container chạy non-root; `/health/ready` trả 200 và upload WAV trả transcript thật.
+6. **Verify:** `curl.exe http://localhost:8000/health/ready` và lệnh upload trong `docs/voice-ai/zipformer-asr.md`.
+7. **Risk:** lỗi package/platform hoặc model path chỉ xuất hiện khi deploy.
+
+### 8.3 Nghiệm thu trên audio cuộc gọi và phần cứng production
+
+1. **Việc làm:** cung cấp corpus cuộc gọi tiếng Việt đã consent/ẩn danh và CPU/RAM mục tiêu; đo WER/CER theo miền, vùng giọng, nhiễu và tải dài hạn.
+2. **Tại sao:** WAV đi kèm model chứng minh pipeline chạy thật nhưng không đại diện điện thoại 8 kHz, tiếng ồn, địa chỉ/POI và giọng vùng miền của khách hàng.
+3. **Ở đâu:** môi trường staging với telephony codec thật và dashboard metrics.
+4. **Command:** chạy `scripts/benchmark_zipformer.py` trên SKU production; bổ sung evaluator WER/CER sau khi corpus được cấp hợp pháp.
+5. **Expected:** SLO latency/error/memory, WER/CER và tuning worker/thread được owner ký duyệt.
+6. **Verify:** soak test không tăng RSS không kiểm soát, error rate <1%, RTF theo gate và báo cáo slice chất lượng.
+7. **Risk:** transcript địa chỉ sai, handoff sai, quá tải RAM/CPU hoặc chất lượng giảm ngoài tập mẫu.
+## 9. TTS output — kiểm duyệt bắt buộc còn cần con người/hạ tầng
+
+### 9.1 Human listening review tiếng Việt
+
+1. **Việc làm:** ít nhất hai reviewer tiếng Việt nghe corpus trong `scripts/live_tts_output_check.py` và bộ câu nghiệp vụ đã consent; chấm HoaiMy/NamMinh về tự nhiên, rõ, nhịp nghỉ, địa chỉ, số tiền, phủ định và persona thương hiệu.
+2. **Tại sao:** TTS→ZipFormer, CER/WER và audio metrics không thay thế khả năng nghe cảm nhận bằng tai người.
+3. **Ở đâu:** staging Voice UI trên Chrome/Edge và thiết bị/loa/tai nghe đại diện người dùng.
+4. **Thao tác:** chạy `scripts/live_tts_output_check.py`, mở audio qua chính `/api/v1/voice/speak`; ghi `case_id`, reviewer, voice, điểm, lỗi và quyết định.
+5. **Expected:** hai reviewer ký duyệt, không có lỗi đổi nghĩa/phủ định/giá/địa chỉ và có voice/persona được Product phê duyệt.
+6. **Verify:** biên bản review gắn model/provider version và ngày chạy; case fail có regression fixture sau khi được phép lưu.
+7. **Risk:** audio đạt chỉ số kỹ thuật nhưng vẫn nghe máy, sai nhịp hoặc phát âm thương hiệu không phù hợp.
+
+### 9.2 Provider TTS có SLA cho production
+
+1. **Việc làm:** Platform/Procurement chọn và cấp credential cho provider Speech chính thức có SLA, quota, DPA và quyền thương mại; giữ Edge-TTS làm fallback/dev nếu policy cho phép.
+2. **Tại sao:** Edge-TTS là online best-effort và live audit đã quan sát `NoAudioReceived`/timeout theo câu ở cả HoaiMy lẫn NamMinh.
+3. **Ở đâu:** secret manager, billing account và hồ sơ third-party vendor của production.
+4. **Thao tác:** tích hợp provider qua contract `TTSProvider`, không bypass `TTSOrchestrator`; chạy lại cùng live report, load/soak và failover drill.
+5. **Expected:** SLO, quota/cost alert, retry policy và data retention được phê duyệt.
+6. **Verify:** canary thực tế, dashboard error/fallback/p95 và diễn tập provider outage.
+7. **Risk:** cả hai Edge voice cùng lỗi khiến TTS trả 503 dù backend/ASR/Agent còn khỏe.
+
+### 9.3 Device/browser playback matrix
+
+1. **Việc làm:** QA kiểm tra autoplay, mute/unmute, Bluetooth, đổi output device, background tab và cuộc gọi liên tiếp trên browser/mobile mục tiêu.
+2. **Tại sao:** AI agent không thể tự cấp quyền media hoặc xác nhận âm thanh phát qua thiết bị vật lý của người dùng.
+3. **Ở đâu:** staging HTTPS trên Chrome/Edge và thiết bị nằm trong support matrix.
+4. **Expected:** không nói đè, không Promise treo, lỗi phát được hiển thị và audio dừng khi mute/unmount.
+5. **Verify:** test record có browser/version/device và video/log network-console.
+6. **Risk:** server audio đúng nhưng người dùng nghe im lặng hoặc audio cũ phát đè lượt mới.

@@ -1,93 +1,213 @@
-# AloSM Voice — AI Booking Assistant
+# AloSM AI Booking Assistant
 
-Trợ lý đặt xe bằng giọng nói/tin nhắn cho AloSM: khách nói/nhắn nhu cầu → Agent AI
-hiểu, thu thập điểm đón/đến, xác nhận → đặt xe hoặc chuyển tổng đài viên nếu cần.
-Xem PRD đầy đủ tại [`docs/PRD_AloSM_Voice.md`](docs/PRD_AloSM_Voice.md).
+Web MVP đặt xe bằng **text hoặc voice**. Phạm vi chính gồm Login/Auth và Homepage với AloSM Assistant; chưa gồm live tracking, trip history, payment hoặc wallet.
 
-## Kiến trúc tổng quan
+Agent coding mới nên bắt đầu tại
+[`docs/CODING_AGENT_HANDOFF.md`](docs/CODING_AGENT_HANDOFF.md), sau đó đọc
+[`docs/LIVEKIT_TEAM_SETUP.md`](docs/LIVEKIT_TEAM_SETUP.md) và
+[`docs/PHASE4_EVALUATION_PLAN.md`](docs/PHASE4_EVALUATION_PLAN.md).
 
-```
-Frontend (React/Vite)  --HTTP/WS-->  Backend (FastAPI)
-                                        │
-                        ┌───────────────┼──────────────────┐
-                        │               │                  │
-                   Agentic AI       Voice AI           Auth/Session/
-                (src/agents/)     (src/voice/,        Booking/Trip
-                LangGraph agent,   src/backend/       (src/backend/
-                RAG, tools,        api/routes/         services/,
-                guardrails         voice.py)           controllers/)
-```
+Thành viên mới muốn cài và chạy từ đầu nên dùng
+[`docs/DEVELOPER_SETUP.md`](docs/DEVELOPER_SETUP.md).
 
-- **Backend**: FastAPI, entrypoint `src/main.py` → `src/backend/main.py`. Domain
-  services (auth, session, booking, trip, handoff, call) hiện lưu **in-memory**
-  (dict cấp class) — xem [`mustdo.md`](mustdo.md) mục 5 cho lộ trình chuyển sang
-  Postgres (Supabase) đã có sẵn hạ tầng tại `src/backend/db/`.
-- **Agentic AI** (`src/agents/`): LangGraph agent thật điều khiển hội thoại đặt xe
-  (thay cho rule-engine đơn giản ban đầu) — xem `src/agents/README.md`.
-- **Voice AI**: hiện có **2 hệ thống song song**, xem
-  [`docs/voice-ai/architecture-note-2-voice-systems.md`](docs/voice-ai/architecture-note-2-voice-systems.md)
-  để biết cái nào frontend đang dùng thật và vì sao.
-- **Frontend** (`src/frontend/`): React + Vite + Tailwind. Trang thật đang chạy:
-  `/login` và `/` (chat/voice assistant) — các trang khác (`Booking`, `Tracking`,
-  `Payment`, `Profile`, `Activity`, `Home`) hiện **không có route nào trỏ tới**.
+Kiến trúc tổng thể: [`docs/MVP_ARCHITECTURE.md`](docs/MVP_ARCHITECTURE.md) ·
+Runtime truth: [`docs/PROJECT_SOURCE_OF_TRUTH.md`](docs/PROJECT_SOURCE_OF_TRUTH.md)
 
-## Chạy dự án
+Setup LiveKit chi tiết cho thành viên mới, mức độ tích hợp BE/FE/DB, catalog địa
+điểm, ưu/nhược điểm và troubleshooting:
+[`docs/LIVEKIT_TEAM_SETUP.md`](docs/LIVEKIT_TEAM_SETUP.md).
 
-### Backend
+## 1. Setup
+
+Yêu cầu: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js/npm và FFmpeg/FFprobe.
 
 ```bash
-cp .env.example .env   # điền GROQ_API_KEY / OPENAI_API_KEY / DATABASE_URL... theo nhu cầu
-pip install -r requirements.txt
-make run                # hoặc: uvicorn src.main:app --reload --port 8000
-```
+uv sync
+cp .env.example .env
 
-### Frontend
-
-```bash
 cd src/frontend
-npm install
+npm ci
+```
+
+Sau khi copy `.env`, chọn profile trong
+[`docs/DEVELOPER_SETUP.md`](docs/DEVELOPER_SETUP.md). Chỉ chạy
+`uv run alembic upgrade head` khi dùng profile development có database persistence;
+profile `APP_ENV=test` để smoke nhanh không cần migration.
+
+Chạy hai terminal:
+
+```bash
+# Terminal 1 — backend: http://localhost:8000
+uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2 — frontend: http://localhost:5173
+cd src/frontend
 npm run dev
 ```
 
-### Test / lint
+Demo account chỉ dùng trực tiếp khi `APP_ENV=test`. Với durable development database,
+hãy đăng ký qua UI hoặc dùng account đã được seed trong database dev:
 
-```bash
-make test        # pytest tests/ -v
-make lint         # ruff check
-cd src/frontend && npm run lint && npx tsc -b && npm run build
+```text
+Phone:    0901234567
+Password: Password123!
 ```
 
-## Cấu trúc thư mục
+### Chạy LiveKit Voice Agent
 
-| Đường dẫn | Nội dung |
-|---|---|
-| `src/backend/` | FastAPI app: routes, controllers, services, schemas, DB layer |
-| `src/agents/` | Agentic AI (LangGraph agent, RAG, tools, guardrails, workflows) |
-| `src/voice/` | Voice AI engine (ASR/TTS provider, VAD, gazetteer, formatter) — 1 trong 2 hệ thống voice, xem ghi chú kiến trúc ở trên |
-| `src/models/` | Schema dùng chung giữa Backend và Voice (WS protocol) |
-| `src/frontend/` | React app (Vite) |
-| `docs/` | Tài liệu dự án — xem bảng dưới |
-| `mustdo.md` | Việc cần người thật làm (credential, tài khoản, quyết định sản phẩm) — không phải việc code được |
-| `tests/` | Test (pytest cho backend/agents/voice) |
-| `migrations/` | Alembic migration (Postgres/Supabase) |
-| `examples/`, `demo/` | Script/demo độc lập, không phải production code |
-| `scripts/` | Script hạ tầng (AI usage logging hooks — yêu cầu của khoá học) |
+LiveKit runtime cần ba tiến trình; mỗi lệnh chạy trong một terminal riêng. Chỉ
+chạy một worker `alosm-voice` để tránh nhiều job test cùng tồn tại:
 
-## Tài liệu (`docs/`)
+```bash
+# Terminal 1 — FastAPI control/business plane
+make livekit-backend
+
+# Terminal 2 — native LiveKit AgentServer/AgentSession worker
+make livekit-worker
+
+# Terminal 3 — React dùng LiveKit useSession
+make livekit-frontend
+```
+
+Các lệnh trên chạy LiveKit voice và Core Agent text độc lập. Nếu lần đầu agent chưa
+tham gia do cold start/dispatch tạm thời, UI tự tạo lại đúng một cuộc gọi; nếu vẫn
+lỗi, nút **Tạo lại cuộc gọi** sẽ đóng LiveKit session cũ và tạo call ID, Room và
+agent dispatch mới.
+
+Để debug lỗi mất câu, ngắt giọng hoặc nhận sai địa điểm trong local test, chạy
+worker với native LiveKit event logging. Terminal vẫn hiện event ngắn và bản đầy đủ
+được lưu dạng JSONL trong `logs/livekit/`:
+
+```bash
+LIVEKIT_DEBUG_EVENT_LOG=true \
+LIVEKIT_DEBUG_TRANSCRIPTS=true \
+make livekit-worker
+```
+
+Transcript mặc định không được lưu; chỉ bật `LIVEKIT_DEBUG_TRANSCRIPTS=true` cho
+phiên local đã được phép debug. Logger không ghi raw audio, token, credential, tool
+arguments hoặc provider payload.
+
+## 2. Environment variables
+
+Copy `.env.example` thành `.env`; không commit secret.
+
+| Biến | Khi nào cần | Giá trị/vai trò |
+|---|---|---|
+| `APP_ENV` | Luôn có | `development`, `test` hoặc `production` |
+| `DATABASE_URL` | Luôn có | SQLite local hoặc PostgreSQL runtime URL |
+| `DATABASE_URL_MIGRATIONS` | Supabase/PostgreSQL | Connection riêng cho Alembic |
+| `AGENT_LLM_ENABLED` | Chat/booking qua LLM | Mặc định `false`; bật khi đã có provider key |
+| `AGENT_LLM_MODEL` | Chat/booking qua LLM | Model hỗ trợ tool calling |
+| `AGENT_LLM_BASE_URL` | LLM | OpenAI endpoint hoặc OpenRouter endpoint |
+| `OPENAI_API_KEY` | Core Agent hoặc LiveKit provider OpenAI | Không thay thế bằng OpenRouter key |
+| `OPENROUTER_API_KEY` | LLM/rewrite qua OpenRouter | Chỉ dùng với `openrouter.ai` base URL |
+| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Voice realtime | Cùng một LiveKit project |
+| `LIVEKIT_STT_*`, `LIVEKIT_LLM_*`, `LIVEKIT_TTS_*` | Voice model | Provider/model cho worker LiveKit |
+| `QUOTE_SIGNING_KEY` | Durable quote | Secret tối thiểu 32 ký tự |
+| `FIELD_ENCRYPTION_KEY` | 2FA fields | Secret tối thiểu 32 ký tự |
+| `VITE_API_URL` | Frontend deploy khác origin | Mặc định `http://localhost:8000` |
+
+### OpenRouter cho Core Agent text
+
+```env
+OPENROUTER_API_KEY=...
+AGENT_LLM_ENABLED=true
+AGENT_LLM_BASE_URL=https://openrouter.ai/api/v1
+AGENT_LLM_MODEL=openai/gpt-5.6-luna-pro
+```
+
+### Database
+
+Local không cần Supabase:
+
+```env
+DATABASE_URL=sqlite:///./data/app.db
+```
+
+Với Supabase, project này dùng transaction pooler cho app và direct/session connection cho migration:
+
+```env
+DATABASE_URL=postgresql://postgres.<PROJECT_REF>:<PASSWORD>@<POOLER_HOST>:5432/postgres
+DATABASE_URL_MIGRATIONS=postgresql://postgres:<PASSWORD>@db.<PROJECT_REF>.supabase.co:5432/postgres
+```
+
+Direct connection thường cần IPv6; lấy đúng URL từ nút **Connect** trong Supabase Dashboard. Không đưa database password hoặc service-role key vào frontend. Chi tiết: [`docs/database_supabase.md`](docs/database_supabase.md) và [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres).
+
+Tạo hai application secrets độc lập:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+## 3. Sample queries
+
+Happy path Hà Nội hiện yêu cầu chọn candidate cụ thể cho VinUni và Hồ Gươm:
+
+```text
+User: Cho tôi xe 4 chỗ từ VinUni tới Hồ Gươm.
+User: Tôi chọn Cổng chính VinUni.
+User: Tôi chọn Bưu điện Hà Nội.
+User: Đúng, tôi xác nhận đặt chuyến này.
+```
+
+Các câu thử Voice rewrite:
+
+```text
+Đón tôi ở Bình Yuni rồi đi Hồ Cương.
+Tôi chọn cổng thành cũng.       # khi Agent đang hỏi cổng VinUni
+Không, tôi muốn sửa điểm đến.
+```
+
+API examples:
+
+```bash
+# Login
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"phone":"0901234567","password":"Password123!"}'
+
+# Text turn
+curl -X POST http://localhost:8000/api/v1/sessions/<SESSION_ID>/messages \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Cho tôi xe 4 chỗ từ VinUni tới Hồ Gươm","source":"TEXT"}'
+
+# Voice uses the LiveKit connection-details endpoint and native Room transport.
+```
+
+## 4. Tests và eval evidence
+
+```bash
+# Full backend/agent/voice suite
+uv run pytest -q
+uv run ruff check src tests eval_cases
+
+# Frontend
+cd src/frontend
+npm run lint
+npm run build
+```
+
+Chạy 6 Agent workflow evals nhiều lượt và selected regression tests:
+
+```bash
+uv run python -m eval_cases.run_agent_workflow_evals
+```
+
+Kết quả tổng hợp nằm tại [`eval_cases/agent_workflow_eval_summary.json`](eval_cases/agent_workflow_eval_summary.json). Mỗi case có một JSON riêng ghi toàn bộ lượt user/agent, semantic decision, backend tool call và state sau lượt đó trong [`eval_cases/results/`](eval_cases/results/). Các case gồm happy path, đổi điểm đón, đổi điểm đến, đổi loại xe, yêu cầu ngoài phạm vi và handoff tổng đài viên. Xem [`eval_cases/README.md`](eval_cases/README.md) để tái chạy evidence.
+
+Các eval dùng scripted semantic decisions để tái lập nhưng vẫn chạy production Agent/state machine/backend tools ở chế độ in-memory; không gọi provider thật và không cần API key.
+
+## 5. Project layout
 
 | Thư mục | Nội dung |
 |---|---|
-| `docs/PRD_AloSM_Voice.md`, `docs/MVP.md`, `docs/BACKEND_TODOS_v3.md` | Yêu cầu sản phẩm, kế hoạch MVP |
-| `docs/architecture_diagram.md`, `docs/interface_design.md` | Kiến trúc & thiết kế giao diện |
-| `docs/voice-ai/` | Tài liệu Voice AI (thiết kế, TODO, dev local, ghi chú 2-hệ-thống) |
-| `docs/database_supabase.md` | Thiết kế + hướng dẫn setup database Supabase |
-| `docs/reports/` | Báo cáo tiến độ theo mốc thời gian (lịch sử, không phải tài liệu tham chiếu hiện hành) |
-| `docs/guide/`, `specification_documents/` | Tài liệu/template gốc của khoá học AI20K — không phải tài liệu riêng của project này, giữ nguyên để tham khảo |
-
-## Ghi chú quan trọng
-
-- **`mustdo.md`** liệt kê mọi việc cần thao tác thủ công (tạo tài khoản Supabase,
-  Payment Gateway thật, v.v.) — luôn xem file này trước khi hỏi "sao chưa hoạt động".
-- Backend hiện là **in-memory MVP** (không phải bug) — dữ liệu mất khi restart server,
-  cho tới khi các service được nối vào `src/backend/db/` (hạ tầng Postgres đã sẵn
-  sàng, xem `docs/database_supabase.md`).
+| `src/frontend/` | React Login, Homepage và Assistant popup |
+| `src/backend/` | FastAPI routes, services, repositories và provider adapters |
+| `src/agents/` | Core Agent model/tool loop, typed state và guardrails |
+| `src/voice_agent/` | LiveKit AgentSession, booking tools, persistence và handoff |
+| `migrations/` | Alembic migrations |
+| `data/gazetteer/` | Hà Nội places, ASR aliases và landmark candidates |
+| `eval_cases/` | Reproducible MVP evaluation và JSON evidence |
+| `docs/` | Architecture, runtime contracts và operations guides |

@@ -1,14 +1,17 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { Home, Grid, History, Sparkles, Settings, User } from "lucide-react";
+import { Headphones, Home, Grid, History, Settings, User } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { getUserRole } from "@/features/auth/storage";
 import logoSvg from "@/assets/logo.svg";
 
-const navItems = [
+// "AI Assistant" đã bỏ khỏi danh sách điều hướng trang — Voice AI không còn là 1
+// trang riêng để chuyển tới, mà là nút nổi + popup khả dụng ngay trên mọi trang (xem
+// VoiceAIButton.tsx, mounted trong AppLayout).
+const customerNavItems = [
   { path: "/", label: "Home", icon: Home },
   { path: "/booking", label: "Services", icon: Grid },
   { path: "/activity", label: "Activity", icon: History },
-  { path: "/assistant", label: "AI Assistant", icon: Sparkles },
   { path: "/payment", label: "Settings", icon: Settings },
   { path: "/profile", label: "Account", icon: User },
 ];
@@ -27,6 +30,9 @@ const COLLAPSE_TRANSITION = "duration-300 ease-in-out";
 const REVEAL_JUSTIFY_START_ON_HOVER = "group-hover/sidebar:justify-start group-focus-within/sidebar:justify-start";
 
 export const Sidebar: React.FC = () => {
+  const navItems = getUserRole() === "OPERATOR" || getUserRole() === "ADMIN"
+    ? [...customerNavItems, { path: "/operator", label: "Operator", icon: Headphones }]
+    : customerNavItems;
   return (
     <>
       {/* Ô giữ chỗ trong hàng flex — LUÔN giữ đúng bề rộng dải hẹp (w-20), không đổi
@@ -91,8 +97,8 @@ export const Sidebar: React.FC = () => {
                       "group-hover/sidebar:px-4 group-hover/sidebar:gap-4 group-focus-within/sidebar:px-4 group-focus-within/sidebar:gap-4",
                       "transition-[background-color,color,padding,gap,justify-content] duration-200",
                       isActive
-                        ? "text-[#006a62] bg-[#00D1C1]/10 font-bold shadow-xs dark:text-[#00D1C1] dark:bg-[#00D1C1]/15"
-                        : "text-slate-600 hover:bg-[#00D1C1]/10 hover:text-[#006a62] dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-[#00D1C1]"
+                        ? "text-[#008F88] bg-[#00C9B7]/10 font-bold shadow-xs dark:text-[#00C9B7] dark:bg-[#00C9B7]/15"
+                        : "text-slate-600 hover:bg-[#00C9B7]/10 hover:text-[#008F88] dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-[#00C9B7]"
                     )
                   }
                 >
@@ -101,7 +107,7 @@ export const Sidebar: React.FC = () => {
                       <Icon
                         className={cn(
                           "w-5 h-5 shrink-0 transition-transform duration-200",
-                          isActive ? "text-[#00D1C1]" : "text-slate-500 dark:text-slate-400"
+                          isActive ? "text-[#00C9B7]" : "text-slate-500 dark:text-slate-400"
                         )}
                       />
                       {/* Chữ nhãn trượt/mờ dần theo width+opacity thay vì biến mất đột
@@ -138,7 +144,7 @@ export const Sidebar: React.FC = () => {
           )}
         >
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#00D1C1] animate-pulse shrink-0" />
+            <span className="w-2 h-2 rounded-full bg-[#00C9B7] animate-pulse shrink-0" />
             <span
               className={cn(
                 "overflow-hidden whitespace-nowrap font-medium text-slate-700 w-0 opacity-0",
