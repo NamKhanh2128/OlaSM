@@ -216,6 +216,14 @@ class BookingDraft(BaseModel):
         self.booking = booking
         self.revision += 1
 
+    def mark_booking_cancelled(self, booking: BookingResult) -> None:
+        if self.booking is None or self.booking.booking_id != booking.booking_id:
+            raise ValueError("BOOKING_NOT_FOUND_IN_DRAFT")
+        if booking.status != "CANCELLED":
+            raise ValueError("BOOKING_CANCEL_NOT_CONFIRMED")
+        self.booking = booking
+        self.revision += 1
+
     def public_state(self) -> dict[str, object]:
         return {
             "schema_version": "1",
@@ -244,7 +252,10 @@ class BookingDraft(BaseModel):
         if vehicle_label:
             details.append(f"loại xe {vehicle_label}")
         if self.booking is not None:
-            details.append(f"đã tạo chuyến mã {self.booking.booking_id}")
+            if self.booking.status == "CANCELLED":
+                details.append(f"chuyến mã {self.booking.booking_id} đã hủy")
+            else:
+                details.append(f"đã tạo chuyến mã {self.booking.booking_id}")
         elif self.confirmation_status == "confirmed":
             details.append("khách đã xác nhận và đang chờ tạo chuyến")
         elif self.confirmation_status == "awaiting":

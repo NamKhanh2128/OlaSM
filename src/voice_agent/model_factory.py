@@ -10,7 +10,26 @@ from src.voice_agent.config import LiveKitVoiceSettings
 
 
 def build_stt(settings: LiveKitVoiceSettings) -> stt.STT:
-    """Build the configured STT using an official LiveKit integration."""
+    """Build the configured STT using the selected provider's own credentials."""
+
+    if settings.livekit_stt_provider == "elevenlabs":
+        try:
+            from livekit.plugins import elevenlabs
+        except ImportError as exc:  # pragma: no cover - depends on optional plugin
+            raise RuntimeError(
+                "LIVEKIT_STT_PROVIDER=elevenlabs requires the livekit-plugins-elevenlabs package."
+            ) from exc
+        return elevenlabs.STT(
+            api_key=settings.eleven_api_key.get_secret_value(),
+            model=settings.livekit_stt_model,
+            language_code=settings.livekit_stt_language,
+            server_vad={
+                "vad_silence_threshold_secs": (settings.livekit_stt_server_vad_silence_threshold_seconds),
+                "vad_threshold": settings.livekit_stt_server_vad_threshold,
+                "min_speech_duration_ms": settings.livekit_stt_server_vad_min_speech_duration_ms,
+                "min_silence_duration_ms": settings.livekit_stt_server_vad_min_silence_duration_ms,
+            },
+        )
 
     if settings.livekit_stt_provider == "google":
         try:

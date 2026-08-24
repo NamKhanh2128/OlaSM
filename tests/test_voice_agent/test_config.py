@@ -19,6 +19,7 @@ def test_livekit_configuration_fails_closed_when_required_values_are_missing() -
         "LIVEKIT_LLM_MODEL_REQUIRED",
         "LIVEKIT_TTS_MODEL_REQUIRED",
         "LIVEKIT_TTS_VOICE_REQUIRED",
+        "ELEVEN_API_KEY_REQUIRED_FOR_ELEVENLABS_STT",
     ]
     with pytest.raises(ValueError, match="LIVEKIT_URL_REQUIRED"):
         config.require_configured()
@@ -30,19 +31,24 @@ def test_livekit_accepts_complete_native_pipeline_configuration() -> None:
         livekit_api_key="api-key",
         livekit_api_secret="api-secret",
         livekit_stt_model="provider/stt-model",
+        eleven_api_key="test-eleven-key",
         livekit_llm_model="provider/llm-model",
         livekit_tts_model="provider/tts-model",
         livekit_tts_voice="vi-voice",
     )
 
     assert config.configuration_errors() == []
-    assert config.livekit_turn_detection == "vad"
+    assert config.livekit_turn_detection == "stt"
     assert config.livekit_llm_provider == "livekit"
-    assert config.livekit_tts_provider == "livekit"
+    assert config.livekit_tts_provider == "google"
     assert config.livekit_interruption_mode == "vad"
     assert config.livekit_endpointing_mode == "fixed"
-    assert config.livekit_endpointing_min_delay_seconds == 0.8
-    assert config.livekit_endpointing_max_delay_seconds == 2.5
+    assert config.livekit_endpointing_min_delay_seconds == 0.25
+    assert config.livekit_endpointing_max_delay_seconds == 1.0
+    assert config.livekit_stt_server_vad_silence_threshold_seconds == 1.0
+    assert config.livekit_stt_server_vad_threshold == 0.4
+    assert config.livekit_stt_server_vad_min_speech_duration_ms == 250
+    assert config.livekit_stt_server_vad_min_silence_duration_ms == 1000
     assert config.livekit_interruption_min_duration_seconds == 0.5
     assert config.livekit_transcription_timeout_seconds == 5.0
     assert config.livekit_stt_language == "vi"
@@ -62,6 +68,7 @@ def test_livekit_url_must_use_websocket_scheme() -> None:
         livekit_api_key="api-key",
         livekit_api_secret="api-secret",
         livekit_stt_model="stt",
+        eleven_api_key="test-eleven-key",
         livekit_llm_model="llm",
         livekit_tts_model="tts",
         livekit_tts_voice="voice",
@@ -113,3 +120,13 @@ def test_standalone_google_stt_benchmark_does_not_require_llm_or_tts() -> None:
 
     assert config.stt_configuration_errors() == []
     config.require_stt_configured()
+
+
+def test_elevenlabs_stt_requires_its_own_api_key() -> None:
+    config = settings(
+        livekit_stt_provider="elevenlabs",
+        livekit_stt_model="scribe_v2_realtime",
+        eleven_api_key="",
+    )
+
+    assert "ELEVEN_API_KEY_REQUIRED_FOR_ELEVENLABS_STT" in config.stt_configuration_errors()

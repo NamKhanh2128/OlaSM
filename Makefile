@@ -7,7 +7,7 @@ livekit-backend:
 	uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
 livekit-worker:
-	uv run python -m src.voice_agent.server dev
+	uv run python -m src.voice_agent.server dev --log-level INFO
 
 livekit-frontend:
 	cd src/frontend && npm run dev

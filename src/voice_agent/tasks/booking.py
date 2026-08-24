@@ -8,7 +8,7 @@ import re
 import unicodedata
 from typing import Literal
 
-from livekit.agents import AgentTask, RunContext, ToolError, function_tool, llm
+from livekit.agents import AgentTask, RunContext, StopResponse, ToolError, function_tool, llm
 from pydantic import BaseModel, ConfigDict
 
 from src.voice_agent.persistence import (
@@ -33,6 +33,10 @@ from src.voice_agent.tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+_LOW_CONFIDENCE_TRUSTED_PLACE_PROVIDERS = frozenset(
+    {"local_gazetteer", "local_landmark_mock", "local_landmark_mock_exact"}
+)
 
 
 class BookingOutcome(BaseModel):
@@ -69,12 +73,23 @@ def is_explicit_confirmation(value: str) -> bool:
 def requires_location_clarification(
     message: llm.ChatMessage | None,
     threshold: float,
+    candidates: list[object] | None = None,
 ) -> bool:
-    """Text input has no confidence and remains an intentional fallback path."""
+    """Repeat only when low-confidence speech has no trusted location match.
 
-    return (
+    Scribe realtime can omit word logprobs and report zero confidence for an
+    otherwise correct transcript. A canonical/alias gazetteer match is stronger
+    evidence than that missing confidence signal; fuzzy matches remain blocked.
+    """
+
+    is_low_confidence = (
         message is not None and message.transcript_confidence is not None and message.transcript_confidence < threshold
     )
+    has_trusted_candidate = any(
+        getattr(candidate, "provider", None) in _LOW_CONFIDENCE_TRUSTED_PLACE_PROVIDERS
+        for candidate in (candidates or [])
+    )
+    return is_low_confidence and not has_trusted_candidate
 
 
 def can_auto_select_place(candidates: list[object]) -> bool:
@@ -108,6 +123,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         self._bookings = bookings or BookingToolsService()
         self._handoffs = handoffs or HandoffToolsService()
         self._state_store = state_store or EphemeralVoiceStateStore()
+        self._handoff_wait_started = False
         super().__init__(
             chat_ctx=chat_ctx,
             instructions=(
@@ -127,7 +143,7 @@ class BookingTask(AgentTask[BookingOutcome]):
                 "Chỉ gọi confirm_booking khi lượt nói mới nhất của khách xác nhận đặt chuyến rõ ràng. "
                 "Chỉ gọi create_booking sau khi confirm_booking thành công. "
                 "Nếu khách sửa điểm đón, điểm đến hoặc loại xe, gọi tool tương ứng; hệ thống sẽ "
-                "tự xoá giá và xác nhận cũ. Không được tự bịa giá, ETA hoặc mã chuyến."
+                "tự xoá giá và xác nhận cũ. Không được tự bịa giá, ETA hoặc mã chuyến. "
                 "Nếu tool báo ASR_LOW_CONFIDENCE thì yêu cầu khách nói lại hoặc nhập tay. "
                 "Nếu khách yêu cầu gặp người thật, tổng đài viên thật, nhân viên thật, operator hoặc yêu cầu chuyển máy, "
                 "bắt buộc gọi request_handoff ngay; không được nói bạn là người thật hay chưa có chức năng chuyển. "
@@ -155,7 +171,21 @@ class BookingTask(AgentTask[BookingOutcome]):
                 return item if isinstance(item, llm.ChatMessage) else None
         return None
 
+    def _enter_handoff_wait(self) -> None:
+        if self._handoff_wait_started:
+            return
+        self._handoff_wait_started = True
+        self.session.input.set_audio_enabled(False)
+        acknowledgement = self.session.say(
+            "Tôi đã chuyển yêu cầu của bạn đến tổng đài viên. Vui lòng chờ trong giây lát.",
+            allow_interruptions=False,
+        )
+        acknowledgement.add_done_callback(lambda _: self.session.output.set_audio_enabled(False))
+
     async def _create_handoff(self, userdata: AloSMSessionData, reason: str) -> BookingOutcome:
+        current = userdata.handoff
+        if current is not None and current.status in {"pending", "accepted", "connected"}:
+            return BookingOutcome(status="handoff", message="Đang chờ tổng đài viên nhận cuộc gọi.")
         room = getattr(getattr(self.session, "room_io", None), "room", None)
         room_name = getattr(room, "name", None)
         record = await self._handoffs.create(userdata, reason=reason, room_name=room_name)
@@ -180,13 +210,17 @@ class BookingTask(AgentTask[BookingOutcome]):
         )
 
     async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
-        # Human-handoff intent is booking-critical. Detect it before the task
-        # LLM responds so an ambiguous location turn cannot swallow the request.
+        # A handoff is terminal for this AI turn: no second LLM reply may follow.
+        current = self.session.userdata.handoff
+        if current is not None and current.status in {"pending", "accepted", "connected"}:
+            raise StopResponse()
         if HandoffToolsService.is_handoff_request(new_message.text_content or ""):
             try:
                 outcome = await self._create_handoff(self.session.userdata, new_message.text_content or "")
             except Exception:
-                logger.exception("failed to create deterministic human handoff session=%s", self.session.userdata.app_session_id)
+                logger.exception(
+                    "failed to create deterministic human handoff session=%s", self.session.userdata.app_session_id
+                )
                 self.session.userdata.record_failure(
                     "HANDOFF_REQUIRED",
                     "Chưa thể tạo yêu cầu chuyển tổng đài viên.",
@@ -195,8 +229,10 @@ class BookingTask(AgentTask[BookingOutcome]):
                 )
                 await publish_booking_state(self.session)
                 return
+            self._enter_handoff_wait()
             if not self.done():
                 self.complete(outcome)
+            raise StopResponse()
 
     async def _commit(self, context: RunContext[AloSMSessionData]) -> None:
         try:
@@ -228,7 +264,12 @@ class BookingTask(AgentTask[BookingOutcome]):
         latest = self._latest_user_message()
         confidence = latest.transcript_confidence if latest is not None else None
         context.userdata.last_asr_confidence = confidence
-        if requires_location_clarification(latest, context.userdata.critical_confidence_threshold):
+        candidates = self._places.search(query)
+        if requires_location_clarification(
+            latest,
+            context.userdata.critical_confidence_threshold,
+            candidates,
+        ):
             context.userdata.record_failure(
                 "ASR_LOW_CONFIDENCE",
                 "Tổng đài chưa nghe rõ địa điểm quan trọng.",
@@ -237,7 +278,6 @@ class BookingTask(AgentTask[BookingOutcome]):
             await self._commit(context)
             return "ASR_LOW_CONFIDENCE: Hãy yêu cầu khách nói lại địa điểm hoặc nhập tay."
 
-        candidates = self._places.search(query)
         draft = self._draft(context)
         draft.set_candidates(target, query, candidates)
         if not candidates:
@@ -421,9 +461,10 @@ class BookingTask(AgentTask[BookingOutcome]):
             )
             await self._commit(context)
             raise ToolError("HANDOFF_CREATE_FAILED") from exc
+        self._enter_handoff_wait()
         if not self.done():
             self.complete(outcome)
-        return None
+        raise StopResponse()
 
     @function_tool()
     async def cancel_booking_flow(

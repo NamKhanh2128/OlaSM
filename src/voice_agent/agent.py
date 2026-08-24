@@ -3,7 +3,7 @@
 import json
 import logging
 
-from livekit.agents import Agent, function_tool, llm
+from livekit.agents import Agent, StopResponse, function_tool, llm
 
 from src.backend.services.knowledge_service import KnowledgeService
 from src.backend.services.pricing_service import PricingService
@@ -11,6 +11,7 @@ from src.voice_agent.persistence import EphemeralVoiceStateStore, VoiceStateStor
 from src.voice_agent.session_data import AloSMSessionData, HandoffState
 from src.voice_agent.state_sync import publish_booking_state
 from src.voice_agent.tasks import BookingTask
+from src.voice_agent.tools.bookings import BookingToolsService
 from src.voice_agent.tools.handoffs import HandoffToolsService
 
 logger = logging.getLogger(__name__)
@@ -26,10 +27,13 @@ class AloSMAgent(Agent):
         session_data: AloSMSessionData | None = None,
         knowledge_service: KnowledgeService | None = None,
         pricing_service: PricingService | None = None,
+        bookings: BookingToolsService | None = None,
     ) -> None:
         self._state_store = state_store or EphemeralVoiceStateStore()
         self._session_data = session_data
         self._handoffs = HandoffToolsService()
+        self._bookings = bookings or BookingToolsService()
+        self._handoff_wait_started = False
         # These catalogs are local, validated and cached.  They are injected so
         # the LiveKit process can preload them once instead of reading files on
         # every call or every turn.
@@ -53,9 +57,8 @@ class AloSMAgent(Agent):
                 "Mọi câu hỏi về trạng thái đặt xe, đặt thành công hay mã chuyến đều phải gọi "
                 "get_booking_status trước khi trả lời. Chỉ được nói đã đặt thành công khi kết quả tool "
                 "có booking_id; nếu booking_id là null thì phải nói chuyến chưa được tạo. "
-                "Sau khi BookingTask chuyển tổng đài viên, không được tự coi yêu cầu đó là đã đặt. "
-                "Nếu khách nói muốn gặp người thật, tổng đài viên thật, nhân viên thật, operator hoặc yêu cầu chuyển máy, "
-                "bắt buộc gọi request_handoff ngay; không được trả lời rằng bạn là người thật hoặc chưa có chức năng chuyển. "
+                "Khi khách yêu cầu gặp tổng đài viên thật, gọi request_handoff; sau đó không trả lời thêm vì hệ thống sẽ chờ người thật vào phòng. "
+                "Khi khách yêu cầu hủy chuyến đã tạo, bắt buộc gọi cancel_booking; không được chỉ nói đã hủy hoặc dùng cancel_booking_flow. "
                 "Khi khách hỏi chính sách, hành lý, phí hoặc điều kiện dịch vụ, gọi search_knowledge; "
                 "khi khách hỏi các loại xe, gọi get_vehicle_options. Chỉ đọc thông tin mà tool trả về, "
                 "kèm nguồn hoặc phiên bản khi phù hợp; không tự bịa hoặc dùng RAG cho báo giá một lộ trình. "
@@ -66,12 +69,36 @@ class AloSMAgent(Agent):
     @function_tool()
     async def start_booking(self) -> str:
         """Start or resume the native AloSM ride-booking task for this call."""
+        if self._session_data is not None and self._session_data.handoff is not None:
+            if self._session_data.handoff.status in {"pending", "accepted", "connected"}:
+                return "Đang chờ tổng đài viên nhận cuộc gọi; không được tiếp tục đặt xe."
         # LiveKit recommends carrying conversation history into a task while
         # excluding the parent instructions, so the focused task prompt remains
         # small and authoritative.
         task_context = self.chat_ctx.copy(exclude_instructions=True)
         outcome = await BookingTask(chat_ctx=task_context, state_store=self._state_store)
         return outcome.message
+
+    @staticmethod
+    def _handoff_is_active(response: str) -> bool:
+        try:
+            status = str(json.loads(response).get("status") or "")
+        except json.JSONDecodeError:
+            return False
+        return status in {"pending", "accepted", "connected"}
+
+    def _enter_handoff_wait(self) -> None:
+        """Keep the Room alive for the operator while making the AI quiescent."""
+
+        if self._handoff_wait_started:
+            return
+        self._handoff_wait_started = True
+        self.session.input.set_audio_enabled(False)
+        acknowledgement = self.session.say(
+            "Tôi đã chuyển yêu cầu của bạn đến tổng đài viên. Vui lòng chờ trong giây lát.",
+            allow_interruptions=False,
+        )
+        acknowledgement.add_done_callback(lambda _: self.session.output.set_audio_enabled(False))
 
     async def _create_handoff(self, reason: str) -> str:
         if self._session_data is None:
@@ -127,20 +154,63 @@ class AloSMAgent(Agent):
             )
 
     async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
-        # Detect explicit human requests before the parent LLM gets a chance to
-        # produce a generic customer-support reply.
+        # Stop this turn before the LLM can add a second AI reply after a handoff.
+        current = self._session_data.handoff if self._session_data is not None else None
+        if current is not None and current.status in {"pending", "accepted", "connected"}:
+            raise StopResponse()
         if HandoffToolsService.is_handoff_request(new_message.text_content or ""):
-            await self._create_handoff(new_message.text_content or "")
+            result = await self._create_handoff(new_message.text_content or "")
+            if self._handoff_is_active(result):
+                self._enter_handoff_wait()
+                raise StopResponse()
 
     @function_tool()
     async def request_handoff(self, reason: str) -> str:
-        """Create a human operator handoff for any point in the conversation.
+        result = await self._create_handoff(reason)
+        if self._handoff_is_active(result):
+            self._enter_handoff_wait()
+            raise StopResponse()
+        return result
 
-        This top-level tool is intentionally available before booking starts;
-        BookingTask exposes the same LiveKit-native operation while a booking
-        task is active.
-        """
-        return await self._create_handoff(reason)
+    @function_tool()
+    async def cancel_booking(self, reason: str) -> str:
+        """Cancel the already-created booking owned by this voice session."""
+
+        if self._session_data is None or self._session_data.booking_draft.booking is None:
+            return json.dumps(
+                {"cancelled": False, "instruction": "Không có chuyến đã tạo để hủy."},
+                ensure_ascii=False,
+            )
+        booking = self._session_data.booking_draft.booking
+        try:
+            cancelled = await self._bookings.cancel(
+                booking_id=booking.booking_id,
+                user_id=self._session_data.user_id,
+                app_session_id=self._session_data.app_session_id,
+            )
+        except Exception:
+            logger.exception("failed to cancel booking id=%s", booking.booking_id)
+            return json.dumps(
+                {"cancelled": False, "booking_id": booking.booking_id, "instruction": "Hủy chuyến chưa thành công."},
+                ensure_ascii=False,
+            )
+        if cancelled is None:
+            return json.dumps(
+                {"cancelled": False, "booking_id": booking.booking_id, "instruction": "Không tìm thấy chuyến thuộc phiên này."},
+                ensure_ascii=False,
+            )
+        self._session_data.booking_draft.mark_booking_cancelled(cancelled)
+        await self._state_store.save(self._session_data)
+        await publish_booking_state(self.session)
+        return json.dumps(
+            {
+                "cancelled": True,
+                "booking_id": cancelled.booking_id,
+                "status": cancelled.status,
+                "instruction": "Thông báo ngắn gọn rằng chuyến đã được hủy thành công.",
+            },
+            ensure_ascii=False,
+        )
 
     @function_tool()
     async def get_booking_status(self) -> str:
@@ -170,9 +240,13 @@ class AloSMAgent(Agent):
                 "handoff_status": self._session_data.handoff.status if self._session_data.handoff else None,
                 "summary": draft.conversation_summary(),
                 "instruction": (
-                    "Chỉ thông báo đặt thành công và đọc booking_id ở trên."
-                    if booking is not None
-                    else "Chuyến chưa được tạo; không được phát sinh hoặc suy đoán mã chuyến."
+                    "Thông báo chuyến đã được hủy; không được nói đặt thành công."
+                    if booking is not None and booking.status == "CANCELLED"
+                    else (
+                        "Chỉ thông báo đặt thành công và đọc booking_id ở trên."
+                        if booking is not None
+                        else "Chuyến chưa được tạo; không được phát sinh hoặc suy đoán mã chuyến."
+                    )
                 ),
             },
             ensure_ascii=False,

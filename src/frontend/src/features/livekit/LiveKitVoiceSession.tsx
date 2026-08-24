@@ -8,6 +8,14 @@ import {
   useSession,
   useSessionMessages,
 } from "@livekit/components-react";
+import {
+  Room,
+  RoomEvent,
+  Track,
+  type RemoteParticipant,
+  type RemoteTrack,
+  type RemoteTrackPublication,
+} from "livekit-client";
 import { Mic, MicOff, PhoneOff, Send, Volume2, VolumeX } from "lucide-react";
 import { getCurrentUser } from "@/features/auth/api";
 import { CURRENT_POLICY_VERSION } from "@/features/policies/api";
@@ -15,6 +23,13 @@ import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssis
 import { getRideSession } from "@/features/ride/api";
 import { createAloSMTokenSource, LIVEKIT_AGENT_NAME } from "./tokenSource";
 import { BOOKING_STATE_TOPIC, type BookingState } from "./contracts";
+
+const voiceAudioCaptureDefaults = {
+  autoGainControl: true,
+  echoCancellation: true,
+  noiseSuppression: true,
+  voiceIsolation: true,
+} as const;
 
 const stateLabels = {
   disconnected: "Đã ngắt kết nối",
@@ -27,6 +42,64 @@ const stateLabels = {
   speaking: "Đang trả lời",
   failed: "Kết nối thất bại",
 } as const;
+
+function LiveKitAudioTrackDiagnostics({ room }: { room: Room }) {
+  useEffect(() => {
+    const report = (
+      action: "present" | "published" | "subscribed" | "unsubscribed" | "unpublished",
+      publication: RemoteTrackPublication,
+      participant: RemoteParticipant,
+    ) => {
+      if (publication.kind !== Track.Kind.Audio) return;
+      console.info("[voice-audio]", {
+        action,
+        ownerIdentity: participant.identity,
+        ownerSid: participant.sid,
+        trackSid: publication.trackSid,
+        trackName: publication.trackName,
+        muted: publication.isMuted,
+      });
+    };
+    const onTrackPublished = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      report("published", publication, participant);
+    };
+    const onTrackSubscribed = (
+      _: RemoteTrack,
+      publication: RemoteTrackPublication,
+      participant: RemoteParticipant,
+    ) => {
+      report("subscribed", publication, participant);
+    };
+    const onTrackUnsubscribed = (
+      _: RemoteTrack,
+      publication: RemoteTrackPublication,
+      participant: RemoteParticipant,
+    ) => {
+      report("unsubscribed", publication, participant);
+    };
+    const onTrackUnpublished = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      report("unpublished", publication, participant);
+    };
+
+    room.on(RoomEvent.TrackPublished, onTrackPublished);
+    room.on(RoomEvent.TrackSubscribed, onTrackSubscribed);
+    room.on(RoomEvent.TrackUnsubscribed, onTrackUnsubscribed);
+    room.on(RoomEvent.TrackUnpublished, onTrackUnpublished);
+    for (const participant of room.remoteParticipants.values()) {
+      for (const publication of participant.trackPublications.values()) {
+        report("present", publication, participant);
+      }
+    }
+    return () => {
+      room.off(RoomEvent.TrackPublished, onTrackPublished);
+      room.off(RoomEvent.TrackSubscribed, onTrackSubscribed);
+      room.off(RoomEvent.TrackUnsubscribed, onTrackUnsubscribed);
+      room.off(RoomEvent.TrackUnpublished, onTrackUnpublished);
+    };
+  }, [room]);
+
+  return null;
+}
 
 function LiveKitCallContent({
   onClose,
@@ -245,7 +318,12 @@ function LiveKitSessionAttempt({
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const callInstanceId = useMemo(() => crypto.randomUUID(), []);
   const tokenSource = useMemo(() => createAloSMTokenSource(), []);
+  const room = useMemo(
+    () => new Room({ audioCaptureDefaults: voiceAudioCaptureDefaults }),
+    [],
+  );
   const session = useSession(tokenSource, {
+    room,
     agentName: LIVEKIT_AGENT_NAME,
     participantAttributes: { "alosm.call_id": callInstanceId },
     agentConnectTimeoutMilliseconds: 20_000,
@@ -291,6 +369,7 @@ function LiveKitSessionAttempt({
 
   return (
     <SessionProvider session={session}>
+      <LiveKitAudioTrackDiagnostics room={room} />
       <LiveKitCallContent onClose={endCall} onRetry={retryCall} autoRetry={autoRetry} />
     </SessionProvider>
   );

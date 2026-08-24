@@ -16,8 +16,7 @@ Cập nhật: **2026-08-20** · Trạng thái: **PHASE 3 IMPLEMENTED / PHASE 4 E
    realtime model cho baseline.
 5. Dùng LiveKit Room/WebRTC, `AgentServer`, `AgentSession`, `RoomIO`, VAD,
    endpointing, interruption, chat context, function tools, events và metrics.
-6. Dùng LiveKit `TurnHandlingOptions` với `turn_detection="vad"` cho baseline tiếng Việt vì LiveKit turn detector
-   hiện chưa công bố hỗ trợ `vi`.
+6. Dùng ElevenLabs Scribe server VAD với `turn_detection="stt"` để chốt lượt nói tiếng Việt; Silero VAD chỉ giữ cho barge-in.
 7. Dùng LiveKit function-tool loop. Flow mới không gọi `LLMAgent.handle()`,
    `SessionService.process_message()` hoặc `AgentToolExecutor.execute()`.
 8. Reuse application services/repositories hiện tại ở phía sau function tools;
@@ -39,7 +38,7 @@ Authenticated React user
 → publish microphone audio over WebRTC
 → AgentServer receives job
 → AgentSession receives audio through RoomIO
-→ LiveKit VAD/endpointing closes user turn
+→ ElevenLabs Scribe server VAD closes user turn
 → Vietnamese streaming STT
 → LiveKit-managed transcript/chat context
 → AloSMAgent or active BookingTask
@@ -61,7 +60,7 @@ Không được thêm REST upload hoặc custom WebSocket vào flow mới.
 | WebRTC, audio tracks, reconnect | LiveKit Room/client SDK | Không tự gửi PCM/MP3 |
 | Agent job/lifecycle | LiveKit `AgentServer` | Worker riêng FastAPI |
 | Pipeline/session | LiveKit `AgentSession` | Một session cho một cuộc gọi |
-| VAD/endpointing/barge-in | LiveKit turn handling | Baseline `vad` cho tiếng Việt |
+| VAD/endpointing/barge-in | ElevenLabs Scribe server VAD + LiveKit turn handling | `stt` chốt lượt; Silero VAD cho barge-in |
 | STT/LLM/TTS orchestration | LiveKit | Model cấu hình qua ENV |
 | Conversation/tool loop | LiveKit Agent/tools | Không giữ loop cũ |
 | Runtime booking draft | typed `userdata` | Không coi là durable |
@@ -263,17 +262,23 @@ LIVEKIT_URL
 LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
 LIVEKIT_AGENT_NAME=alosm-voice
-LIVEKIT_STT_MODEL
+LIVEKIT_STT_PROVIDER=elevenlabs
+LIVEKIT_STT_MODEL=scribe_v2_realtime
 LIVEKIT_STT_LANGUAGE=vi
+ELEVEN_API_KEY
 LIVEKIT_LLM_MODEL
 LIVEKIT_TTS_MODEL
 LIVEKIT_TTS_VOICE
 LIVEKIT_TTS_LANGUAGE=vi
-LIVEKIT_TURN_DETECTION=vad
+LIVEKIT_TURN_DETECTION=stt
+LIVEKIT_STT_SERVER_VAD_SILENCE_THRESHOLD_SECONDS=1.0
+LIVEKIT_STT_SERVER_VAD_THRESHOLD=0.4
+LIVEKIT_STT_SERVER_VAD_MIN_SPEECH_DURATION_MS=250
+LIVEKIT_STT_SERVER_VAD_MIN_SILENCE_DURATION_MS=1000
 LIVEKIT_INTERRUPTION_MODE=vad
 LIVEKIT_ENDPOINTING_MODE=fixed
-LIVEKIT_ENDPOINTING_MIN_DELAY_SECONDS=0.8
-LIVEKIT_ENDPOINTING_MAX_DELAY_SECONDS=2.5
+LIVEKIT_ENDPOINTING_MIN_DELAY_SECONDS=0.25
+LIVEKIT_ENDPOINTING_MAX_DELAY_SECONDS=1.0
 LIVEKIT_INTERRUPTION_MIN_DURATION_SECONDS=0.5
 LIVEKIT_INTERRUPTION_MIN_WORDS=1
 LIVEKIT_RECORD_AUDIO=false
@@ -507,7 +512,7 @@ mới không gọi tool loop cũ.
   `alosm.booking_state.v1`; React nhận packet bằng `useDataChannel` và hiển thị pickup,
   destination, vehicle, quote, confirmation và booking ID. Không thêm REST utterance
   hoặc custom WebSocket.
-- Runtime baseline dùng LiveKit VAD cho cả turn detection và interruption. Adaptive
+- Runtime baseline dùng ElevenLabs Scribe server VAD cho turn detection và Silero VAD cho interruption. Adaptive
   chỉ còn là explicit opt-in qua `LIVEKIT_INTERRUPTION_MODE=adaptive`, không tiêu quota
   Adaptive Cloud trong baseline Phase 2.
 - LiveKit UI có recovery native: khi agent không join, lần đầu UI tự end session cũ
@@ -611,8 +616,7 @@ Gate: correction và handoff tests pass; reconnect/retry không duplicate bookin
   Resolver bổ sung reverse containment và fuzzy match bảo thủ bằng dependency
   `rapidfuzz` đã có sẵn; chỉ trả candidate khi score cao và cách biệt, mọi candidate
   vẫn phải đi qua `select_place`. Không echo free text và không cho LLM tạo place ID.
-- LiveKit VAD baseline được tune bằng native endpointing: fixed `0.8–2.5s`, barge-in
-  minimum `0.5s`, một từ; greeting cho phép interruption để không drop câu nói sớm.
+- ElevenLabs Scribe server VAD chốt lượt nói: silence threshold `1.0s`, speech minimum `250ms`, silence minimum `1000ms`; LiveKit chỉ thêm endpoint guard `0.25–1.0s`. Silero VAD vẫn xử lý barge-in minimum `0.5s`; greeting cho phép interruption để không drop câu nói sớm.
   Preemptive LLM generation vẫn bật. Các giá trị đều cấu hình qua ENV để benchmark,
   không tạo detector riêng.
 - `RoomOptions.audio_input` bật rõ native automatic gain control và pre-connect audio.

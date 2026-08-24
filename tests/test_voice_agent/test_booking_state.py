@@ -80,6 +80,24 @@ class FakeBookingService:
         }
 
 
+class FakeCancellationService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, str]] = []
+
+    async def cancel_booking_durable(
+        self, booking_id: str, idempotency_key: str, user_id: str | None = None
+    ) -> dict[str, object] | None:
+        assert user_id is not None
+        self.calls.append((booking_id, idempotency_key, user_id))
+        return {
+            "booking_id": booking_id,
+            "status": "CANCELLED",
+            "estimated_fare": 100_000,
+            "currency": "VND",
+            "eta_minutes": 25,
+        }
+
+
 def test_candidate_must_come_from_current_search_result() -> None:
     draft = BookingDraft()
     draft.set_candidates("pickup", "VinUni", [_place("place_1", "VinUni")])
@@ -150,6 +168,38 @@ async def test_durable_booking_uses_stable_idempotency_key_for_same_session_and_
     assert backend.calls[0]["idempotency_key"] == backend.calls[1]["idempotency_key"]
     assert backend.calls[0]["quote_id"] == "quote_test"
 
+
+@pytest.mark.asyncio
+async def test_durable_cancellation_uses_stable_booking_scoped_idempotency_key() -> None:
+    backend = FakeCancellationService()
+    service = BookingToolsService(backend)
+
+    first = await service.cancel(booking_id="book_durable", user_id="user-1", app_session_id="session-1")
+    second = await service.cancel(booking_id="book_durable", user_id="user-1", app_session_id="session-1")
+
+    assert first == second
+    assert first is not None and first.status == "CANCELLED"
+    assert backend.calls == [
+        ("book_durable", "session-1:cancel_booking:book_durable", "user-1"),
+        ("book_durable", "session-1:cancel_booking:book_durable", "user-1"),
+    ]
+
+
+def test_cancelled_booking_is_reflected_in_compact_conversation_summary() -> None:
+    draft = _quoted_draft()
+    booking = BookingResult(
+        booking_id="book_durable",
+        status="SEARCHING_DRIVER",
+        estimated_fare=100_000,
+        currency="VND",
+        eta_minutes=25,
+    )
+    draft.request_confirmation()
+    draft.confirm()
+    draft.set_booking(booking)
+    draft.mark_booking_cancelled(booking.model_copy(update={"status": "CANCELLED"}))
+
+    assert "chuyến mã book_durable đã hủy" in draft.conversation_summary()
 
 @pytest.mark.asyncio
 async def test_quote_tool_uses_existing_durable_quote_service() -> None:

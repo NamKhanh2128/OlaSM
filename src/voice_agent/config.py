@@ -24,31 +24,47 @@ class LiveKitVoiceSettings(BaseSettings):
     livekit_api_secret: SecretStr = SecretStr("")
     livekit_agent_name: str = "alosm-voice"
 
+    # STT is billed and authenticated directly with ElevenLabs. LiveKit remains
+    # the RTC transport, rather than proxying this request through Inference.
     livekit_stt_model: str = ""
     livekit_stt_language: str = "vi"
-    livekit_stt_provider: Literal["deepgram", "google"] = "deepgram"
+    livekit_stt_provider: Literal["elevenlabs", "deepgram", "google"] = "elevenlabs"
+    eleven_api_key: SecretStr = SecretStr("")
     google_cloud_project: str = ""
     google_stt_location: str = "asia-southeast1"
     livekit_llm_provider: Literal["livekit", "openai"] = "livekit"
     livekit_llm_model: str = ""
     openai_api_key: SecretStr = SecretStr("")
-    livekit_tts_provider: Literal["livekit", "openai"] = "livekit"
+    livekit_tts_provider: Literal["google", "livekit", "openai"] = "google"
     livekit_tts_model: str = ""
     livekit_tts_voice: str = ""
     livekit_tts_language: str = "vi"
+    # Generative Gemini TTS can exceed LiveKit's 10-second default during a
+    # cold start. One retry plus a Google Chirp fallback keeps the call audible.
+    livekit_tts_timeout_seconds: float = Field(default=30, ge=5, le=60)
+    livekit_tts_max_retries: int = Field(default=1, ge=0, le=3)
+    livekit_tts_retry_interval_seconds: float = Field(default=0.5, ge=0, le=10)
+    livekit_google_tts_fallback_model: str = "chirp_3"
+    livekit_google_tts_fallback_voice: str = "vi-VN-Chirp3-HD-Autonoe"
 
-    # LiveKit owns turn handling in the new path. Semantic turn detection is not
-    # a Vietnamese baseline until LiveKit documents/supports it and we benchmark it.
-    livekit_turn_detection: Literal["vad"] = "vad"
+    # ElevenLabs Scribe realtime owns end-of-speech for user turns. The local
+    # Silero VAD remains in AgentSession for interruption/barge-in detection.
+    livekit_turn_detection: Literal["stt", "vad"] = "stt"
+    # Scribe server VAD is enabled whenever ElevenLabs is the STT provider.
+    # Keep these separately configurable for Vietnamese address-pause tests.
+    livekit_stt_server_vad_silence_threshold_seconds: float = Field(default=1.0, ge=0.25, le=5)
+    livekit_stt_server_vad_threshold: float = Field(default=0.4, ge=0, le=1)
+    livekit_stt_server_vad_min_speech_duration_ms: int = Field(default=250, ge=50, le=5000)
+    livekit_stt_server_vad_min_silence_duration_ms: int = Field(default=1000, ge=250, le=10000)
     # Keep the Phase 2 baseline on LiveKit's VAD interruption path. Adaptive is
     # still framework-native, but it consumes a separate Cloud quota and must be
     # enabled only for an explicit benchmark/deployment decision.
     livekit_interruption_mode: Literal["vad", "adaptive"] = "vad"
-    # Vietnamese is not supported by LiveKit's semantic turn detector yet, so
-    # keep VAD and give natural mid-address pauses a slightly wider endpoint.
+    # In STT turn mode this is the small post-provider endpointing guard, not
+    # the primary end-of-speech detector. ElevenLabs server VAD owns that job.
     livekit_endpointing_mode: Literal["fixed", "dynamic"] = "fixed"
-    livekit_endpointing_min_delay_seconds: float = Field(default=0.8, ge=0.25, le=3)
-    livekit_endpointing_max_delay_seconds: float = Field(default=2.5, ge=0.5, le=5)
+    livekit_endpointing_min_delay_seconds: float = Field(default=0.25, ge=0.25, le=3)
+    livekit_endpointing_max_delay_seconds: float = Field(default=1.0, ge=0.5, le=5)
     livekit_interruption_min_duration_seconds: float = Field(default=0.5, ge=0, le=5)
     # Do not wait for a slow STT interim before stopping agent playback. VAD has
     # already established sustained speech for min_duration; LiveKit's current
@@ -110,6 +126,8 @@ class LiveKitVoiceSettings(BaseSettings):
             errors.append("GOOGLE_CLOUD_PROJECT_REQUIRED_FOR_GOOGLE_STT")
         if self.livekit_stt_provider == "google" and not self.google_stt_location.strip():
             errors.append("GOOGLE_STT_LOCATION_REQUIRED_FOR_GOOGLE_STT")
+        if self.livekit_stt_provider == "elevenlabs" and not self.eleven_api_key.get_secret_value().strip():
+            errors.append("ELEVEN_API_KEY_REQUIRED_FOR_ELEVENLABS_STT")
         if (
             self.livekit_llm_provider == "openai" or self.livekit_tts_provider == "openai"
         ) and not self.openai_api_key.get_secret_value().strip():
@@ -125,7 +143,10 @@ class LiveKitVoiceSettings(BaseSettings):
             "LIVEKIT_STT_LANGUAGE_REQUIRED": self.livekit_stt_language,
         }
         errors = [code for code, value in required.items() if not value.strip()]
-        if self.livekit_stt_provider == "google":
+        if self.livekit_stt_provider == "elevenlabs":
+            if not self.eleven_api_key.get_secret_value().strip():
+                errors.append("ELEVEN_API_KEY_REQUIRED_FOR_ELEVENLABS_STT")
+        elif self.livekit_stt_provider == "google":
             if not self.google_cloud_project.strip():
                 errors.append("GOOGLE_CLOUD_PROJECT_REQUIRED_FOR_GOOGLE_STT")
             if not self.google_stt_location.strip():

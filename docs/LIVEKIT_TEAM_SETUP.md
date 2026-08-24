@@ -18,7 +18,7 @@ React Login/Homepage/VoiceCallPanel hiện có
 → POST /api/v1/livekit/token trên FastAPI hiện có
 → LiveKit Room/WebRTC
 → worker alosm-voice dùng AgentServer + AgentSession
-→ Silero VAD → STT tiếng Việt → LLM/function tools → TTS
+→ Silero VAD (barge-in) + ElevenLabs Scribe server VAD (end-of-turn) → STT tiếng Việt → LLM/function tools → TTS
 → PlaceSearchService/PricingService/HandoffService hiện có
 → voice state trong ride_sessions hiện có
 → LiveKit data channel cập nhật booking state về React
@@ -139,26 +139,29 @@ LIVEKIT_API_KEY=<lay-tu-livekit-dashboard-hoac-secret-manager>
 LIVEKIT_API_SECRET=<lay-tu-livekit-dashboard-hoac-secret-manager>
 LIVEKIT_AGENT_NAME=alosm-voice
 
-LIVEKIT_STT_PROVIDER=google
-LIVEKIT_STT_MODEL=chirp_2
-LIVEKIT_STT_LANGUAGE=vi-VN
-GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/google-credentials.json
-GOOGLE_CLOUD_PROJECT=<google-cloud-project-id>
-GOOGLE_STT_LOCATION=asia-southeast1
+LIVEKIT_STT_PROVIDER=elevenlabs
+LIVEKIT_STT_MODEL=scribe_v2_realtime
+LIVEKIT_STT_LANGUAGE=vi
+ELEVEN_API_KEY=<elevenlabs-api-key>
 # `openai` uses OPENAI_API_KEY directly and does not consume LiveKit LLM credits.
 LIVEKIT_LLM_PROVIDER=openai
 LIVEKIT_LLM_MODEL=gpt-4.1-mini
-# Keep the team-tested Vietnamese voice on LiveKit Inference / Cartesia.
-LIVEKIT_TTS_PROVIDER=livekit
-LIVEKIT_TTS_MODEL=cartesia/sonic-3
-LIVEKIT_TTS_VOICE=9626c31c-bec5-4cca-baa8-f8ba9e84c8bc
-LIVEKIT_TTS_LANGUAGE=vi
+# Google Cloud TTS authenticates through ADC or this service-account JSON file.
+GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/google-credentials.json
+LIVEKIT_TTS_PROVIDER=google
+LIVEKIT_TTS_MODEL=gemini-2.5-flash-tts
+LIVEKIT_TTS_VOICE=Kore
+LIVEKIT_TTS_LANGUAGE=vi-VN
 
-LIVEKIT_TURN_DETECTION=vad
+LIVEKIT_TURN_DETECTION=stt
+LIVEKIT_STT_SERVER_VAD_SILENCE_THRESHOLD_SECONDS=1.0
+LIVEKIT_STT_SERVER_VAD_THRESHOLD=0.4
+LIVEKIT_STT_SERVER_VAD_MIN_SPEECH_DURATION_MS=250
+LIVEKIT_STT_SERVER_VAD_MIN_SILENCE_DURATION_MS=1000
 LIVEKIT_INTERRUPTION_MODE=vad
 LIVEKIT_ENDPOINTING_MODE=fixed
-LIVEKIT_ENDPOINTING_MIN_DELAY_SECONDS=0.8
-LIVEKIT_ENDPOINTING_MAX_DELAY_SECONDS=2.5
+LIVEKIT_ENDPOINTING_MIN_DELAY_SECONDS=0.25
+LIVEKIT_ENDPOINTING_MAX_DELAY_SECONDS=1.0
 LIVEKIT_INTERRUPTION_MIN_DURATION_SECONDS=0.5
 LIVEKIT_INTERRUPTION_MIN_WORDS=1
 
@@ -170,8 +173,7 @@ LIVEKIT_DEBUG_EVENT_LOG=false
 LIVEKIT_DEBUG_TRANSCRIPTS=false
 ```
 
-`OPENAI_API_KEY` is required when `LIVEKIT_LLM_PROVIDER=openai`. Google STT còn yêu
-cầu Speech-to-Text API và Application Default Credentials/service-account hợp lệ.
+`OPENAI_API_KEY` is required when `LIVEKIT_LLM_PROVIDER=openai`. ElevenLabs STT requires `ELEVEN_API_KEY`; it is sent directly to ElevenLabs, not through LiveKit Cloud.
 To move the LLM
 back to LiveKit Inference after quota is available, use:
 
@@ -310,7 +312,7 @@ Sau đó kiểm tra flow có sửa thông tin:
 Kiểm tra interruption/VAD riêng:
 
 1. Chờ agent bắt đầu nói, ngắt bằng câu rõ dài hơn nửa giây.
-2. Sau khi agent nói xong, đợi khoảng nửa giây rồi nói một câu địa điểm đầy đủ.
+2. Sau khi agent nói xong, nói một câu địa điểm đầy đủ, gồm cả một khoảng nghỉ tự nhiên giữa quận và phường.
 3. Theo dõi UI có transcript user hay không.
 4. Nếu câu đầu mất nhưng nói lại mới nhận, ghi lại `call_id`, thời điểm và JSONL;
    đây là lỗi nhỏ còn mở của baseline.

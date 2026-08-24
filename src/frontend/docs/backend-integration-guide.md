@@ -37,7 +37,9 @@ location/vehicle phải làm stale quote/confirmation biến mất theo Backend 
 ## Voice transport
 
 Frontend dùng LiveKit components để publish microphone, nhận audio/transcript và gửi
-text fallback. API key/secret không bao giờ được đưa vào bundle trình duyệt.
+dữ liệu state và cung cấp text fallback. Microphone được mở với browser-native `voiceIsolation` (khi hỗ trợ),
+`noiseSuppression`, echo cancellation và auto gain control trước khi audio được gửi tới STT.
+API key/secret không bao giờ được đưa vào bundle trình duyệt.
 
 ## Demo isolation
 

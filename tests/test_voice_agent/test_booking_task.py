@@ -1,11 +1,11 @@
 from types import SimpleNamespace
 
 import pytest
-from livekit.agents import llm
+from livekit.agents import StopResponse, llm
 
 from src.voice_agent.agent import AloSMAgent
 from src.voice_agent.persistence import EphemeralVoiceStateStore
-from src.voice_agent.session_data import AloSMSessionData, PlaceCandidate, QuoteSnapshot
+from src.voice_agent.session_data import AloSMSessionData, HandoffState, PlaceCandidate, QuoteSnapshot
 from src.voice_agent.tasks import booking as booking_module
 from src.voice_agent.tasks.booking import (
     BookingTask,
@@ -36,11 +36,85 @@ def test_agent_exposes_native_booking_entrypoint_and_authoritative_status_tool()
     assert {tool.id for tool in AloSMAgent().tools} == {
         "start_booking",
         "request_handoff",
+        "cancel_booking",
         "get_booking_status",
         "search_knowledge",
         "get_vehicle_options",
     }
 
+
+class _SpeechHandle:
+    def __init__(self) -> None:
+        self._callbacks: list[object] = []
+
+    def add_done_callback(self, callback: object) -> None:
+        self._callbacks.append(callback)
+
+    def finish(self) -> None:
+        for callback in self._callbacks:
+            callback(self)  # type: ignore[operator]
+
+
+class _AudioControl:
+    def __init__(self) -> None:
+        self.enabled: list[bool] = []
+
+    def set_audio_enabled(self, enabled: bool) -> None:
+        self.enabled.append(enabled)
+
+
+class _HandoffSession:
+    def __init__(self, userdata: AloSMSessionData) -> None:
+        self.userdata = userdata
+        self.input = _AudioControl()
+        self.output = _AudioControl()
+        self.speech = _SpeechHandle()
+        self.acknowledgements: list[tuple[str, bool]] = []
+
+    def say(self, text: str, *, allow_interruptions: bool) -> _SpeechHandle:
+        self.acknowledgements.append((text, allow_interruptions))
+        return self.speech
+
+
+def test_handoff_wait_mutes_ai_after_exactly_one_acknowledgement() -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    session = _HandoffSession(userdata)
+    agent = AloSMAgent(session_data=userdata)
+    agent._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
+
+    agent._enter_handoff_wait()
+    agent._enter_handoff_wait()
+
+    assert session.input.enabled == [False]
+    assert session.acknowledgements == [
+        ("Tôi đã chuyển yêu cầu của bạn đến tổng đài viên. Vui lòng chờ trong giây lát.", False)
+    ]
+    assert session.output.enabled == []
+    session.speech.finish()
+    assert session.output.enabled == [False]
+
+
+@pytest.mark.asyncio
+async def test_handoff_wait_rejects_later_customer_turns_without_llm_reply() -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+        handoff=HandoffState(handoff_id="handoff", status="pending", reason_code="USER_REQUEST"),
+    )
+    agent = AloSMAgent(session_data=userdata)
+
+    with pytest.raises(StopResponse):
+        await agent.on_user_turn_completed(
+            llm.ChatContext.empty(),
+            llm.ChatMessage(role="user", content=["Tôi muốn nói thêm"]),
+        )
 
 @pytest.mark.asyncio
 async def test_agent_rag_tool_returns_versioned_policy_citation() -> None:
@@ -207,6 +281,36 @@ def test_native_transcript_confidence_only_blocks_low_confidence_audio() -> None
 
     assert requires_location_clarification(audio, 0.65) is True
     assert requires_location_clarification(text, 0.65) is False
+    assert requires_location_clarification(audio, 0.65, PlaceToolsService().search("Đại học Ếch Khoa Hà Nội")) is True
+
+
+@pytest.mark.asyncio
+async def test_known_place_candidates_bypass_low_confidence_transcript_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    chat_ctx = llm.ChatContext.empty()
+    chat_ctx.add_message(role="user", content="Tôi muốn đặt xe từ VinUni")
+    chat_ctx.items[-1].transcript_confidence = 0.4
+    task = BookingTask(chat_ctx=chat_ctx, state_store=EphemeralVoiceStateStore())
+
+    async def _publish(_: object) -> None:
+        return None
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
+    context = SimpleNamespace(userdata=userdata, session=object())
+
+    result = await BookingTask.search_place._func(task, context, target="pickup", query="VinUni")
+
+    assert "ASR_LOW_CONFIDENCE" not in result
+    assert "Cổng chính VinUni" in result
+    assert userdata.booking_draft.pickup is None
+    assert len(userdata.booking_draft.pickup_candidates) == 3
 
 
 def test_place_tool_reuses_hanoi_gazetteer_without_echo_fallback() -> None:

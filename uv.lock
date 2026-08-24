@@ -1942,6 +1942,18 @@ wheels = [
 ]
 
 [[package]]
+name = "livekit-plugins-elevenlabs"
+version = "1.6.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "livekit-agents", extra = ["codecs"] },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fc/d7/83b43e8ba682e27eef01a14c949779aac1bfab435dd73d5d27157b541ba7/livekit_plugins_elevenlabs-1.6.8.tar.gz", hash = "sha256:a866a689ad7041f4576f3f2c0ce60db734213a8f4ba115cc995c6782a9f36af9", size = 19224, upload-time = "2026-08-03T17:11:52.752Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7d/d1/24d0696029f99bb1ce2776958ab06866962157bca07df04fec5209733897/livekit_plugins_elevenlabs-1.6.8-py3-none-any.whl", hash = "sha256:b82c5962d9aa2f80585c358ff2c7a1d2480309ce3914ae1d780d0a40fcbea2e7", size = 21942, upload-time = "2026-08-03T17:11:51.706Z" },
+]
+
+[[package]]
 name = "livekit-plugins-google"
 version = "1.6.6"
 source = { registry = "https://pypi.org/simple" }
@@ -2636,6 +2648,7 @@ dependencies = [
     { name = "langchain-openai" },
     { name = "langgraph" },
     { name = "livekit-agents" },
+    { name = "livekit-plugins-elevenlabs" },
     { name = "livekit-plugins-google" },
     { name = "livekit-plugins-openai" },
     { name = "openai" },
@@ -2669,6 +2682,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=0.3.0" },
     { name = "langgraph", specifier = ">=0.2.0" },
     { name = "livekit-agents", specifier = "==1.6.8" },
+    { name = "livekit-plugins-elevenlabs", specifier = "==1.6.8" },
     { name = "livekit-plugins-google", specifier = "==1.6.6" },
     { name = "livekit-plugins-openai", specifier = "==1.5.0" },
     { name = "openai", specifier = ">=2.20.0" },

@@ -8,9 +8,11 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 
+from livekit import rtc
 from livekit.agents import (
     AgentServer,
     AgentSession,
+    APIConnectOptions,
     JobContext,
     JobProcess,
     cli,
@@ -20,6 +22,7 @@ from livekit.agents import (
     tts,
     vad,
 )
+from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.agents.voice.events import ErrorEvent
 from livekit.agents.voice.room_io import AudioInputOptions, RoomOptions
 
@@ -43,6 +46,15 @@ _PREWARMED_VAD_KEY = "alosm_prewarmed_vad"
 _PREWARMED_STT_KEY = "alosm_prewarmed_stt"
 _PREWARMED_KNOWLEDGE_KEY = "alosm_prewarmed_knowledge"
 _PREWARMED_PRICING_KEY = "alosm_prewarmed_pricing"
+_NOISY_WORKER_LOGGERS = ("grpc", "grpc._cython.cygrpc", "livekit.agents")
+
+
+def _configure_worker_console_logging() -> None:
+    """Keep the terminal focused on application voice events and real failures."""
+
+    for logger_name in _NOISY_WORKER_LOGGERS:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
+    logging.getLogger("src.voice_agent.observability").setLevel(logging.INFO)
 
 
 def _build_llm(settings: LiveKitVoiceSettings):
@@ -89,6 +101,38 @@ def _build_tts(settings: LiveKitVoiceSettings):
             instructions="Nói tiếng Việt tự nhiên, rõ ràng, thân thiện và với âm lượng ổn định.",
         )
 
+    if settings.livekit_tts_provider == "google":
+        try:
+            from google.cloud import texttospeech
+            from livekit.plugins import google
+        except ImportError as exc:
+            raise RuntimeError("LIVEKIT_TTS_PROVIDER=google requires the livekit-plugins-google package.") from exc
+
+        def build_google_tts(model: str, voice: str):
+            return google.TTS(
+                language=settings.livekit_tts_language,
+                voice_name=voice,
+                model_name=model,
+                audio_encoding=(
+                    texttospeech.AudioEncoding.LINEAR16 if model == "chirp_3" else texttospeech.AudioEncoding.PCM
+                ),
+            )
+
+        primary = build_google_tts(settings.livekit_tts_model, settings.livekit_tts_voice)
+        fallback_model = settings.livekit_google_tts_fallback_model
+        fallback_voice = settings.livekit_google_tts_fallback_voice
+        if (
+            settings.livekit_tts_model == "chirp_3"
+            or not fallback_model
+            or not fallback_voice
+            or (settings.livekit_tts_model, settings.livekit_tts_voice) == (fallback_model, fallback_voice)
+        ):
+            return primary
+        return tts.FallbackAdapter(
+            [primary, build_google_tts(fallback_model, fallback_voice)],
+            max_retry_per_tts=settings.livekit_tts_max_retries,
+        )
+
     return inference.TTS(
         model=settings.livekit_tts_model,
         voice=settings.livekit_tts_voice,
@@ -96,6 +140,59 @@ def _build_tts(settings: LiveKitVoiceSettings):
         api_key=settings.livekit_api_key.get_secret_value(),
         api_secret=settings.livekit_api_secret.get_secret_value(),
     )
+
+
+def _tts_voice_map(settings: LiveKitVoiceSettings) -> dict[str, str]:
+    voices = {settings.livekit_tts_model: settings.livekit_tts_voice}
+    if settings.livekit_tts_provider == "google" and settings.livekit_tts_model != "chirp_3":
+        fallback_model = settings.livekit_google_tts_fallback_model
+        fallback_voice = settings.livekit_google_tts_fallback_voice
+        if fallback_model and fallback_voice:
+            voices[fallback_model] = fallback_voice
+    return voices
+
+
+def register_room_audio_track_logging(ctx: JobContext, event_log: SessionEventLog) -> None:
+    """Log each audio publication once so overlapping voices have an owner and SID."""
+
+    room = ctx.room
+
+    def emit_audio_track(action: str, direction: str, publication: object, participant: object) -> None:
+        if getattr(publication, "kind", None) != rtc.TrackKind.KIND_AUDIO:
+            return
+        event_log.emit(
+            "room_audio_track",
+            action=action,
+            direction=direction,
+            owner_identity=getattr(participant, "identity", None),
+            owner_sid=getattr(participant, "sid", None),
+            track_sid=getattr(publication, "sid", None),
+            track_name=getattr(publication, "name", None),
+            muted=getattr(publication, "muted", None),
+        )
+
+    def on_local_track_published(publication: object, _: object) -> None:
+        emit_audio_track("published", "outgoing", publication, room.local_participant)
+
+    def on_local_track_unpublished(publication: object) -> None:
+        emit_audio_track("unpublished", "outgoing", publication, room.local_participant)
+
+    def on_track_published(publication: object, participant: object) -> None:
+        emit_audio_track("published", "incoming", publication, participant)
+
+    def on_track_unpublished(publication: object, participant: object) -> None:
+        emit_audio_track("unpublished", "incoming", publication, participant)
+
+    room.on("local_track_published", on_local_track_published)
+    room.on("local_track_unpublished", on_local_track_unpublished)
+    room.on("track_published", on_track_published)
+    room.on("track_unpublished", on_track_unpublished)
+
+    for publication in room.local_participant.track_publications.values():
+        emit_audio_track("present", "outgoing", publication, room.local_participant)
+    for participant in room.remote_participants.values():
+        for publication in participant.track_publications.values():
+            emit_audio_track("present", "incoming", publication, participant)
 
 
 def build_agent_session(
@@ -122,6 +219,13 @@ def build_agent_session(
         stt=stt_model if stt_model is not None else build_stt(settings),
         llm=_build_llm(settings),
         tts=_build_tts(settings),
+        conn_options=SessionConnectOptions(
+            tts_conn_options=APIConnectOptions(
+                max_retry=settings.livekit_tts_max_retries,
+                retry_interval=settings.livekit_tts_retry_interval_seconds,
+                timeout=settings.livekit_tts_timeout_seconds,
+            )
+        ),
         tts_text_transforms=[
             "filter_emoji",
             "filter_markdown",
@@ -273,9 +377,9 @@ def prepare_process(proc: JobProcess) -> None:
     # cannot be transferred to the different loop used by the RTC job.
     proc.userdata[_STATE_STORE_KEY] = DatabaseVoiceStateStore()
     # LiveKit keeps idle job processes warm specifically so model/plugin setup is
-    # not paid after a participant is waiting. Google STT's module import and ADC
-    # resolution are synchronous and safe to perform here; its streaming client
-    # is still opened later on the RTC job's event loop.
+    # not paid after a participant is waiting. The ElevenLabs plugin validates
+    # its direct API credentials synchronously; its streaming client is still
+    # opened later on the RTC job's event loop.
     proc.userdata[_PREWARMED_VAD_KEY] = inference.VAD(model="silero")
     proc.userdata[_PREWARMED_STT_KEY] = build_stt(_server_settings)
     # Policy and pricing catalogs are local, validated and static for the
@@ -302,6 +406,14 @@ def _process_vad(ctx: JobContext) -> vad.VAD | None:
 def _process_stt(ctx: JobContext) -> stt.STT | None:
     model = ctx.proc.userdata.get(_PREWARMED_STT_KEY)
     return model if isinstance(model, stt.STT) else None
+
+
+async def _connect_room_early(ctx: JobContext) -> float:
+    """Join the assigned Room before any state restore or model/session setup."""
+
+    started_at = time.monotonic()
+    await ctx.connect()
+    return round((time.monotonic() - started_at) * 1000, 3)
 
 
 def _process_knowledge(ctx: JobContext) -> KnowledgeService | None:
@@ -428,6 +540,9 @@ def register_operator_takeover(
 async def alosm_voice_session(ctx: JobContext) -> None:
     """Run one LiveKit AgentSession for one Room call."""
 
+    job_entry_at = time.time()
+    room_connect_duration_ms = await _connect_room_early(ctx)
+
     settings = get_livekit_voice_settings()
     userdata = build_session_data(ctx, settings)
     event_log = SessionEventLog(
@@ -439,7 +554,16 @@ async def alosm_voice_session(ctx: JobContext) -> None:
     )
     await event_log.start()
     ctx.add_shutdown_callback(event_log.close)
-    event_log.emit("worker_milestone", milestone="job_entry")
+    event_log.emit(
+        "worker_milestone",
+        event_created_at=job_entry_at,
+        milestone="job_entry",
+    )
+    event_log.emit(
+        "worker_milestone",
+        milestone="room_connected",
+        duration_ms=room_connect_duration_ms,
+    )
 
     state_store = _process_state_store(ctx)
     knowledge_service = _process_knowledge(ctx)
@@ -492,7 +616,8 @@ async def alosm_voice_session(ctx: JobContext) -> None:
     )
     drain_provider_failures = register_provider_failure_sync(session, state_store)
     ctx.add_shutdown_callback(drain_provider_failures)
-    LiveKitSessionObserver(event_log).register(session)
+    LiveKitSessionObserver(event_log, tts_voices=_tts_voice_map(settings)).register(session)
+    register_room_audio_track_logging(ctx, event_log)
     event_log.emit(
         "session_configured",
         stt_model=settings.livekit_stt_model,
@@ -553,4 +678,5 @@ async def alosm_voice_session(ctx: JobContext) -> None:
 
 
 if __name__ == "__main__":
+    _configure_worker_console_logging()
     cli.run_app(server)

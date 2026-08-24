@@ -118,27 +118,19 @@ LIVEKIT_API_KEY=<livekit-api-key>
 LIVEKIT_API_SECRET=<livekit-api-secret>
 LIVEKIT_AGENT_NAME=alosm-voice
 
-LIVEKIT_STT_PROVIDER=google
-LIVEKIT_STT_MODEL=chirp_2
-LIVEKIT_STT_LANGUAGE=vi-VN
-GOOGLE_CLOUD_PROJECT=<google-cloud-project>
-GOOGLE_STT_LOCATION=asia-southeast1
-GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/service-account.json
+LIVEKIT_STT_PROVIDER=elevenlabs
+LIVEKIT_STT_MODEL=scribe_v2_realtime
+LIVEKIT_STT_LANGUAGE=vi
+ELEVEN_API_KEY=<elevenlabs-api-key>
 
 LIVEKIT_LLM_PROVIDER=openai
 LIVEKIT_LLM_MODEL=gpt-4.1-mini
 OPENAI_API_KEY=<openai-key>
 ```
 
-Có thể dùng Google Application Default Credentials thay cho file credential:
-
-```bash
-gcloud auth application-default login
-```
-
-Khi đó để `GOOGLE_APPLICATION_CREDENTIALS` trống nhưng vẫn điền
-`GOOGLE_CLOUD_PROJECT`. Không đặt bất kỳ key nào trong biến `VITE_*` vì các biến đó
-được bundle vào trình duyệt.
+STT gọi trực tiếp đến ElevenLabs bằng key của bạn; LiveKit chỉ giữ Room/WebRTC,
+không proxy STT qua LiveKit Cloud. Không đặt bất kỳ key nào trong biến `VITE_*` vì
+các biến đó được bundle vào trình duyệt.
 
 Voice demo hiện để `MAPS_PROVIDER` trống: địa điểm lấy từ catalog approved local và
 giá là deterministic demo. Nominatim/OSRM localhost chỉ có tác dụng khi teammate
@@ -247,8 +239,7 @@ npm run build
   `http://localhost:8000`; kiểm tra `/health` và `CORS_ORIGINS`.
 - `Agent did not join the room`: kiểm tra worker còn chạy, tên agent đúng và
   `LIVEKIT_URL`/key/secret cùng project; không chạy nhiều worker trùng tên.
-- Google STT không khởi tạo: kiểm tra Speech-to-Text API, project/location và ADC
-  hoặc đường dẫn tuyệt đối của `GOOGLE_APPLICATION_CREDENTIALS`.
+- ElevenLabs STT không khởi tạo: kiểm tra `ELEVEN_API_KEY`, `LIVEKIT_STT_PROVIDER=elevenlabs` và `LIVEKIT_STT_MODEL=scribe_v2_realtime`.
 - Không có account sau khi restart: đang dùng `APP_ENV=test`, dữ liệu là memory;
   dùng account đăng ký trong DB dev hoặc chuyển sang PostgreSQL cho persistence.
 - Không thấy giá thay đổi theo đường đi: đây là giới hạn hiện tại; demo chưa có
