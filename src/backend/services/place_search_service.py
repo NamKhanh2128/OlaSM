@@ -9,14 +9,14 @@ from pathlib import Path
 
 from rapidfuzz import fuzz
 
-# data/gazetteer/place_names.json đã có sẵn từ trước (dùng cho Voice ASR biasing, xem
+# config/gazetteer/place_names.json đã có sẵn từ trước (dùng cho Voice ASR biasing, xem
 # src/voice/text/gazetteer.py) — tái dùng đúng nguồn thật này cho search_place của Core
 # Agent thay vì bịa candidate giả (bản cũ chỉ echo lại nguyên câu người dùng nhập thành
 # 1 candidate duy nhất, không thật sự "tìm kiếm" gì cả).
-_GAZETTEER_PATH = Path(__file__).resolve().parents[3] / "data" / "gazetteer" / "place_names.json"
-_ALIASES_PATH = Path(__file__).resolve().parents[3] / "data" / "gazetteer" / "hanoi_place_aliases.json"
+_GAZETTEER_PATH = Path(__file__).resolve().parents[3] / "config" / "gazetteer" / "place_names.json"
+_ALIASES_PATH = Path(__file__).resolve().parents[3] / "config" / "gazetteer" / "hanoi_place_aliases.json"
 _LANDMARK_PICKUP_POINTS_PATH = (
-    Path(__file__).resolve().parents[3] / "data" / "gazetteer" / "hanoi_landmark_pickup_points.json"
+    Path(__file__).resolve().parents[3] / "config" / "gazetteer" / "hanoi_landmark_pickup_points.json"
 )
 
 

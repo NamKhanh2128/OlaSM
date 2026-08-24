@@ -9,7 +9,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 SUPPORTED_VEHICLES = {"MOTORBIKE", "CAR_4", "CAR_7", "LUXURY"}
-DEFAULT_PRICING_PATH = Path(__file__).resolve().parents[3] / "data" / "pricing" / "hanoi_demo_2026-08-16.yaml"
+DEFAULT_PRICING_PATH = Path(__file__).resolve().parents[3] / "config" / "pricing" / "hanoi_demo_2026-08-16.yaml"
 
 
 class DistanceTier(BaseModel):

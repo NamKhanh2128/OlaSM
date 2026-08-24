@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-POLICY_DIR = Path(__file__).resolve().parents[3] / "data" / "policies"
+POLICY_DIR = Path(__file__).resolve().parents[3] / "config" / "policies"
 POLICY_CATALOG_PATH = POLICY_DIR / "catalog.json"
 
 

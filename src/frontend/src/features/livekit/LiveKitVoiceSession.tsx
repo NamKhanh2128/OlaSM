@@ -24,6 +24,17 @@ import { getRideSession } from "@/features/ride/api";
 import { createAloSMTokenSource, LIVEKIT_AGENT_NAME } from "./tokenSource";
 import { BOOKING_STATE_TOPIC, type BookingState } from "./contracts";
 
+function generateUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 const voiceAudioCaptureDefaults = {
   autoGainControl: true,
   echoCancellation: true,
@@ -316,7 +327,7 @@ function LiveKitSessionAttempt({
   autoRetry: boolean;
 }) {
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const callInstanceId = useMemo(() => crypto.randomUUID(), []);
+  const callInstanceId = useMemo(() => generateUUID(), []);
   const tokenSource = useMemo(() => createAloSMTokenSource(), []);
   const room = useMemo(
     () => new Room({ audioCaptureDefaults: voiceAudioCaptureDefaults }),
