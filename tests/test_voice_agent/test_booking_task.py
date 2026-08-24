@@ -116,6 +116,24 @@ async def test_handoff_wait_rejects_later_customer_turns_without_llm_reply() -> 
             llm.ChatMessage(role="user", content=["Tôi muốn nói thêm"]),
         )
 
+class _RequoteService:
+    async def estimate(self, *, draft: object, **_: object) -> QuoteSnapshot:
+        assert getattr(draft, "pickup") is not None
+        assert getattr(draft, "destination") is not None
+        assert getattr(draft, "vehicle_type") is not None
+        return QuoteSnapshot(
+            quote_id="quote-refreshed",
+            pickup_place_id=draft.pickup.place_id,
+            destination_place_id=draft.destination.place_id,
+            vehicle_type=draft.vehicle_type,
+            fare_amount=120_000,
+            currency="VND",
+            distance_km=24.0,
+            eta_minutes=22,
+            expires_at="2099-01-01T00:00:00+00:00",
+            estimated=True,
+        )
+
 @pytest.mark.asyncio
 async def test_agent_rag_tool_returns_versioned_policy_citation() -> None:
     result = await AloSMAgent().search_knowledge("Tôi muốn yêu cầu hoàn tiền")
@@ -253,6 +271,76 @@ async def test_estimate_fare_atomically_starts_confirmation(
     assert draft.confirmation_status == "awaiting"
     assert draft.confirmation_fingerprint == draft.quote.fingerprint
     assert "Hãy hỏi xác nhận rõ ràng" in result
+
+
+@pytest.mark.asyncio
+async def test_location_change_refreshes_existing_quote_and_interrupts_stale_preamble(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    draft = userdata.booking_draft
+    pickup = PlaceCandidate(
+        place_id="pickup",
+        display_name="Cổng chính VinUni",
+        address="VinUni",
+        provider="test",
+    )
+    old_destination = PlaceCandidate(
+        place_id="old-destination",
+        display_name="Hồ Gươm",
+        address="Hồ Gươm",
+        provider="test",
+    )
+    draft.set_candidates("pickup", "VinUni", [pickup])
+    draft.select_place("pickup", pickup.place_id)
+    draft.set_candidates("destination", "Hồ Gươm", [old_destination])
+    draft.select_place("destination", old_destination.place_id)
+    draft.set_vehicle_type("MOTORBIKE")
+    draft.set_quote(
+        QuoteSnapshot(
+            quote_id="quote-old",
+            pickup_place_id=pickup.place_id,
+            destination_place_id=old_destination.place_id,
+            vehicle_type="MOTORBIKE",
+            fare_amount=80_000,
+            currency="VND",
+            distance_km=10.0,
+            eta_minutes=12,
+            expires_at="2099-01-01T00:00:00+00:00",
+            estimated=True,
+        )
+    )
+    draft.request_confirmation()
+
+    interrupted: list[bool] = []
+
+    class _Session:
+        async def interrupt(self) -> None:
+            interrupted.append(True)
+
+    async def _publish(_: object) -> None:
+        return None
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
+    task = BookingTask(quotes=_RequoteService(), state_store=EphemeralVoiceStateStore())
+    context = SimpleNamespace(userdata=userdata, session=_Session())
+
+    await BookingTask.search_place._func(
+        task,
+        context,
+        target="destination",
+        query="Đại học Bách khoa Hà Nội",
+    )
+
+    assert interrupted == [True]
+    assert draft.quote is not None
+    assert draft.quote.quote_id == "quote-refreshed"
+    assert draft.confirmation_status == "awaiting"
 
 
 def test_terminal_task_tools_follow_livekit_complete_without_narrating_inside_task() -> None:

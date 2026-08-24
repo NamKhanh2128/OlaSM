@@ -134,6 +134,13 @@ def _console_message(event_name: str, payload: dict[str, Any]) -> str:
             parts.append(f"message_chars={message_length}")
         return " ".join(parts)
 
+    if event_name == "conversation_item_added" and payload.get("role") == "user":
+        text = payload.get("text")
+        detail = f" transcript={text!r}" if isinstance(text, str) else f" chars={payload.get('text_length', 0)}"
+        confidence = payload.get("transcript_confidence")
+        confidence_detail = f" confidence={confidence}" if confidence is not None else ""
+        return f"USER TURN{detail}{confidence_detail}"
+
     if event_name == "conversation_item_added" and payload.get("role") == "assistant":
         text = payload.get("text")
         detail = f" text={text!r}" if isinstance(text, str) else f" chars={payload.get('text_length', 0)}"
@@ -199,7 +206,7 @@ def _should_log_to_console(event_name: str, payload: dict[str, Any]) -> bool:
             "error",
             "user_transcription_timeout",
         }
-        or (event_name == "conversation_item_added" and payload.get("role") == "assistant")
+        or (event_name == "conversation_item_added" and payload.get("role") in {"user", "assistant"})
     )
 
 

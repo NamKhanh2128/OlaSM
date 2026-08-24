@@ -21,6 +21,7 @@ from src.voice_agent.session_data import (
     BookingResult,
     BookingTarget,
     HandoffState,
+    QuoteSnapshot,
     VehicleType,
     vehicle_spoken_label,
 )
@@ -234,6 +235,41 @@ class BookingTask(AgentTask[BookingOutcome]):
                 self.complete(outcome)
             raise StopResponse()
 
+    async def _interrupt_stale_speech(self, context: RunContext[AloSMSessionData]) -> None:
+        """Cancel pre-tool speech so stale quote/location text is never played."""
+
+        try:
+            await context.session.interrupt()
+        except RuntimeError:
+            # A tool can run after speech has already completed or during startup.
+            return
+
+    async def _refresh_quote_after_change(self, context: RunContext[AloSMSessionData]) -> QuoteSnapshot | None:
+        """Re-issue a quote after a correction when all booking fields remain present."""
+
+        draft = self._draft(context)
+        if draft.pickup is None or draft.destination is None or draft.vehicle_type is None:
+            return None
+        try:
+            quote = await self._quotes.estimate(
+                user_id=context.userdata.user_id,
+                app_session_id=context.userdata.app_session_id,
+                draft=draft,
+            )
+            draft.set_quote(quote)
+            draft.request_confirmation()
+        except ValueError:
+            context.userdata.record_failure(
+                "QUOTE_UNAVAILABLE",
+                "Chưa thể tính lại báo giá từ thông tin mới.",
+                fallback_action="retry",
+            )
+            await self._commit(context)
+            return None
+        context.userdata.clear_failure()
+        await self._commit(context)
+        return quote
+
     async def _commit(self, context: RunContext[AloSMSessionData]) -> None:
         try:
             await self._state_store.save(context.userdata)
@@ -279,6 +315,9 @@ class BookingTask(AgentTask[BookingOutcome]):
             return "ASR_LOW_CONFIDENCE: Hãy yêu cầu khách nói lại địa điểm hoặc nhập tay."
 
         draft = self._draft(context)
+        had_quote = draft.quote is not None
+        if had_quote:
+            await self._interrupt_stale_speech(context)
         draft.set_candidates(target, query, candidates)
         if not candidates:
             context.userdata.record_failure(
@@ -290,15 +329,28 @@ class BookingTask(AgentTask[BookingOutcome]):
             return "Không tìm thấy địa điểm trong dữ liệu demo. Hãy hỏi khách tên địa điểm khác hoặc rõ hơn."
         if can_auto_select_place(candidates):
             selected = draft.select_place(target, candidates[0].place_id)
+            refreshed_quote = (
+                await self._refresh_quote_after_change(context)
+                if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None
+                else None
+            )
+            if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None and refreshed_quote is None:
+                return "Đã cập nhật địa điểm nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
             context.userdata.clear_failure()
-            await self._commit(context)
+            if refreshed_quote is None:
+                await self._commit(context)
             return json.dumps(
                 {
                     "target": target,
                     "auto_selected": True,
                     "place_id": selected.place_id,
                     "display_name": selected.display_name,
-                    "instruction": "Đã tự chọn exact match duy nhất; tiếp tục trường còn thiếu, không hỏi lại.",
+                    "quote_refreshed": refreshed_quote is not None,
+                    "instruction": (
+                        "Đã cập nhật và tính lại báo giá; đọc giá mới, không dùng giá cũ."
+                        if refreshed_quote is not None
+                        else "Đã tự chọn exact match duy nhất; tiếp tục trường còn thiếu, không hỏi lại."
+                    ),
                 },
                 ensure_ascii=False,
             )
@@ -326,14 +378,27 @@ class BookingTask(AgentTask[BookingOutcome]):
             target: Whether the selected location is the pickup or destination.
             place_id: Exact candidate place_id returned by search_place.
         """
+        draft = self._draft(context)
+        had_quote = draft.quote is not None
+        if had_quote:
+            await self._interrupt_stale_speech(context)
         try:
-            selected = self._draft(context).select_place(target, place_id)
+            selected = draft.select_place(target, place_id)
         except ValueError as exc:
             raise ToolError(str(exc)) from exc
+        refreshed_quote = (
+            await self._refresh_quote_after_change(context)
+            if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None
+            else None
+        )
+        if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None and refreshed_quote is None:
+            return "Đã xác nhận địa điểm nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
         context.userdata.clear_failure()
-        await self._commit(context)
+        if refreshed_quote is None:
+            await self._commit(context)
         target_label = "điểm đón" if target == "pickup" else "điểm đến"
-        return f"Đã xác nhận {target_label}: {selected.display_name}, {selected.address}."
+        suffix = " Đã tính lại báo giá mới." if refreshed_quote is not None else ""
+        return f"Đã xác nhận {target_label}: {selected.display_name}, {selected.address}.{suffix}"
 
     @function_tool()
     async def set_vehicle_type(
@@ -346,15 +411,40 @@ class BookingTask(AgentTask[BookingOutcome]):
         Args:
             vehicle_type: MOTORBIKE, CAR_4, CAR_7, or LUXURY.
         """
-        self._draft(context).set_vehicle_type(vehicle_type)
+        draft = self._draft(context)
+        had_quote = draft.quote is not None
+        if had_quote:
+            await self._interrupt_stale_speech(context)
+        draft.set_vehicle_type(vehicle_type)
+        refreshed_quote = (
+            await self._refresh_quote_after_change(context)
+            if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None
+            else None
+        )
+        if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None and refreshed_quote is None:
+            return "Đã cập nhật loại xe nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
         context.userdata.clear_failure()
-        await self._commit(context)
-        return f"Đã chọn {vehicle_spoken_label(vehicle_type)}."
+        if refreshed_quote is None:
+            await self._commit(context)
+        suffix = " Đã tính lại báo giá mới." if refreshed_quote is not None else ""
+        return f"Đã chọn {vehicle_spoken_label(vehicle_type)}.{suffix}"
 
     @function_tool()
     async def estimate_fare(self, context: RunContext[AloSMSessionData]) -> str:
         """Create a quote and atomically move it to awaiting confirmation."""
         draft = self._draft(context)
+        if (
+            draft.quote is not None
+            and draft.confirmation_status == "awaiting"
+            and draft.confirmation_fingerprint == draft.quote.fingerprint
+        ):
+            quote = draft.quote
+            return (
+                f"Hãy hỏi xác nhận rõ ràng: đón tại {draft.pickup.display_name}, "
+                f"đến {draft.destination.display_name}, đi bằng {vehicle_spoken_label(draft.vehicle_type)}, "
+                f"giá dự kiến {quote.fare_amount} đồng, "
+                f"thời gian xe tới dự kiến {quote.eta_minutes} phút."
+            )
         try:
             quote = await self._quotes.estimate(
                 user_id=context.userdata.user_id,
