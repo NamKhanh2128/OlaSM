@@ -15,11 +15,9 @@ def test_livekit_configuration_fails_closed_when_required_values_are_missing() -
         "LIVEKIT_URL_REQUIRED",
         "LIVEKIT_API_KEY_REQUIRED",
         "LIVEKIT_API_SECRET_REQUIRED",
-        "LIVEKIT_STT_MODEL_REQUIRED",
         "LIVEKIT_LLM_MODEL_REQUIRED",
         "LIVEKIT_TTS_MODEL_REQUIRED",
         "LIVEKIT_TTS_VOICE_REQUIRED",
-        "ELEVEN_API_KEY_REQUIRED_FOR_ELEVENLABS_STT",
     ]
     with pytest.raises(ValueError, match="LIVEKIT_URL_REQUIRED"):
         config.require_configured()
@@ -30,15 +28,13 @@ def test_livekit_accepts_complete_native_pipeline_configuration() -> None:
         livekit_url="wss://alosm.example.livekit.cloud",
         livekit_api_key="api-key",
         livekit_api_secret="api-secret",
-        livekit_stt_model="provider/stt-model",
-        eleven_api_key="test-eleven-key",
         livekit_llm_model="provider/llm-model",
         livekit_tts_model="provider/tts-model",
         livekit_tts_voice="vi-voice",
     )
 
     assert config.configuration_errors() == []
-    assert config.livekit_turn_detection == "stt"
+    assert config.livekit_turn_detection == "vad"
     assert config.livekit_llm_provider == "livekit"
     assert config.livekit_tts_provider == "google"
     assert config.livekit_interruption_mode == "vad"
@@ -67,8 +63,6 @@ def test_livekit_url_must_use_websocket_scheme() -> None:
         livekit_url="https://alosm.example.livekit.cloud",
         livekit_api_key="api-key",
         livekit_api_secret="api-secret",
-        livekit_stt_model="stt",
-        eleven_api_key="test-eleven-key",
         livekit_llm_model="llm",
         livekit_tts_model="tts",
         livekit_tts_voice="voice",
@@ -130,3 +124,9 @@ def test_elevenlabs_stt_requires_its_own_api_key() -> None:
     )
 
     assert "ELEVEN_API_KEY_REQUIRED_FOR_ELEVENLABS_STT" in config.stt_configuration_errors()
+
+
+def test_livekit_inference_stt_does_not_require_an_external_provider_key() -> None:
+    config = settings(livekit_stt_provider="livekit")
+
+    assert config.stt_configuration_errors() == []

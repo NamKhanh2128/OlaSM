@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RoomAudioRenderer,
   SessionProvider,
@@ -25,9 +25,15 @@ import { createAloSMTokenSource, LIVEKIT_AGENT_NAME } from "./tokenSource";
 import { BOOKING_STATE_TOPIC, type BookingState } from "./contracts";
 
 function generateUUID(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
+  if (
+    typeof globalThis !== "undefined" &&
+    globalThis.crypto &&
+    typeof globalThis.crypto.randomUUID === "function"
+  ) {
+    return globalThis.crypto.randomUUID();
   }
+
+  // RFC4122-compatible UUID v4 fallback
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === "x" ? r : (r & 0x3) | 0x8;
@@ -331,60 +337,60 @@ function LiveKitSessionAttempt({
   const tokenSource = useMemo(() => createAloSMTokenSource(), []);
   const room = useMemo(
     () => new Room({ audioCaptureDefaults: voiceAudioCaptureDefaults }),
-    [],
-  );
-  const session = useSession(tokenSource, {
-    room,
-    agentName: LIVEKIT_AGENT_NAME,
-    participantAttributes: { "alosm.call_id": callInstanceId },
-    agentConnectTimeoutMilliseconds: 20_000,
-  });
-
-  const start = session.start;
-  const end = session.end;
-
-  useEffect(() => {
-    let active = true;
-    void start({ tracks: { microphone: { enabled: true } } }).catch((error: unknown) => {
-      if (active) setConnectionError(error instanceof Error ? error.message : "Không thể kết nối LiveKit.");
+      [],
+    );
+    const session = useSession(tokenSource, {
+      room,
+      agentName: LIVEKIT_AGENT_NAME,
+      participantAttributes: { "alosm.call_id": callInstanceId },
+      agentConnectTimeoutMilliseconds: 20_000,
     });
-    return () => {
-      active = false;
-      void end();
-    };
-  }, [end, start]);
 
-  const endCall = useCallback(() => {
-    void end().finally(onClose);
-  }, [end, onClose]);
+    const sessionRef = useRef(session);
+    sessionRef.current = session;
 
-  const retryCall = useCallback(() => {
-    void end().finally(onRetry);
-  }, [end, onRetry]);
+    useEffect(() => {
+      let active = true;
+      void sessionRef.current.start({ tracks: { microphone: { enabled: true } } }).catch((error: unknown) => {
+        if (active) setConnectionError(error instanceof Error ? error.message : "Không thể kết nối LiveKit.");
+      });
+      return () => {
+        active = false;
+        void sessionRef.current.end();
+      };
+    }, []);
 
-  if (connectionError) {
-    return (
-      <div className="rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-slate-950">
-        <p className="text-sm text-rose-600">{connectionError}</p>
-        <div className="mt-4 flex justify-center gap-3">
-          <button type="button" onClick={retryCall} className="rounded-xl bg-[#00A99D] px-4 py-2 text-white">
-            Tạo lại cuộc gọi
-          </button>
-          <button type="button" onClick={endCall} className="rounded-xl bg-slate-900 px-4 py-2 text-white">
-            Đóng
-          </button>
+    const endCall = useCallback(() => {
+      void sessionRef.current.end().finally(onClose);
+    }, [onClose]);
+
+    const retryCall = useCallback(() => {
+      void sessionRef.current.end().finally(onRetry);
+    }, [onRetry]);
+
+    if (connectionError) {
+      return (
+        <div className="rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-slate-950">
+          <p className="text-sm text-rose-600">{connectionError}</p>
+          <div className="mt-4 flex justify-center gap-3">
+            <button type="button" onClick={retryCall} className="rounded-xl bg-[#00A99D] px-4 py-2 text-white">
+              Tạo lại cuộc gọi
+            </button>
+            <button type="button" onClick={endCall} className="rounded-xl bg-slate-900 px-4 py-2 text-white">
+              Đóng
+            </button>
+          </div>
         </div>
-      </div>
+      );
+    }
+
+    return (
+      <SessionProvider session={session}>
+        <LiveKitAudioTrackDiagnostics room={room} />
+        <LiveKitCallContent onClose={endCall} onRetry={retryCall} autoRetry={autoRetry} />
+      </SessionProvider>
     );
   }
-
-  return (
-    <SessionProvider session={session}>
-      <LiveKitAudioTrackDiagnostics room={room} />
-      <LiveKitCallContent onClose={endCall} onRetry={retryCall} autoRetry={autoRetry} />
-    </SessionProvider>
-  );
-}
 
 export const LiveKitVoiceSession: React.FC = () => {
   const { close, sessionId, newSession } = useVoiceAssistant();

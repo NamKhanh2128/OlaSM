@@ -24,11 +24,12 @@ class LiveKitVoiceSettings(BaseSettings):
     livekit_api_secret: SecretStr = SecretStr("")
     livekit_agent_name: str = "alosm-voice"
 
-    # STT is billed and authenticated directly with ElevenLabs. LiveKit remains
-    # the RTC transport, rather than proxying this request through Inference.
-    livekit_stt_model: str = ""
-    livekit_stt_language: str = "vi"
-    livekit_stt_provider: Literal["elevenlabs", "deepgram", "google"] = "elevenlabs"
+    # Default to LiveKit Inference so the voice worker does not require a
+    # separate ElevenLabs account/API key. Deepgram Nova-3's multilingual mode
+    # covers Vietnamese and is billed through the LiveKit Cloud project.
+    livekit_stt_model: str = "deepgram/nova-3"
+    livekit_stt_language: str = "multi"
+    livekit_stt_provider: Literal["livekit", "elevenlabs", "google"] = "livekit"
     eleven_api_key: SecretStr = SecretStr("")
     google_cloud_project: str = ""
     google_stt_location: str = "asia-southeast1"
@@ -47,11 +48,12 @@ class LiveKitVoiceSettings(BaseSettings):
     livekit_google_tts_fallback_model: str = "chirp_3"
     livekit_google_tts_fallback_voice: str = "vi-VN-Chirp3-HD-Autonoe"
 
-    # ElevenLabs Scribe realtime owns end-of-speech for user turns. The local
-    # Silero VAD remains in AgentSession for interruption/barge-in detection.
-    livekit_turn_detection: Literal["stt", "vad"] = "stt"
-    # Scribe server VAD is enabled whenever ElevenLabs is the STT provider.
-    # Keep these separately configurable for Vietnamese address-pause tests.
+    # Deepgram Nova-3 does not provide the semantic end-of-turn signal used by
+    # the old ElevenLabs setup, so local Silero VAD owns end-of-speech and
+    # barge-in detection by default.
+    livekit_turn_detection: Literal["stt", "vad"] = "vad"
+    # Used only with ElevenLabs Scribe realtime. Keep these configurable for
+    # deployments that explicitly opt into that provider.
     livekit_stt_server_vad_silence_threshold_seconds: float = Field(default=1.0, ge=0.25, le=5)
     livekit_stt_server_vad_threshold: float = Field(default=0.4, ge=0, le=1)
     livekit_stt_server_vad_min_speech_duration_ms: int = Field(default=250, ge=50, le=5000)

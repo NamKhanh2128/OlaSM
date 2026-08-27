@@ -22,9 +22,10 @@ def _settings(**overrides: object) -> LiveKitVoiceSettings:
         "livekit_url": "wss://alosm.test.livekit.cloud",
         "livekit_api_key": "api-key",
         "livekit_api_secret": "test-api-secret-with-at-least-32-bytes",
-        "livekit_stt_provider": "elevenlabs",
-        "livekit_stt_model": "scribe_v2_realtime",
-        "eleven_api_key": "test-eleven-key",
+        "livekit_stt_provider": "livekit",
+        "livekit_stt_model": "deepgram/nova-3",
+        "livekit_stt_language": "multi",
+        "livekit_turn_detection": "vad",
         "livekit_llm_model": "google/gemma-4-31b-it",
         "livekit_tts_provider": "livekit",
         "livekit_tts_model": "cartesia/sonic-3",
@@ -74,13 +75,8 @@ async def test_build_agent_session_uses_livekit_native_pipeline() -> None:
     assert isinstance(session, AgentSession)
     assert session.userdata.booking_draft.public_state()["confirmation_status"] == "not_requested"
     assert session.options.endpointing["mode"] == "fixed"
-    assert session.options.turn_handling["turn_detection"] == "stt"
-    assert session.stt._opts.server_vad == {  # type: ignore[attr-defined]
-        "vad_silence_threshold_secs": 1.0,
-        "vad_threshold": 0.4,
-        "min_speech_duration_ms": 250,
-        "min_silence_duration_ms": 1000,
-    }
+    assert session.options.turn_handling["turn_detection"] == "vad"
+    assert session.stt.model == "deepgram/nova-3"
     assert session.options.endpointing["min_delay"] == 0.25
     assert session.options.endpointing["max_delay"] == 1.0
     assert session.options.interruption["mode"] == "vad"
