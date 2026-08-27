@@ -121,6 +121,7 @@ class BookingDraft(BaseModel):
     quote: QuoteSnapshot | None = None
     confirmation_status: ConfirmationStatus = "not_requested"
     confirmation_fingerprint: str | None = None
+    cancellation_confirmation_booking_id: str | None = None
     booking: BookingResult | None = None
     revision: int = 0
 
@@ -128,6 +129,7 @@ class BookingDraft(BaseModel):
         self.quote = None
         self.confirmation_status = "not_requested"
         self.confirmation_fingerprint = None
+        self.cancellation_confirmation_booking_id = None
         self.booking = None
 
     def set_candidates(
@@ -178,6 +180,7 @@ class BookingDraft(BaseModel):
         self.quote = quote
         self.confirmation_status = "not_requested"
         self.confirmation_fingerprint = None
+        self.cancellation_confirmation_booking_id = None
         self.booking = None
         self.revision += 1
 
@@ -214,6 +217,7 @@ class BookingDraft(BaseModel):
         if self.booking is not None and self.booking.booking_id != booking.booking_id:
             raise ValueError("BOOKING_ALREADY_CREATED")
         self.booking = booking
+        self.cancellation_confirmation_booking_id = None
         self.revision += 1
 
     def mark_booking_cancelled(self, booking: BookingResult) -> None:
@@ -222,7 +226,19 @@ class BookingDraft(BaseModel):
         if booking.status != "CANCELLED":
             raise ValueError("BOOKING_CANCEL_NOT_CONFIRMED")
         self.booking = booking
+        self.cancellation_confirmation_booking_id = None
         self.revision += 1
+
+    def request_cancellation_confirmation(self) -> None:
+        if self.booking is None:
+            raise ValueError("BOOKING_REQUIRED_BEFORE_CANCELLATION_CONFIRMATION")
+        self.cancellation_confirmation_booking_id = self.booking.booking_id
+        self.revision += 1
+
+    def clear_cancellation_confirmation(self) -> None:
+        if self.cancellation_confirmation_booking_id is not None:
+            self.cancellation_confirmation_booking_id = None
+            self.revision += 1
 
     def public_state(self) -> dict[str, object]:
         return {
@@ -233,6 +249,7 @@ class BookingDraft(BaseModel):
             "vehicle_type": self.vehicle_type,
             "quote": self.quote.model_dump() if self.quote else None,
             "confirmation_status": self.confirmation_status,
+            "cancellation_confirmation_pending": self.cancellation_confirmation_booking_id is not None,
             "booking": self.booking.model_dump() if self.booking else None,
         }
 

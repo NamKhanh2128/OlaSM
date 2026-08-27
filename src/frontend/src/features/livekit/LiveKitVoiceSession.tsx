@@ -186,6 +186,14 @@ function LiveKitCallContent({
     await send(text);
   }, [draft, isSending, send]);
 
+  const submitCancellationDecision = useCallback(
+    async (decision: "confirm" | "decline") => {
+      if (isSending) return;
+      await send(decision === "confirm" ? "Xác nhận hủy chuyến" : "Không hủy chuyến");
+    },
+    [isSending, send],
+  );
+
   return (
     <div className="flex h-full min-h-[560px] w-full flex-col rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-950">
       <RoomAudioRenderer muted={speakerMuted} />
@@ -231,6 +239,29 @@ function LiveKitCallContent({
           </p>
           <p><span className="font-semibold">Xác nhận:</span> {bookingState.confirmation_status}</p>
           <p><span className="font-semibold">Mã chuyến:</span> {bookingState.booking?.booking_id ?? "Chưa tạo"}</p>
+          {bookingState.cancellation_confirmation_pending && bookingState.booking ? (
+            <div className="col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100">
+              <p className="font-semibold">Bạn có chắc muốn hủy chuyến này không?</p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  disabled={isSending}
+                  onClick={() => void submitCancellationDecision("confirm")}
+                  className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Xác nhận hủy chuyến
+                </button>
+                <button
+                  type="button"
+                  disabled={isSending}
+                  onClick={() => void submitCancellationDecision("decline")}
+                  className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-300 disabled:opacity-50 dark:bg-white/10 dark:text-white dark:ring-white/20"
+                >
+                  Giữ chuyến
+                </button>
+              </div>
+            </div>
+          ) : null}
           {bookingState.failure ? (
             <p className="col-span-2 rounded-lg bg-amber-100 p-2 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
               {bookingState.failure.message}

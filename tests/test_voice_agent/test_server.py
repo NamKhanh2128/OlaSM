@@ -5,8 +5,8 @@ import pytest
 from livekit.agents import AgentSession
 
 from src.voice_agent.config import LiveKitVoiceSettings
+from src.voice_agent.model_factory import build_tts
 from src.voice_agent.server import (
-    _build_tts,
     _configure_worker_console_logging,
     _connect_room_early,
     build_agent_session,
@@ -138,7 +138,7 @@ def test_build_google_tts_uses_the_native_google_plugin(monkeypatch: pytest.Monk
     monkeypatch.setattr(google, "TTS", build_google_tts)
 
     assert (
-        _build_tts(
+        build_tts(
             _settings(
                 livekit_tts_provider="google",
                 livekit_tts_model="chirp_3",
@@ -179,7 +179,7 @@ def test_build_google_gemini_tts_uses_pcm_and_chirp_fallback(monkeypatch: pytest
 
     monkeypatch.setattr(google, "TTS", build_google_tts)
 
-    built_tts = _build_tts(
+    built_tts = build_tts(
         _settings(
             livekit_tts_provider="google",
             livekit_tts_model="gemini-2.5-flash-tts",
