@@ -23,8 +23,8 @@
 
 ## Công nghệ định hướng
 
-- STT tiếng Việt: Whisper/PhoWhisper;
-- TTS: ElevenLabs/Google;
+- STT tiếng Việt: Whisper/PhoWhisper (định hướng ban đầu; runtime hiện tại dùng LiveKit Inference/Deepgram Nova-3);
+- TTS: ElevenLabs/Google (định hướng ban đầu; runtime hiện tại dùng Google Gemini Flash TTS và Chirp 3 HD fallback);
 - LLM và LangGraph;
 - tool geocoding: Mapbox/Google Places để xác nhận địa chỉ;
 - PostgreSQL lưu dữ liệu chuyến;
@@ -314,11 +314,11 @@ loop trong cùng cuộc gọi. Kiến trúc đích là full LiveKit-native, như
 thực hiện theo vertical slice, benchmark xong mới xóa runtime cũ.
 
 Kiến trúc đã chốt, mapping source và acceptance gate nằm tại
-[`LIVEKIT_MIGRATION_IMPLEMENTATION.md`](./LIVEKIT_MIGRATION_IMPLEMENTATION.md); trạng
+[`architecture_diagram.md`](./architecture_diagram.md); trạng
 thái hiện tại và đường đọc cho coding agent nằm tại
-[`CODING_AGENT_HANDOFF.md`](./CODING_AGENT_HANDOFF.md).
+[`README.md`](./README.md).
 
 Quyết định cuối cùng và thứ tự dành cho coding agent nằm tại
-[`LIVEKIT_MIGRATION_IMPLEMENTATION.md`](./LIVEKIT_MIGRATION_IMPLEMENTATION.md). Kiến
+[`architecture_diagram.md`](./architecture_diagram.md). Kiến
 trúc đã chốt là **một `AloSMAgent` + `BookingTask` + LiveKit function tools**, không
 dùng multi-agent cho scope hiện tại.

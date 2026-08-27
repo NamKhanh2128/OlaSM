@@ -1,5 +1,7 @@
 """Provider-independent model/tool loop for the service agent."""
 
+import re
+
 from src.agents.capabilities import build_tool_registry
 from src.agents.capabilities.common import handoff
 from src.agents.contracts.schemas import ActionType, AgentAction, AgentInput, ToolName, ToolStatus
@@ -19,6 +21,8 @@ from src.agents.core.session import TurnSession
 from src.agents.tools.builders import EstimateFareTool, SearchPlaceTool
 from src.agents.tools.lifecycle import clear_pending_tool_updates, correlate_tool_result
 from src.agents.tools.schemas import PlaceResolutionStatus
+
+_BOOKING_CORRECTION_PATTERN = re.compile(r"\b(?:đổi|sửa|thay|chuyển)\b", re.IGNORECASE)
 
 
 class ModelDrivenAgent:
@@ -204,6 +208,7 @@ class ModelDrivenAgent:
             and data.vehicle_type is not None
             and data.fare_estimate_id is not None
             and data.phone_number is not None
+            and not ModelDrivenAgent._looks_like_booking_correction(session)
         ):
             session.persist("booking")
             action = request_booking_confirmation_action(data)
@@ -212,6 +217,13 @@ class ModelDrivenAgent:
                 deep=True,
             )
         return None
+
+    @staticmethod
+    def _looks_like_booking_correction(session: TurnSession) -> bool:
+        """Let an explicit correction reach the model before rebuilding confirmation."""
+
+        transcript = session.event.get("user_transcript")
+        return isinstance(transcript, str) and bool(_BOOKING_CORRECTION_PATTERN.search(transcript))
 
     def _handle_model_failure(self, session: TurnSession) -> AgentAction:
         failures = session.working_state().model_failure_count + 1

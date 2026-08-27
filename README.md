@@ -1,21 +1,16 @@
 # AloSM AI Booking Assistant
 
-Web MVP đặt xe bằng **text hoặc voice**. Phạm vi chính gồm Login/Auth và Homepage với AloSM Assistant; chưa gồm live tracking, trip history, payment hoặc wallet.
+Web app đặt xe bằng **text hoặc voice**. Phạm vi chính gồm Login/Auth, Homepage với AloSM Assistant, booking/trip status demo và operator handoff; chưa gồm live tracking realtime, payment hoặc wallet.
 
-Agent coding mới nên bắt đầu tại
-[`docs/CODING_AGENT_HANDOFF.md`](docs/CODING_AGENT_HANDOFF.md), sau đó đọc
-[`docs/LIVEKIT_TEAM_SETUP.md`](docs/LIVEKIT_TEAM_SETUP.md) và
-[`docs/PHASE4_EVALUATION_PLAN.md`](docs/PHASE4_EVALUATION_PLAN.md).
+Bắt đầu đọc [docs/README.md](docs/README.md), sau đó xem
+[docs/LIVEKIT_TEAM_SETUP.md](docs/LIVEKIT_TEAM_SETUP.md) và
+[docs/PROJECT_SOURCE_OF_TRUTH.md](docs/PROJECT_SOURCE_OF_TRUTH.md).
 
-Thành viên mới muốn cài và chạy từ đầu nên dùng
-[`docs/DEVELOPER_SETUP.md`](docs/DEVELOPER_SETUP.md).
+Kiến trúc tổng thể: [docs/architecture_diagram.md](docs/architecture_diagram.md) ·
+Product requirements: [docs/PRD_AloSM_Voice.md](docs/PRD_AloSM_Voice.md)
 
-Kiến trúc tổng thể: [`docs/MVP_ARCHITECTURE.md`](docs/MVP_ARCHITECTURE.md) ·
-Runtime truth: [`docs/PROJECT_SOURCE_OF_TRUTH.md`](docs/PROJECT_SOURCE_OF_TRUTH.md)
-
-Setup LiveKit chi tiết cho thành viên mới, mức độ tích hợp BE/FE/DB, catalog địa
-điểm, ưu/nhược điểm và troubleshooting:
-[`docs/LIVEKIT_TEAM_SETUP.md`](docs/LIVEKIT_TEAM_SETUP.md).
+Setup LiveKit chi tiết cho thành viên mới:
+[docs/LIVEKIT_TEAM_SETUP.md](docs/LIVEKIT_TEAM_SETUP.md).
 
 ## 1. Setup
 
@@ -30,7 +25,7 @@ npm ci
 ```
 
 Sau khi copy `.env`, chọn profile trong
-[`docs/DEVELOPER_SETUP.md`](docs/DEVELOPER_SETUP.md). Chỉ chạy
+[`README.md`](README.md). Chỉ chạy
 `uv run alembic upgrade head` khi dùng profile development có database persistence;
 profile `APP_ENV=test` để smoke nhanh không cần migration.
 
@@ -132,7 +127,7 @@ DATABASE_URL=postgresql://postgres.<PROJECT_REF>:<PASSWORD>@<POOLER_HOST>:5432/p
 DATABASE_URL_MIGRATIONS=postgresql://postgres:<PASSWORD>@db.<PROJECT_REF>.supabase.co:5432/postgres
 ```
 
-Direct connection thường cần IPv6; lấy đúng URL từ nút **Connect** trong Supabase Dashboard. Không đưa database password hoặc service-role key vào frontend. Chi tiết: [`docs/database_supabase.md`](docs/database_supabase.md) và [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres).
+Direct connection thường cần IPv6; lấy đúng URL từ nút **Connect** trong Supabase Dashboard. Không đưa database password hoặc service-role key vào frontend. Chi tiết: [`docs/verification/database.md`](docs/verification/database.md) và [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres).
 
 Tạo hai application secrets độc lập:
 

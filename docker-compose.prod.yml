@@ -1,4 +1,5 @@
-version: "3.8"
+volumes:
+  app-data:
 
 services:
   # 1. FastAPI Web Backend
@@ -8,16 +9,23 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
-      - APP_ENV=production
+      - APP_ENV=development
       - LOG_LEVEL=INFO
+      # Keep backend token validation aligned with the worker. This overrides
+      # any legacy ElevenLabs values still present in .env.production.
+      - LIVEKIT_STT_PROVIDER=livekit
+      - LIVEKIT_STT_MODEL=deepgram/nova-3
+      - LIVEKIT_STT_LANGUAGE=multi
+      - LIVEKIT_TURN_DETECTION=vad
     env_file:
       - .env.production
     volumes:
-      - ./data:/app/data
+      - app-data:/app/data
     ports:
       - "8000:8000"
+    user: root
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -30,10 +38,21 @@ services:
     command: ["python", "-m", "src.voice_agent.server", "dev"]
     restart: always
     environment:
-      - APP_ENV=production
+      - APP_ENV=development
       - LOG_LEVEL=INFO
+      - LIVEKIT_STT_PROVIDER=livekit
+      - LIVEKIT_STT_MODEL=deepgram/nova-3
+      - LIVEKIT_STT_LANGUAGE=multi
+      - LIVEKIT_TURN_DETECTION=vad
     env_file:
       - .env.production
+    volumes:
+      - app-data:/app/data
+    # This service is an RTC worker, not an HTTP server. Disable the image-level
+    # /health probe inherited from the backend image; otherwise Docker marks a
+    # healthy worker as unhealthy because nothing listens on port 8000.
+    healthcheck:
+      disable: true
     depends_on:
       backend:
         condition: service_healthy

@@ -18,6 +18,16 @@ from src.backend.config import get_settings  # noqa: E402
 async def lifespan(app: FastAPI):
     settings = get_settings()
     print(f"Starting {settings.app_name} in {settings.app_env} mode")
+    try:
+        from src.backend.db.base import get_engine
+        from src.backend.db.models import Base
+
+        engine = get_engine()
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print("Database schema verified/initialized.")
+    except Exception as exc:
+        print(f"Database schema initialization notice: {exc}")
     yield
     print("Shutting down...")
 

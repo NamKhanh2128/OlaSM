@@ -56,20 +56,45 @@ services:
         value: production
       - key: LOG_LEVEL
         value: INFO
+      # Worker needs the same full PostgreSQL DSN as the API service.
+      # Configure these values in Render; a web-service host is not a DSN.
       - key: DATABASE_URL
-        fromService:
-          type: web
-          name: alosm-backend
-          property: host
+        sync: false
+      - key: DATABASE_URL_MIGRATIONS
+        sync: false
+      - key: QUOTE_SIGNING_KEY
+        sync: false
+      - key: FIELD_ENCRYPTION_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
       - key: LIVEKIT_URL
         sync: false
       - key: LIVEKIT_API_KEY
         sync: false
       - key: LIVEKIT_API_SECRET
         sync: false
+      - key: LIVEKIT_STT_PROVIDER
+        value: livekit
+      - key: LIVEKIT_STT_MODEL
+        value: deepgram/nova-3
+      - key: LIVEKIT_STT_LANGUAGE
+        value: multi
+      - key: LIVEKIT_LLM_PROVIDER
+        value: openai
+      - key: LIVEKIT_LLM_MODEL
+        value: gpt-4.1-mini
+      - key: LIVEKIT_TTS_PROVIDER
+        value: google
+      - key: LIVEKIT_TTS_MODEL
+        value: gemini-2.5-flash-tts
+      - key: LIVEKIT_TTS_VOICE
+        value: Kore
+      - key: LIVEKIT_TTS_LANGUAGE
+        value: vi-VN
+      - key: GOOGLE_CLOUD_PROJECT
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY
-        sync: false
-      - key: GEMINI_API_KEY
         sync: false

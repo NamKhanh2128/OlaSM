@@ -34,7 +34,7 @@ flowchart LR
     LK[LiveKit Cloud / Server<br/>Room + token]
     WORKER[LiveKit Agent Worker<br/>AgentServer + JobContext]
     AS[AgentSession<br/>một session cho một cuộc hội thoại]
-    STT[STT<br/>ElevenLabs Scribe realtime]
+    STT[STT<br/>LiveKit Inference / Deepgram Nova-3 realtime]
     LLM[LLM<br/>OpenAI via LiveKit plugin]
     TTS[TTS<br/>Google Gemini Flash TTS]
     FALLBACK[TTS fallback<br/>Google Chirp 3 HD]
@@ -106,7 +106,7 @@ Luồng text và luồng voice là hai transport khác nhau nhưng dùng chung q
 
 ### 4.2 Audio pipeline hiện tại
 
-- **STT**: ElevenLabs Scribe Realtime, ngôn ngữ tiếng Việt.
+- **STT**: LiveKit Inference với Deepgram Nova-3, ngôn ngữ tiếng Việt.
 - **Turn detection**: STT/server turn detection; dùng Silero VAD trong AgentSession để phát hiện giọng nói và barge-in.
 - **LLM**: OpenAI qua LiveKit plugin; model runtime hiện tại là gpt-4.1-mini.
 - **TTS**: Google Generative TTS với gemini-2.5-flash-tts, giọng Kore, vi-VN.

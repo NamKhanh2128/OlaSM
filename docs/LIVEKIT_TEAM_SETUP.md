@@ -1,13 +1,13 @@
 # AloSM LiveKit baseline — hướng dẫn setup cho team
 
-Cập nhật: **2026-08-20** · Branch làm việc: `feature/agentic-ai`.
+Cập nhật: **2026-08-27** · Branch làm việc: `feature/agentic-ai`.
 
 Tài liệu này dành cho thành viên mới cần lấy source, chạy lại đúng baseline LiveKit
 đang có và biết chính xác phần nào đã nối thật, phần nào vẫn là demo. Không đưa
 credential vào Git, ticket, ảnh chụp màn hình hoặc nhóm chat.
 
-Coding agent phải đọc [`CODING_AGENT_HANDOFF.md`](CODING_AGENT_HANDOFF.md) trước;
-benchmark/cutover dùng [`PHASE4_EVALUATION_PLAN.md`](PHASE4_EVALUATION_PLAN.md).
+Coding agent phải đọc [`README.md`](README.md) trước;
+benchmark/cutover dùng [`verification/release-readiness.md`](verification/release-readiness.md).
 
 ## 1. Baseline hiện tại là gì?
 
@@ -18,7 +18,7 @@ React Login/Homepage/VoiceCallPanel hiện có
 → POST /api/v1/livekit/token trên FastAPI hiện có
 → LiveKit Room/WebRTC
 → worker alosm-voice dùng AgentServer + AgentSession
-→ Silero VAD (barge-in) + ElevenLabs Scribe server VAD (end-of-turn) → STT tiếng Việt → LLM/function tools → TTS
+→ Silero VAD (turn detection và barge-in) + LiveKit Inference/Deepgram Nova-3 → STT tiếng Việt → LLM/function tools → TTS
 → PlaceSearchService/PricingService/HandoffService hiện có
 → voice state trong ride_sessions hiện có
 → LiveKit data channel cập nhật booking state về React
@@ -139,10 +139,10 @@ LIVEKIT_API_KEY=<lay-tu-livekit-dashboard-hoac-secret-manager>
 LIVEKIT_API_SECRET=<lay-tu-livekit-dashboard-hoac-secret-manager>
 LIVEKIT_AGENT_NAME=alosm-voice
 
-LIVEKIT_STT_PROVIDER=elevenlabs
-LIVEKIT_STT_MODEL=scribe_v2_realtime
-LIVEKIT_STT_LANGUAGE=vi
-ELEVEN_API_KEY=<elevenlabs-api-key>
+LIVEKIT_STT_PROVIDER=livekit
+LIVEKIT_STT_MODEL=deepgram/nova-3
+LIVEKIT_STT_LANGUAGE=multi
+# Không cần ELEVEN_API_KEY khi dùng LiveKit Inference
 # `openai` uses OPENAI_API_KEY directly and does not consume LiveKit LLM credits.
 LIVEKIT_LLM_PROVIDER=openai
 LIVEKIT_LLM_MODEL=gpt-4.1-mini
@@ -173,7 +173,7 @@ LIVEKIT_DEBUG_EVENT_LOG=false
 LIVEKIT_DEBUG_TRANSCRIPTS=false
 ```
 
-`OPENAI_API_KEY` is required when `LIVEKIT_LLM_PROVIDER=openai`. ElevenLabs STT requires `ELEVEN_API_KEY`; it is sent directly to ElevenLabs, not through LiveKit Cloud.
+`OPENAI_API_KEY` is required when `LIVEKIT_LLM_PROVIDER=openai`. LiveKit Inference/Deepgram dùng credential LiveKit; ElevenLabs chỉ là provider tùy chọn khi cấu hình riêng.
 To move the LLM
 back to LiveKit Inference after quota is available, use:
 
