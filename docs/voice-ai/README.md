@@ -4,7 +4,7 @@ Cập nhật: **2026-08-20**. Đây là chỉ mục cho legacy rollback path và
 
 > Không mở rộng thêm custom Voice Gateway/VAD/tool orchestration từ các tài liệu
 > dưới đây. Target thay thế đã được chốt tại
-> [`../LIVEKIT_MIGRATION_IMPLEMENTATION.md`](../LIVEKIT_MIGRATION_IMPLEMENTATION.md).
+> [`../architecture_diagram.md`](../architecture_diagram.md).
 > Runtime LiveKit hiện là team-test baseline. Các file dưới đây không được dùng để
 > mở rộng custom voice pipeline; chỉ giữ cho rollback, so sánh Phase 4 và evidence.
 

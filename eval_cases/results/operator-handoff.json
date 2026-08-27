@@ -1,13 +1,13 @@
 {
   "schema_version": "2.0",
-  "generated_at": "2026-08-16T20:02:45.210408+00:00",
+  "generated_at": "2026-08-27T04:15:42.110589+00:00",
   "mode": "offline_deterministic_agent_workflow",
   "case": {
     "id": "AGENT-006",
     "title": "Handoff tổng đài viên",
     "goal": "Chuyển booking context đang dở tới đúng hàng đợi người thật.",
     "status": "passed",
-    "duration_ms": 4.858,
+    "duration_ms": 1.835,
     "conversation": [
       {
         "turn": 1,

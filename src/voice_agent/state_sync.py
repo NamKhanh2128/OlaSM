@@ -25,6 +25,14 @@ async def publish_booking_state(session: AgentSession[AloSMSessionData]) -> None
             reliable=True,
             topic=BOOKING_STATE_TOPIC,
         )
+    except RuntimeError as exc:
+        # LiveKit tears down RoomIO before late provider-failure callbacks run.
+        # There is no recipient at that point, so this is an expected cleanup
+        # race rather than an application error.
+        if "room_io" in str(exc).lower() and "not started with a room" in str(exc).lower():
+            logger.info("skipped LiveKit booking-state publish because the session is closed")
+            return
+        logger.exception("failed to publish LiveKit booking state")
     except Exception:
         # The call can continue if a browser disconnects while a tool is completing.
         logger.exception("failed to publish LiveKit booking state")

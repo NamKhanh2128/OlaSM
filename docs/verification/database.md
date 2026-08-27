@@ -1,15 +1,17 @@
 # Database verification
 
-Date: **2026-08-16** · Branch: `feature/voice-ai`.
+Date: **2026-08-27** · Branch: `feature/agentic-ai`.
+
+> Các check PostgreSQL bên dưới là historical evidence; current non-live verification nằm ở [`../evaluation.md`](../evaluation.md).
 
 ## Evidence đã chạy
 
 | Check | Kết quả |
 |---|---|
 | Runtime imports | pass |
-| Ruff toàn repository | pass |
+| Ruff trên source/test/eval | pass |
 | Backend/API regression | pass sau khi sửa 3 regression |
-| Full offline suite | `501 passed, 2 skipped` |
+| Full offline suite | `459 passed, 3 skipped` |
 | Real SQL persistence integration | pass trên SQLite/aiosqlite, không mock repository/transaction |
 | Quote tamper rejection | pass |
 | Idempotent booking retry | pass |
@@ -25,7 +27,7 @@ Code persistence và migration đã hoàn tất nhưng PostgreSQL live chưa đ�
 - không ghi `LIVE_VALIDATED` cho migration mới;
 - không chạy script acceptance trước khi DB ở đúng revision;
 - giữ production readiness fail-closed;
-- thao tác owner cần làm nằm trong `mustdo.md` và `docs/database_supabase.md`.
+- thao tác owner cần làm nằm trong `mustdo.md`; hướng dẫn verify nằm trong tài liệu này.
 
 Sau khi được phê duyệt, chạy:
 

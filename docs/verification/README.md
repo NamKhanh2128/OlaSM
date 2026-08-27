@@ -3,9 +3,9 @@
 > **Historical evidence:** các báo cáo trong thư mục này ghi nhận trạng thái kiểm
 > chứng tại thời điểm chúng được tạo, không tự động đại diện cho LiveKit baseline
 > hiện tại. Bối cảnh runtime mới nằm trong
-> [`../CODING_AGENT_HANDOFF.md`](../CODING_AGENT_HANDOFF.md); kết quả benchmark mới
+> [`../README.md`](../README.md); kết quả benchmark mới
 > phải được lưu theo cấu trúc trong
-> [`../PHASE4_EVALUATION_PLAN.md`](../PHASE4_EVALUATION_PLAN.md).
+> [`../verification/release-readiness.md`](../verification/release-readiness.md).
 
 Artifacts in this directory record commands actually run and distinguish code evidence from external gates.
 

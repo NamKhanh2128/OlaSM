@@ -8,7 +8,12 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-POLICY_DIR = Path(__file__).resolve().parents[3] / "data" / "policies"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DATA_POLICY_DIR = PROJECT_ROOT / "data" / "policies"
+STATIC_POLICY_DIR = PROJECT_ROOT / "config" / "policies"
+# Local/test uses the checked-in data catalog. Docker may mount /app/data as an
+# empty runtime volume, so retain the image-baked /app/config fallback.
+POLICY_DIR = DATA_POLICY_DIR if (DATA_POLICY_DIR / "catalog.json").is_file() else STATIC_POLICY_DIR
 POLICY_CATALOG_PATH = POLICY_DIR / "catalog.json"
 
 

@@ -123,7 +123,8 @@ def _update(data: BookingData, arguments: dict) -> tuple[BookingData, str]:
             return data, "Số điện thoại không hợp lệ; state chưa thay đổi."
         values["phone_number"] = normalize_phone(str(values["phone_number"]))
 
-    if values and _has_completed_booking(data):
+    had_completed_booking = bool(values and _has_completed_booking(data))
+    if had_completed_booking:
         data = clear_completed_booking(data)
 
     location_changed = any(
@@ -156,13 +157,13 @@ def _update(data: BookingData, arguments: dict) -> tuple[BookingData, str]:
         )
     if location_changed or needs_changed:
         # Route/needs changes invalidate backend-generated vehicle options, but
-        # an explicit vehicle type supplied in this same user turn remains a
-        # valid preference. Previously a complete sentence such as "xe 4 chỗ từ
-        # VinUni tới Hồ Gươm" immediately lost its freshly stored CAR_4 slot.
-        explicit_vehicle_type = values.get("vehicle_type")
+        # the selected vehicle type remains a valid customer preference. Keep it
+        # so a correction such as "đổi điểm đón" can search the new place and
+        # re-quote without asking for the vehicle a second time.
+        preserved_vehicle_type = values.get("vehicle_type") or (None if had_completed_booking else data.vehicle_type)
         data = clear_vehicle_selection(data)
-        if explicit_vehicle_type is not None:
-            data = data.model_copy(update={"vehicle_type": explicit_vehicle_type}, deep=True)
+        if preserved_vehicle_type is not None:
+            data = data.model_copy(update={"vehicle_type": preserved_vehicle_type}, deep=True)
     if vehicle_changed:
         data = data.model_copy(update={"selected_vehicle_option_id": None, "vehicle_display_name": None}, deep=True)
     if location_changed or needs_changed or vehicle_changed:

@@ -9,7 +9,12 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 SUPPORTED_VEHICLES = {"MOTORBIKE", "CAR_4", "CAR_7", "LUXURY"}
-DEFAULT_PRICING_PATH = Path(__file__).resolve().parents[3] / "data" / "pricing" / "hanoi_demo_2026-08-16.yaml"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DATA_PRICING_PATH = PROJECT_ROOT / "data" / "pricing" / "hanoi_demo_2026-08-16.yaml"
+STATIC_PRICING_PATH = PROJECT_ROOT / "config" / "pricing" / "hanoi_demo_2026-08-16.yaml"
+# Local/test uses the checked-in data catalog. Docker falls back to the static
+# copy created in the image when /app/data is mounted as a runtime volume.
+DEFAULT_PRICING_PATH = DATA_PRICING_PATH if DATA_PRICING_PATH.is_file() else STATIC_PRICING_PATH
 
 
 class DistanceTier(BaseModel):

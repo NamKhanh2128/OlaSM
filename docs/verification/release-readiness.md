@@ -1,10 +1,10 @@
 # Release readiness matrix
 
-Date: **2026-08-16** · Branch: `feature/voice-ai`.
+Date: **2026-08-27** · Branch: `feature/agentic-ai`.
 
 | Domain | Code/test evidence | Còn thiếu | Status |
 |---|---|---|---|
-| PostgreSQL persistence | ORM, repositories, runtime wiring, 467-test suite và real-SQL integration pass | apply migration live, PostgreSQL acceptance, least-privilege role, backup/restore | `RELEASE_GATED` |
+| PostgreSQL persistence | ORM, repositories, runtime wiring, 459-pass test suite và real-SQL integration pass | apply migration live, PostgreSQL acceptance, least-privilege role, backup/restore | `RELEASE_GATED` |
 | Quote integrity/snapshot | stored HMAC quote, TTL, ownership, single-use, idempotency, immutable snapshots | approved production pricing/route/promotion và live PG acceptance | `STAGING_ONLY` |
 | Maps/Route | fail-closed provider contract | provider, credential, service area, license | `EXTERNAL_BLOCKED` |
 | Pricing | versioned catalog và deterministic engine | Finance/Product-approved AloSM catalog | `DEMO` |
@@ -19,8 +19,8 @@ Date: **2026-08-16** · Branch: `feature/voice-ai`.
 
 ## Evidence của thay đổi này
 
-- Ruff toàn repository: pass.
-- Full non-live pytest: `501 passed, 2 skipped`.
+- Ruff trên `src tests scripts eval_cases`: pass.
+- Full non-live pytest: `459 passed, 3 skipped` on the current branch head.
 - Real SQLite persistence/quote integration: pass, không mock repository/transaction.
 - Alembic code head: `0004_maps_places_routes` (persistence/quote ở `9e9b6f420a9a`, Maps/Route nối tiếp).
 - Supabase current: `0002_handoff_operations`; migration mới chưa áp dụng vì mutation live cần phê duyệt.

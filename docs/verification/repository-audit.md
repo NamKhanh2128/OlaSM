@@ -1,6 +1,8 @@
 # Repository audit — persistence và quote integrity
 
-Date: **2026-08-16** · Branch: `feature/voice-ai`.
+Date: **2026-08-27** · Branch: `feature/agentic-ai`.
+
+> Đây là audit snapshot lịch sử; các kết quả mới nhất xem tại [`../evaluation.md`](../evaluation.md).
 
 | Finding trước đây | Trạng thái mới | Evidence |
 |---|---|---|
