@@ -13,11 +13,21 @@ from rapidfuzz import fuzz
 # src/voice/text/gazetteer.py) — tái dùng đúng nguồn thật này cho search_place của Core
 # Agent thay vì bịa candidate giả (bản cũ chỉ echo lại nguyên câu người dùng nhập thành
 # 1 candidate duy nhất, không thật sự "tìm kiếm" gì cả).
-_GAZETTEER_PATH = Path(__file__).resolve().parents[3] / "config" / "gazetteer" / "place_names.json"
-_ALIASES_PATH = Path(__file__).resolve().parents[3] / "config" / "gazetteer" / "hanoi_place_aliases.json"
-_LANDMARK_PICKUP_POINTS_PATH = (
-    Path(__file__).resolve().parents[3] / "config" / "gazetteer" / "hanoi_landmark_pickup_points.json"
-)
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_DATA_GAZETTEER_DIR = _PROJECT_ROOT / "data" / "gazetteer"
+_STATIC_GAZETTEER_DIR = _PROJECT_ROOT / "config" / "gazetteer"
+
+
+def _data_path(filename: str) -> Path:
+    """Use checked-in data locally and the image-baked config fallback in Docker."""
+
+    data_path = _DATA_GAZETTEER_DIR / filename
+    return data_path if data_path.is_file() else _STATIC_GAZETTEER_DIR / filename
+
+
+_GAZETTEER_PATH = _data_path("place_names.json")
+_ALIASES_PATH = _data_path("hanoi_place_aliases.json")
+_LANDMARK_PICKUP_POINTS_PATH = _data_path("hanoi_landmark_pickup_points.json")
 
 
 @lru_cache

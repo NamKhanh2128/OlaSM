@@ -4,7 +4,7 @@ Cập nhật: **2026-08-20** · Trạng thái: `LEGACY_ROLLBACK`.
 
 > File này chỉ mô tả rollback path còn tồn tại trong source. Team-test/current
 > target là full LiveKit-native theo
-> [`../LIVEKIT_MIGRATION_IMPLEMENTATION.md`](../LIVEKIT_MIGRATION_IMPLEMENTATION.md).
+> [`../architecture_diagram.md`](../architecture_diagram.md).
 
 ## Transport
 

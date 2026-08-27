@@ -14,11 +14,10 @@ Runner dùng scripted semantic decisions để kết quả tái lập được, 
 
 | Tổng số | Passed | Failed | Pytest | Overall |
 |---:|---:|---:|---|---|
-| 6 | 3 | 3 | 14 passed, 3 failed | `failed` |
+| 6 | 6 | 0 | 17 passed, 0 failed | `passed` |
 
-- **Passed:** happy path (`AGENT-001`), yêu cầu ngoài phạm vi (`AGENT-005`) và handoff tổng đài viên (`AGENT-006`).
-- **Failed:** đổi điểm đón (`AGENT-002`), đổi điểm đến (`AGENT-003`) và đổi loại xe (`AGENT-004`).
-- **Lỗi chung:** sau khi người dùng từ chối bản xác nhận và yêu cầu sửa, Agent bỏ qua nội dung sửa, hiện lại bản xác nhận cũ và có thể tạo booking bằng dữ liệu cũ. Không có `update_booking`, `search_place` hoặc `estimate_fare` tương ứng với thay đổi của người dùng.
+- **Passed:** happy path, đổi điểm đón, đổi điểm đến, đổi loại xe, yêu cầu ngoài phạm vi và handoff tổng đài viên.
+- Các case correction kiểm tra rằng quote cũ bị invalidate, thông tin mới được resolve/re-quote và booking chỉ được tạo sau khi xác nhận lại.
 
 Chi tiết đầy đủ nằm trong [`agent_workflow_eval_summary.json`](agent_workflow_eval_summary.json).
 

@@ -10,7 +10,7 @@
 
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
-| @NamKhanh2128 | Khởi tạo baseline sản phẩm AloSM Voice AI và bộ tài liệu G1 | ✅ Done | `ALOSM_Brief.md`, `ALOSM_PRD.md`, `ARCHITECTURE.md` | — |
+| @NamKhanh2128 | Khởi tạo baseline sản phẩm AloSM Voice AI và bộ tài liệu G1 | ✅ Done | `docs/PRODUCT_BRIEF.md`, `docs/PRD_AloSM_Voice.md`, `docs/architecture_diagram.md` | — |
 
 **Tổng kết ngày:** Định hình mục tiêu sản phẩm, kiến trúc ban đầu và phạm vi trợ lý đặt xe bằng giọng nói.
 
@@ -22,7 +22,7 @@
 |--------|------|--------|--------|------|
 | @NamKhanh2128 | Hợp nhất baseline G1 vào repository | ✅ Done | [PR #1](https://github.com/AI20K-Build-Phase-Cohort-3/P-160/pull/1) | — |
 | @NamKhanh2128 | Chuẩn hóa thư mục tài liệu đặc tả | ✅ Done | `specification_documents/` | — |
-| @PhucHung | Hoàn thiện PRD, architecture diagram và interface design cho AloSM Voice AI | ✅ Done | `docs/PRD_AloSM_Voice.md`, `docs/architecture_diagram.md`, `docs/interface_design.md` | — |
+| @PhucHung | Hoàn thiện PRD, architecture diagram và interface design cho AloSM Voice AI | ✅ Done | `docs/PRD_AloSM_Voice.md`, `docs/architecture_diagram.md`, `docs/FEATURE_USER_STORIES.md` | — |
 
 **Tổng kết ngày:** Product scope, yêu cầu MVP, kiến trúc và luồng giao diện được ghi thành tài liệu làm nền cho các branch implementation.
 
@@ -194,7 +194,7 @@
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
 | @PivePipiopia | Hardening LiveKit voice baseline, handoff và session recovery | ✅ Done | Commit `80c1d1a`, `src/voice_agent/`, `tests/test_voice_agent/` | — |
-| @PivePipiopia | Viết coding-agent handoff, Phase 4 evaluation plan và latency plan | ✅ Done | `docs/CODING_AGENT_HANDOFF.md`, `docs/PHASE4_EVALUATION_PLAN.md` | — |
+| @PivePipiopia | Viết coding-agent handoff, Phase 4 evaluation plan và latency plan | ✅ Done | `docs/evaluation.md`, `docs/performance/latency-remediation-plan.md` | — |
 | @DanielK345 | Warm worker và chuẩn bị call trước khi người dùng bắt đầu voice session | ✅ Done | `src/frontend/src/features/livekit/prepareCall.ts`, commit `e017c0c` | — |
 | @DanielK345 | Thu hồi access khi session kết thúc | ✅ Done | Commit `f034646` | — |
 | @DanielK345 | Hiển thị transcript rewrite progress và trạng thái provider trên UI | ✅ Done | `src/voice_agent/state_sync.py`, `LiveKitVoiceSession.tsx`, commit `992daf2` | — |
@@ -211,7 +211,7 @@
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
 | @PivePipiopia | Cập nhật agentic AI implementation và chuyển runtime chính sang LiveKit flow | ✅ Done | [PR #10](https://github.com/AI20K-Build-Phase-Cohort-3/P-160/pull/10), commit `83b685c` | — |
-| @PivePipiopia | Chuẩn hóa developer setup, environment profile và cách chạy ba process | ✅ Done | `docs/DEVELOPER_SETUP.md`, `README.md` | — |
+| @PivePipiopia | Chuẩn hóa developer setup, environment profile và cách chạy ba process | ✅ Done | `docs/LIVEKIT_TEAM_SETUP.md`, `README.md` | — |
 | @NamKhanh2128 | Hợp nhất agentic-ai với voice-ai và xử lý merge conflict | ✅ Done | Commit `524949f`, `bdcdb9b` | — |
 | @NamKhanh2128 | Sửa Docker runtime permission khi chạy bằng appuser | ✅ Done | Commit `8292db4` | — |
 
@@ -264,3 +264,12 @@
 - PR #6 và #7 vẫn được GitHub ghi nhận là các PR frontend mở; phần UI tương ứng đã được các branch khác tiếp tục hợp nhất và phát triển.
 - Workflow evaluation, LiveKit product evaluation và CI vẫn còn các lỗi cần xử lý; chưa nên coi hệ thống là production-ready.
 - Việc tiếp theo là sửa regression trong booking/evaluation, chạy lại backend/frontend checks, hoàn tất browser/device/reconnect/provider-failure tests và kiểm chứng các tích hợp production.
+
+
+## 2026-08-27
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Team | Hardening branch agentic-ai theo review: sửa catalog path, correction flow, provider/docs drift và CI evidence | ✅ Done | `459 passed, 3 skipped`; deterministic eval 6/6; `docs/evaluation.md` | — |
+
+**Tổng kết ngày:** Source hiện tại có thể rebuild/test từ branch, các giới hạn external và release gates được ghi rõ thay vì để reviewer suy đoán.

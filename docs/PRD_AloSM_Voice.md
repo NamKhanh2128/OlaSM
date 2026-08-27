@@ -8,7 +8,7 @@
 
 ---
 
-> **Cập nhật triển khai 2026-08-27:** PRD vẫn giữ nguyên các feature và mục tiêu sản phẩm ban đầu. Các thay đổi đã được phản ánh trong tài liệu này là: voice runtime chuyển sang LiveKit AgentServer/AgentSession; STT hiện dùng ElevenLabs Scribe Realtime, LLM dùng OpenAI qua LiveKit plugin, TTS dùng Google Gemini Flash TTS có Google Chirp 3 HD fallback; text và voice dùng chung state/guardrail contract; booking có quote, explicit confirmation, idempotency và invalidate quote khi đổi yêu cầu; handoff đưa operator vào cùng LiveKit Room và dừng AI audio khi takeover. Các tính năng thanh toán, hoàn tiền, CRM, hỗ trợ tài xế, kho tri thức có màn hình quản trị và emergency integration vẫn được giữ trong PRD nhưng chưa coi là đã hoàn thành.
+> **Cập nhật triển khai 2026-08-27:** PRD vẫn giữ nguyên các feature và mục tiêu sản phẩm ban đầu. Các thay đổi đã được phản ánh trong tài liệu này là: voice runtime chuyển sang LiveKit AgentServer/AgentSession; STT hiện dùng LiveKit Inference với Deepgram Nova-3, LLM dùng OpenAI qua LiveKit plugin, TTS dùng Google Gemini Flash TTS có Google Chirp 3 HD fallback; text và voice dùng chung state/guardrail contract; booking có quote, explicit confirmation, idempotency và invalidate quote khi đổi yêu cầu; handoff đưa operator vào cùng LiveKit Room và dừng AI audio khi takeover. Các tính năng thanh toán, hoàn tiền, CRM, hỗ trợ tài xế, kho tri thức có màn hình quản trị và emergency integration vẫn được giữ trong PRD nhưng chưa coi là đã hoàn thành.
 
 ---
 

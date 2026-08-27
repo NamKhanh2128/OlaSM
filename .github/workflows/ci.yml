@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, feature/voice-ai]
+    branches: [main, develop, feature/agentic-ai, feature/voice-ai]
   pull_request:
     branches: [main, develop]
 
@@ -13,14 +13,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Ruff
-        run: ruff check src tests scripts
+        run: ruff check src tests scripts eval_cases
       - name: Compile
-        run: python -m compileall -q src tests scripts
+        run: python -m compileall -q src tests scripts eval_cases
       - name: Migration graph
         run: python -m alembic heads
         env:

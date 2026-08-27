@@ -108,3 +108,6 @@ maps-data/
 data/osm/raw/
 infra/maps/osrm/data/
 infra/maps/nominatim/data/
+
+# Deployment bundles may contain environment/database artifacts
+*.tar.gz

@@ -47,7 +47,7 @@ def test_livekit_accepts_complete_native_pipeline_configuration() -> None:
     assert config.livekit_stt_server_vad_min_silence_duration_ms == 1000
     assert config.livekit_interruption_min_duration_seconds == 0.5
     assert config.livekit_transcription_timeout_seconds == 5.0
-    assert config.livekit_stt_language == "vi"
+    assert config.livekit_stt_language == "multi"
     assert config.livekit_tts_language == "vi"
     assert config.livekit_record_audio is False
     assert config.livekit_record_transcript is False
@@ -126,7 +126,11 @@ def test_elevenlabs_stt_requires_its_own_api_key() -> None:
     assert "ELEVEN_API_KEY_REQUIRED_FOR_ELEVENLABS_STT" in config.stt_configuration_errors()
 
 
-def test_livekit_inference_stt_does_not_require_an_external_provider_key() -> None:
-    config = settings(livekit_stt_provider="livekit")
+def test_livekit_inference_stt_requires_livekit_credentials() -> None:
+    config = settings(
+        livekit_stt_provider="livekit",
+        livekit_api_key="api-key",
+        livekit_api_secret="api-secret",
+    )
 
     assert config.stt_configuration_errors() == []

@@ -1,7 +1,7 @@
 # AloSM Voice — nguồn sự thật và trình tự hoàn thiện project
 
-Cập nhật: **2026-08-20**. Tài liệu này là nguồn trạng thái toàn project. Với công
-việc LiveKit, điểm bắt đầu là `docs/CODING_AGENT_HANDOFF.md`. Tài liệu này xác định
+Cập nhật: **2026-08-27**. Tài liệu này là nguồn trạng thái toàn project. Với công
+việc LiveKit, điểm bắt đầu là `docs/LIVEKIT_TEAM_SETUP.md`. Tài liệu này xác định
 nào có thẩm quyền, dữ liệu nào đang là demo, contract nào đang chạy và phải hoàn
 thiện project theo thứ tự nào. Không dùng báo cáo tiến trình hoặc kế hoạch cũ để
 suy ra trạng thái runtime.
@@ -18,14 +18,14 @@ Khi hai nguồn mâu thuẫn, áp dụng thứ tự sau:
 
 | Câu hỏi | Nguồn chuẩn |
 |---|---|
-| Sản phẩm hướng tới điều gì? | `docs/PRODUCT_BRIEF.md`, sau đó `docs/PRD_AloSM_Voice.md` và `docs/MVP.md` |
+| Sản phẩm hướng tới điều gì? | `docs/PRODUCT_BRIEF.md`, sau đó `docs/PRD_AloSM_Voice.md` |
 | Hệ thống hiện chạy thế nào? | code trong `src/`, migration và test |
 | Contract Agent | `src/agents/README.md`, `src/agents/docs/BACKEND_INTEGRATION.md` |
 | Trạng thái Core Agent | `src/agents/docs/CORE_AGENT_STATUS.md` |
 | Data production cần gì? | `src/agents/DATAFINDING.md`, `data/catalog.json` |
-| Voice runtime hiện tại | `docs/CODING_AGENT_HANDOFF.md`, `docs/LIVEKIT_TEAM_SETUP.md` |
-| LiveKit architecture/history | `docs/LIVEKIT_MIGRATION_IMPLEMENTATION.md` |
-| Voice evaluation/cutover | `docs/PHASE4_EVALUATION_PLAN.md` |
+| Voice runtime hiện tại | `docs/LIVEKIT_TEAM_SETUP.md` |
+| LiveKit architecture/history | `docs/architecture_diagram.md` |
+| Voice evaluation/cutover | `docs/verification/release-readiness.md` |
 | Legacy voice rollback/evidence | `docs/voice-ai/README.md` |
 | Việc AI/code không thể tự hoàn tất | `mustdo.md` |
 | Cần truy vết tài liệu đã thay thế | Git history; không giữ duplicate trong cây hiện hành |
@@ -90,9 +90,9 @@ Catalog máy đọc được nằm tại `data/catalog.json`; giải thích các
 | Booking/trip | durable/idempotent demo integration | `STAGING_ONLY` | provider dispatch thật + reconciliation |
 | Policy/RAG | owner-approved catalog + checksum/citation retrieval | `STAGING_ONLY` | AloSM legal identity/contact + durable consent + production eval |
 | Handoff | LiveKit tool + durable record + redacted context/UI | `STAGING_ONLY` | operator accept/join/takeover + telephony SLA |
-| LiveKit STT | Google Chirp 2 qua official plugin | `STAGING_ONLY` | WER/CER/entity corpus theo accent/noise |
+| LiveKit STT | LiveKit Inference / Deepgram Nova-3, multilingual | `STAGING_ONLY` | WER/CER/entity corpus theo accent/noise |
 | LiveKit LLM | GPT-4.1 mini qua official plugin | `STAGING_ONLY` | behavioral/model/cost A/B |
-| LiveKit TTS | Cartesia Sonic 3 qua LiveKit Inference | `STAGING_ONLY` | human listening, device matrix, cost/SLA |
+| LiveKit TTS | Google Gemini Flash TTS, có Chirp 3 HD fallback | `STAGING_ONLY` | human listening, device matrix, cost/SLA |
 | Legacy ZipFormer/rewrite/TTS | historical evidence only | `RETIRED` | code/runtime đã gỡ sau LiveKit cutover |
 | Payment/notification | chưa có provider | `EXTERNAL_BLOCKED` | merchant/webhook/reconciliation + consented messaging |
 
@@ -134,8 +134,8 @@ Mọi implementation mới phải giữ đúng thứ tự và ID liên kết sau
 
 > **Không nhầm hai hệ phase:** các phase trong mục này là roadmap production của
 > toàn bộ AloSM (Maps, Fleet, Telephony, Policy...). “Phase 4” trong
-> [`LIVEKIT_MIGRATION_IMPLEMENTATION.md`](LIVEKIT_MIGRATION_IMPLEMENTATION.md) và
-> [`PHASE4_EVALUATION_PLAN.md`](PHASE4_EVALUATION_PLAN.md) là phase đánh giá/cutover
+> [`architecture_diagram.md`](architecture_diagram.md) và
+> [`verification/release-readiness.md`](verification/release-readiness.md) là phase đánh giá/cutover
 > riêng của nhánh refactor LiveKit. Baseline LiveKit hiện đã hoàn tất implementation
 > Phase 3 nhưng toàn project vẫn còn các dependency external ở roadmap dưới đây.
 
@@ -242,10 +242,10 @@ Khi thay đổi contract/runtime:
   `DEMO/STAGING_ONLY` và chưa phải production truth.
 - Frontend: route và API client chính đã có; booking catalog/payment/map/fleet còn
   phần demo hoặc chưa có provider production.
-- Current model baseline: Google Chirp 2 STT, OpenAI GPT-4.1 mini LLM và LiveKit
-  Inference Cartesia Sonic 3 TTS.
+- Current model baseline: LiveKit Inference / Deepgram Nova-3 STT, OpenAI GPT-4.1 mini
+  LLM và Google Gemini Flash TTS với Chirp 3 HD fallback.
 - Policy/RAG: `STAGING_ONLY`, catalog owner-approved đã tích hợp; còn pháp nhân/liên hệ AloSM và durable consent.
-- Supabase connectivity/migration: `LIVE_VALIDATED`; service repository wiring vẫn là internal `STAGING_ONLY`.
+- Supabase connectivity/migration: `RELEASE_GATED`; local SQLite/integration evidence đã pass nhưng migration live/RLS acceptance chưa được owner phê duyệt.
 - Telephony, maps business truth, backup/PITR/retention, Redis decision và payment: `EXTERNAL_BLOCKED`.
 - LiveKit migration: React → Room → AgentSession → native tools → persistence đã
   implement tới Phase 3. Known issue thỉnh thoảng bỏ sót lượt nói/không có final

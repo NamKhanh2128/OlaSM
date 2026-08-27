@@ -1,13 +1,13 @@
 {
   "schema_version": "2.0",
-  "generated_at": "2026-08-16T20:02:45.210408+00:00",
+  "generated_at": "2026-08-27T04:15:42.110589+00:00",
   "mode": "offline_deterministic_agent_workflow",
   "case": {
     "id": "AGENT-003",
     "title": "Đổi điểm đến giữa chừng",
     "goal": "Giữ điểm đón, đổi điểm đến và tạo lại bản xác nhận.",
-    "status": "failed",
-    "duration_ms": 17.534,
+    "status": "passed",
+    "duration_ms": 10.281,
     "conversation": [
       {
         "turn": 1,
@@ -243,11 +243,49 @@
         "user": "Đổi điểm đến sang Ga Hà Nội",
         "assistant": {
           "action": "ASK_USER",
-          "message": "Bạn xác nhận đặt xe đón tại Cổng chính VinUni và đến Bưu điện Hà Nội, loại ô tô 4 chỗ, giá dự kiến 95.180 đồng, đúng không?",
+          "message": "Bạn xác nhận đặt xe đón tại Cổng chính VinUni và đến Ga Hà Nội, loại ô tô 4 chỗ, giá dự kiến 202.340 đồng, đúng không?",
           "booking": null
         },
-        "semantic_decisions": [],
-        "backend_tools": [],
+        "semantic_decisions": [
+          {
+            "tool": "update_booking",
+            "arguments": {
+              "destination_query": "Ga Hà Nội"
+            }
+          }
+        ],
+        "backend_tools": [
+          {
+            "tool": "search_place",
+            "params": {
+              "query": "Ga Hà Nội"
+            },
+            "result": {
+              "tool_status": "SUCCESS",
+              "candidates": [
+                {
+                  "place_id": "place_b9c0f7fc86e1",
+                  "display_name": "Ga Hà Nội"
+                }
+              ]
+            }
+          },
+          {
+            "tool": "estimate_fare",
+            "params": {
+              "pickup_place_id": "place_71e69b1e78a8",
+              "destination_place_id": "place_b9c0f7fc86e1",
+              "vehicle_type": "CAR_4"
+            },
+            "result": {
+              "tool_status": "SUCCESS",
+              "estimate_id": "est_82b9d8666a73",
+              "fare_amount": 202340,
+              "currency": "VND",
+              "eta_minutes": 35
+            }
+          }
+        ],
         "state_after_turn": {
           "workflow": "RIDE_BOOKING",
           "step": "CONFIRM",
@@ -259,15 +297,15 @@
               "display_name": "Cổng chính VinUni",
               "address": "Đường San Hô, Vinhomes Ocean Park, Đa Tốn, Gia Lâm, Hà Nội"
             },
-            "destination_query": "Hồ Gươm",
+            "destination_query": "Ga Hà Nội",
             "destination": {
-              "place_id": "place_4b3912dcfb3c",
-              "display_name": "Bưu điện Hà Nội",
-              "address": "75 Đinh Tiên Hoàng, Tràng Tiền, Hoàn Kiếm, Hà Nội"
+              "place_id": "place_b9c0f7fc86e1",
+              "display_name": "Ga Hà Nội",
+              "address": "Ga Hà Nội"
             },
             "vehicle_type": "CAR_4",
-            "fare_estimate_id": "est_bd64ece1f33e",
-            "fare_amount": 95180.0,
+            "fare_estimate_id": "est_82b9d8666a73",
+            "fare_amount": 202340.0,
             "currency": "VND",
             "booking_id": null,
             "booking_status": null
@@ -280,12 +318,12 @@
         "user": "Xác nhận",
         "assistant": {
           "action": "RESPOND",
-          "message": "Chuyến xe đã được đặt thành công. Xe dự kiến đến sau 16 phút.",
+          "message": "Chuyến xe đã được đặt thành công. Xe dự kiến đến sau 35 phút.",
           "booking": {
-            "booking_id": "book_b3f5dcc4",
+            "booking_id": "book_4bad1ded",
             "status": "CONFIRMED",
             "lifecycle_status": "SUCCESS",
-            "estimated_fare": 95180
+            "estimated_fare": 202340
           }
         },
         "semantic_decisions": [],
@@ -294,18 +332,18 @@
             "tool": "create_booking",
             "params": {
               "pickup_place_id": "place_71e69b1e78a8",
-              "destination_place_id": "place_4b3912dcfb3c",
+              "destination_place_id": "place_b9c0f7fc86e1",
               "phone_number": "0901234567",
               "vehicle_type": "CAR_4",
-              "fare_estimate_id": "est_bd64ece1f33e",
+              "fare_estimate_id": "est_82b9d8666a73",
               "idempotency_key": "<sha256-present>"
             },
             "result": {
               "tool_status": "SUCCESS",
-              "fare_amount": 95180,
+              "fare_amount": 202340,
               "currency": "VND",
-              "eta_minutes": 16,
-              "booking_id": "book_b3f5dcc4",
+              "eta_minutes": 35,
+              "booking_id": "book_4bad1ded",
               "backend_status": "CONFIRMED"
             }
           }
@@ -321,17 +359,17 @@
               "display_name": "Cổng chính VinUni",
               "address": "Đường San Hô, Vinhomes Ocean Park, Đa Tốn, Gia Lâm, Hà Nội"
             },
-            "destination_query": "Hồ Gươm",
+            "destination_query": "Ga Hà Nội",
             "destination": {
-              "place_id": "place_4b3912dcfb3c",
-              "display_name": "Bưu điện Hà Nội",
-              "address": "75 Đinh Tiên Hoàng, Tràng Tiền, Hoàn Kiếm, Hà Nội"
+              "place_id": "place_b9c0f7fc86e1",
+              "display_name": "Ga Hà Nội",
+              "address": "Ga Hà Nội"
             },
             "vehicle_type": "CAR_4",
-            "fare_estimate_id": "est_bd64ece1f33e",
-            "fare_amount": 95180.0,
+            "fare_estimate_id": "est_82b9d8666a73",
+            "fare_amount": 202340.0,
             "currency": "VND",
-            "booking_id": "book_b3f5dcc4",
+            "booking_id": "book_4bad1ded",
             "booking_status": "CONFIRMED"
           },
           "handoff": null
@@ -347,9 +385,9 @@
       },
       {
         "name": "new destination resolved",
-        "passed": false,
+        "passed": true,
         "expected": "Ga Hà Nội",
-        "actual": "Bưu điện Hà Nội"
+        "actual": "Ga Hà Nội"
       },
       {
         "name": "vehicle preserved",
@@ -365,26 +403,31 @@
       },
       {
         "name": "correction semantic flow",
-        "passed": false,
+        "passed": true,
         "expected": [
           "update_booking"
         ],
-        "actual": []
+        "actual": [
+          "update_booking"
+        ]
       },
       {
         "name": "route and fare recalculated",
-        "passed": false,
+        "passed": true,
         "expected": [
           "search_place",
           "estimate_fare"
         ],
-        "actual": []
+        "actual": [
+          "search_place",
+          "estimate_fare"
+        ]
       },
       {
         "name": "old fare invalidated",
-        "passed": false,
+        "passed": true,
         "expected": false,
-        "actual": true
+        "actual": false
       },
       {
         "name": "booking only after reconfirmation",
@@ -404,9 +447,9 @@
       },
       {
         "name": "all scripted decisions consumed",
-        "passed": false,
+        "passed": true,
         "expected": 0,
-        "actual": 1
+        "actual": 0
       }
     ]
   }
