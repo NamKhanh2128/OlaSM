@@ -193,6 +193,32 @@ async def test_console_log_labels_asr_tool_and_tts_with_safe_fields(
 
 
 @pytest.mark.asyncio
+async def test_console_log_labels_authoritative_user_turn_transcript(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    event_log = SessionEventLog(
+        enabled=True,
+        include_transcripts=True,
+        directory=tmp_path,
+        userdata=_userdata("call-user-turn"),
+        room_name="room-console",
+    )
+    observer = LiveKitSessionObserver(event_log)
+    await event_log.start()
+    caplog.set_level(logging.INFO, logger="src.voice_agent.observability")
+    caplog.clear()
+
+    observer.record(
+        ConversationItemAddedEvent(
+            item=llm.ChatMessage(role="user", content=["đi đến Đại học Bách khoa Hà Nội"])
+        )
+    )
+    await event_log.close("test")
+
+    messages = [record.message for record in caplog.records if "[voice:call-user-turn]" in record.message]
+    assert any("USER TURN transcript='đi đến Đại học Bách khoa Hà Nội'" in message for message in messages)
+
+@pytest.mark.asyncio
 async def test_jsonl_observability_can_explicitly_include_transcripts(tmp_path: Path) -> None:
     event_log = SessionEventLog(
         enabled=True,

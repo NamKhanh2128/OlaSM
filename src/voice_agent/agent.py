@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import Literal
 
 from livekit.agents import Agent, StopResponse, function_tool, llm
 
@@ -58,7 +59,7 @@ class AloSMAgent(Agent):
                 "get_booking_status trước khi trả lời. Chỉ được nói đã đặt thành công khi kết quả tool "
                 "có booking_id; nếu booking_id là null thì phải nói chuyến chưa được tạo. "
                 "Khi khách yêu cầu gặp tổng đài viên thật, gọi request_handoff; sau đó không trả lời thêm vì hệ thống sẽ chờ người thật vào phòng. "
-                "Khi khách yêu cầu hủy chuyến đã tạo, bắt buộc gọi cancel_booking; không được chỉ nói đã hủy hoặc dùng cancel_booking_flow. "
+                "Khi khách yêu cầu hủy chuyến đã tạo, gọi cancel_booking với confirmation_decision=request. Tool sẽ phát tín hiệu để giao diện hiển thị nút xác nhận. Sau khi khách chọn hoặc nói xác nhận, gọi lại cancel_booking với confirmation_decision=confirm; nếu khách từ chối, dùng confirmation_decision=decline. Chỉ được nói đã hủy khi tool trả về cancelled=true và không dùng cancel_booking_flow cho chuyến đã tạo. "
                 "Khi khách hỏi chính sách, hành lý, phí hoặc điều kiện dịch vụ, gọi search_knowledge; "
                 "khi khách hỏi các loại xe, gọi get_vehicle_options. Chỉ đọc thông tin mà tool trả về, "
                 "kèm nguồn hoặc phiên bản khi phù hợp; không tự bịa hoặc dùng RAG cho báo giá một lộ trình. "
@@ -172,16 +173,70 @@ class AloSMAgent(Agent):
             raise StopResponse()
         return result
 
+
     @function_tool()
-    async def cancel_booking(self, reason: str) -> str:
-        """Cancel the already-created booking owned by this voice session."""
+    async def cancel_booking(
+        self,
+        reason: str,
+        confirmation_decision: Literal["request", "confirm", "decline"] = "request",
+    ) -> str:
+        """Request or execute cancellation based on the LLM decision."""
 
         if self._session_data is None or self._session_data.booking_draft.booking is None:
             return json.dumps(
-                {"cancelled": False, "instruction": "Không có chuyến đã tạo để hủy."},
+                {"cancelled": False, "confirmation_required": False, "instruction": "Không có chuyến đã tạo để hủy."},
                 ensure_ascii=False,
             )
-        booking = self._session_data.booking_draft.booking
+
+        draft = self._session_data.booking_draft
+        booking = draft.booking
+        assert booking is not None
+        if booking.status == "CANCELLED":
+            return json.dumps(
+                {"cancelled": False, "already_cancelled": True, "booking_id": booking.booking_id, "instruction": "Chuyến này đã được hủy trước đó."},
+                ensure_ascii=False,
+            )
+
+        pending = draft.cancellation_confirmation_booking_id == booking.booking_id
+        if not pending:
+            draft.request_cancellation_confirmation()
+            await self._state_store.save(self._session_data)
+            await publish_booking_state(self.session)
+            return json.dumps(
+                {
+                    "cancelled": False,
+                    "confirmation_required": True,
+                    "booking_id": booking.booking_id,
+                    "instruction": "Chưa hủy chuyến. Hãy hỏi khách xác nhận bằng lời nói hoặc nút xác nhận trên giao diện.",
+                },
+                ensure_ascii=False,
+            )
+
+        if confirmation_decision == "decline":
+            draft.clear_cancellation_confirmation()
+            await self._state_store.save(self._session_data)
+            await publish_booking_state(self.session)
+            return json.dumps(
+                {
+                    "cancelled": False,
+                    "confirmation_required": False,
+                    "booking_id": booking.booking_id,
+                    "instruction": "Khách đã từ chối hủy; giữ nguyên chuyến.",
+                },
+                ensure_ascii=False,
+            )
+
+        if confirmation_decision != "confirm":
+            return json.dumps(
+                {
+                    "cancelled": False,
+                    "confirmation_required": True,
+                    "booking_id": booking.booking_id,
+                    "instruction": "Chưa có xác nhận hủy. Hãy tiếp tục hỏi hoặc chờ khách bấm nút xác nhận.",
+                },
+                ensure_ascii=False,
+            )
+
         try:
             cancelled = await self._bookings.cancel(
                 booking_id=booking.booking_id,
@@ -199,7 +254,7 @@ class AloSMAgent(Agent):
                 {"cancelled": False, "booking_id": booking.booking_id, "instruction": "Không tìm thấy chuyến thuộc phiên này."},
                 ensure_ascii=False,
             )
-        self._session_data.booking_draft.mark_booking_cancelled(cancelled)
+        draft.mark_booking_cancelled(cancelled)
         await self._state_store.save(self._session_data)
         await publish_booking_state(self.session)
         return json.dumps(

@@ -1,10 +1,14 @@
 # PRD — AloSM Voice AI Agent
 
-> **PRODUCT · CANONICAL** — Yêu cầu sản phẩm mới nhất. Trạng thái triển khai thực tế được theo dõi tại [PROJECT_SOURCE_OF_TRUTH.md](PROJECT_SOURCE_OF_TRUTH.md) và [mustdo.md](../mustdo.md).
+> **PRODUCT · CANONICAL** — Yêu cầu sản phẩm mới nhất. Trạng thái triển khai thực tế được đối chiếu với code hiện tại, [mustdo.md](../mustdo.md) và [system design](architecture_diagram.md).
 
-**Phiên bản:** 1.2 · **Trạng thái:** Draft để xác thực với người dùng · **Primary persona:** Khách hàng ít thành thạo công nghệ / người lớn tuổi
+**Phiên bản:** 1.3 · **Trạng thái:** Đang chạy demo, tiếp tục hoàn thiện production · **Primary persona:** Khách hàng ít thành thạo công nghệ / người lớn tuổi
 
-> Sản phẩm cho phép khách hàng thực hiện toàn bộ hành trình dịch vụ AloSM — từ đặt xe, thanh toán, khiếu nại đến hỗ trợ tài xế — bằng giọng nói tiếng Việt tự nhiên, thông qua giao diện web. AI xử lý các nghiệp vụ có quy trình cố định; con người tiếp nhận các tình huống khẩn cấp, phức tạp và cần phán đoán.
+> Sản phẩm cho phép khách hàng thực hiện toàn bộ hành trình dịch vụ AloSM — từ đặt xe, thanh toán, khiếu nại đến hỗ trợ tài xế — bằng giọng nói tiếng Việt tự nhiên, thông qua giao diện web. Runtime hiện tại sử dụng LiveKit cho realtime voice, có text fallback và các provider STT/LLM/TTS cấu hình được. AI xử lý các nghiệp vụ có quy trình cố định; con người tiếp nhận các tình huống khẩn cấp, phức tạp và cần phán đoán.
+
+---
+
+> **Cập nhật triển khai 2026-08-27:** PRD vẫn giữ nguyên các feature và mục tiêu sản phẩm ban đầu. Các thay đổi đã được phản ánh trong tài liệu này là: voice runtime chuyển sang LiveKit AgentServer/AgentSession; STT hiện dùng ElevenLabs Scribe Realtime, LLM dùng OpenAI qua LiveKit plugin, TTS dùng Google Gemini Flash TTS có Google Chirp 3 HD fallback; text và voice dùng chung state/guardrail contract; booking có quote, explicit confirmation, idempotency và invalidate quote khi đổi yêu cầu; handoff đưa operator vào cùng LiveKit Room và dừng AI audio khi takeover. Các tính năng thanh toán, hoàn tiền, CRM, hỗ trợ tài xế, kho tri thức có màn hình quản trị và emergency integration vẫn được giữ trong PRD nhưng chưa coi là đã hoàn thành.
 
 ---
 
@@ -95,6 +99,8 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 
 **Pain point giải quyết:** Người lớn tuổi và người ít quen công nghệ không thể đặt xe qua app vì giao diện đòi hỏi quá nhiều thao tác. Tính năng này cho phép họ chỉ cần nói — AI lo phần còn lại.
 
+> **Cập nhật triển khai:** Voice path hiện chạy qua LiveKit Room và một AgentSession cho mỗi cuộc hội thoại; frontend vẫn có text fallback khi mic/LiveKit/provider không khả dụng. Luồng booking thực tế dùng local gazetteer/pricing catalog hoặc maps adapter tùy cấu hình, nên giá và tuyến trong demo là ước tính, chưa phải dữ liệu fleet realtime.
+
 **User stories**
 
 1. Là khách hàng, tôi muốn nói yêu cầu đặt xe bằng câu bình thường để AI hiểu và thu thập thông tin thay tôi.
@@ -121,6 +127,8 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 
 **Pain point giải quyết:** Khách phải kể lại toàn bộ thông tin khi được chuyển sang tổng đài viên; khách bị kẹt với AI khi yêu cầu vượt quá phạm vi xử lý tự động.
 
+> **Cập nhật triển khai:** Người dùng yêu cầu gặp người thật sẽ được handoff ngay. Backend lưu reason, priority/severity và context snapshot; operator nhận token và tham gia cùng LiveKit Room. Khi operator vào room hợp lệ, AI tắt audio input/output và kết thúc AgentSession an toàn. Cơ chế hiển thị vị trí trong hàng chờ và operator tạo booking thủ công vẫn là yêu cầu kế hoạch, chưa phải năng lực runtime hiện tại.
+
 **User stories**
 
 1. Là khách hàng, tôi muốn yêu cầu gặp người thật bất kỳ lúc nào trong cuộc gọi để không bị giữ lại với AI.
@@ -135,14 +143,16 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 - Given phát hiện tình huống nhạy cảm (khách đề cập khiếu nại tranh chấp phức tạp, yêu cầu không có trong KB), when AI nhận dạng được, then AI chuyển ngay sang tổng đài viên mà không cần chờ đủ 2 lần thất bại.
 - Given cuộc gọi được chuyển sang tổng đài viên, when tổng đài viên mở màn hình tiếp nhận, then tổng đài viên thấy: toàn bộ transcript, tóm tắt ngắn (ý định khách, thông tin đã thu thập, lý do chuyển) — **trước** khi nghe tiếng khách.
 - Given nhiều tổng đài viên đang online, when một cuộc gọi vào hàng chờ, then chỉ đúng một tổng đài viên tiếp nhận — không có tình trạng hai người cùng nhận một cuộc gọi.
-- Given khách đang trong hàng chờ, then khách thấy vị trí của mình trong hàng chờ và có thể hủy chờ bất kỳ lúc nào.
-- Given tổng đài viên đã tiếp nhận, then tổng đài viên có thể tạo booking mới từ màn hình hỗ trợ bằng form gồm: điểm đón, điểm đến, loại xe, thông tin liên hệ; booking chỉ được tạo sau khi tổng đài viên xác nhận.
+- Given khách đang trong hàng chờ, then khách có thể xem trạng thái handoff và hủy chờ theo khả năng của runtime; hiển thị vị trí cụ thể trong hàng chờ vẫn là yêu cầu cần hoàn thiện.
+- Given tổng đài viên đã tiếp nhận, then tổng đài viên có thể tiếp tục hỗ trợ trong cùng LiveKit Room với context đã có; form để operator tự tạo booking vẫn giữ trong kế hoạch và chưa được coi là đã triển khai.
 
 ---
 
 ### F3 — Tra cứu thông tin và giải đáp câu hỏi thường gặp (Must)
 
 **Pain point giải quyết:** Tổng đài phải xử lý nhiều cuộc gọi hỏi giá, hỏi trạng thái chuyến và hỏi chính sách — các câu hỏi lặp lại, có câu trả lời cố định. Nếu AI xử lý được những cuộc này, tổng đài viên có thêm thời gian cho các ca phức tạp thực sự.
+
+> **Cập nhật triển khai:** Knowledge hiện được truy vấn từ catalog FAQ/policy được phê duyệt, có version/source; agent không dùng knowledge để tự bịa giá hoặc booking status. Báo giá trong runtime hiện gắn với booking flow và pricing catalog/route adapter; tích hợp giá/fleet realtime vẫn là phần kế hoạch.
 
 **User stories**
 
@@ -163,15 +173,17 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 
 **Pain point giải quyết:** Dữ liệu cá nhân của khách (số điện thoại, địa chỉ nhà) cần được bảo vệ. Mỗi vai trò (khách hàng, tổng đài viên, tài xế, admin) chỉ nên thấy đúng thông tin và chức năng thuộc phạm vi của mình.
 
+> **Cập nhật triển khai:** Auth runtime hiện dùng phone/password, policy acceptance theo version và TOTP tùy chọn (setup/confirm/disable); OTP login qua SMS vẫn là kế hoạch ban đầu. Audio recording, raw transcript và trace recording tắt mặc định. Nếu bật recording trong một môi trường sau này, consent gate và retention policy của PRD vẫn bắt buộc.
+
 **User stories**
 
 1. Là khách hàng, tôi muốn được hỏi ý kiến rõ ràng trước khi cuộc gọi được ghi âm, để tôi có quyền quyết định.
-2. Là khách hàng, tôi muốn đăng nhập bằng số điện thoại và mã OTP để xác nhận danh tính an toàn.
+2. Là khách hàng, tôi muốn đăng nhập bằng số điện thoại và mật khẩu; khi cần tăng cường bảo mật, tôi có thể thiết lập TOTP. Đăng nhập OTP qua SMS vẫn là hướng phát triển.
 3. Là Admin, tôi muốn tạo, khóa và phân quyền tài khoản tổng đài viên và tài xế để kiểm soát ai được truy cập hệ thống.
 
 **AC**
 
-- Given khách nhấn "Gọi AI", when màn hình khởi động cuộc gọi, then hệ thống hiển thị thông báo đồng ý ghi âm trước khi bắt đầu; nếu khách từ chối, cuộc gọi vẫn diễn ra bình thường nhưng **không ghi âm**.
+- Given khách nhấn "Gọi AI", when màn hình khởi động cuộc gọi, then voice session có thể bắt đầu mà không ghi âm; audio recording, raw transcript và trace recording hiện **tắt mặc định**. Nếu triển khai recording, hệ thống phải hiển thị consent trước khi ghi và vẫn cho phép dùng dịch vụ khi khách từ chối.
 - Given khách đăng nhập thành công, when vào hệ thống, then giao diện hiển thị đúng theo vai trò: khách hàng **không thấy** màn hình tổng đài viên; tổng đài viên **không thấy** trang cấu hình Admin; tài xế chỉ thấy màn hình dành cho tài xế.
 - Given AI đang phản hồi bằng giọng nói, when AI cần nhắc số điện thoại của khách, then AI chỉ đọc 4 số cuối — **không đọc toàn bộ số**.
 - Given Admin khóa một tài khoản, when tài khoản đó cố đăng nhập, then hệ thống từ chối truy cập; hành động khóa được ghi vào nhật ký (audit log) với thời điểm và tên Admin thực hiện.
@@ -181,6 +193,8 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 ### F5 — Quản lý kho tri thức và theo dõi chất lượng (Should)
 
 **Pain point giải quyết:** AI Ops hiện không có công cụ để kiểm tra xem AI sẽ trả lời gì trước khi đưa tài liệu vào production. PO và CS Manager không có dữ liệu tổng hợp để biết AI đang hoạt động tốt hay không và cần cải thiện ở đâu.
+
+> **Cập nhật triển khai:** Runtime hiện đã có approved local FAQ/policy catalog, version/source và search_knowledge read-only để agent trả lời có căn cứ. Luồng AI Ops upload PDF/DOCX/TXT, preview relevance, publish/rollback và dashboard chất lượng vẫn giữ nguyên trong PRD nhưng chưa được coi là đã hoàn thành.
 
 > **Lưu ý cho người đọc không chuyên kỹ thuật:** "Kho tri thức" (Knowledge Base) là tập hợp tài liệu nội bộ (chính sách, FAQ, quy trình) mà AI dùng để trả lời câu hỏi của khách. Việc kiểm thử truy xuất nghĩa là: nhập một câu hỏi thử, xem AI sẽ tìm ra tài liệu nào để trả lời — để đảm bảo AI không dùng tài liệu sai hoặc đã hết hiệu lực.
 
@@ -202,6 +216,8 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 ### F6 — Thanh toán qua giọng nói (Should)
 
 **Pain point giải quyết:** Người dùng không quen app không thể thực hiện thanh toán qua giao diện đồ họa. Họ phải gọi hotline — vốn đã quá tải — để được hỗ trợ thanh toán.
+
+> **Trạng thái hiện tại:** Chưa có payment gateway hoặc payment/refund integration trong runtime. Các user stories và AC dưới đây vẫn là yêu cầu sản phẩm mục tiêu; khi chưa tích hợp, agent phải chuyển các yêu cầu thanh toán sang operator thay vì giả lập giao dịch.
 
 > **Lưu ý:** AI thực hiện giao dịch qua payment gateway tích hợp. AI không lưu thông tin thẻ và không xử lý thông tin thanh toán nhạy cảm — mọi dữ liệu thẻ đi qua payment gateway được chứng nhận bảo mật. Cần xác nhận payment gateway cụ thể của AloSM trước khi phát triển (xem Open Questions).
 
@@ -225,6 +241,8 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 
 **Pain point giải quyết:** Khách muốn phản ánh sự cố hoặc yêu cầu hoàn tiền nhưng không quen thao tác app và không muốn chờ tổng đài. Mọi phản ánh cần được ghi nhận đầy đủ và theo dõi được, ngay cả khi AI không tự giải quyết được.
 
+> **Trạng thái hiện tại:** Chưa có ticketing/CRM, payment dispute hoặc refund workflow thật. Handoff hiện có thể tiếp nhận yêu cầu phức tạp và truyền context cho operator; việc tạo ticket, theo dõi ticket và phê duyệt hoàn tiền vẫn là yêu cầu kế hoạch.
+
 **User stories**
 
 1. Là khách hàng, tôi muốn yêu cầu hoàn tiền cho một chuyến có sự cố bằng giọng nói, để không phải thao tác app.
@@ -244,6 +262,8 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 ### F8 — Hỗ trợ tài xế qua giọng nói (Should)
 
 **Pain point giải quyết:** Tài xế cần thao tác điện thoại trong khi lái xe để xác nhận chuyến, cập nhật trạng thái hoặc tra cứu thông tin — gây nguy hiểm và không an toàn. Giọng nói cho phép tài xế tập trung lái xe.
+
+> **Trạng thái hiện tại:** Runtime hiện tập trung vào customer web flow. Chưa có driver role, driver app hoặc fleet API để xác nhận/cập nhật chuyến; các user stories và AC được giữ lại làm phạm vi phát triển sau.
 
 **User stories**
 
@@ -265,6 +285,8 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 
 **Pain point giải quyết:** Khi xảy ra tai nạn hoặc tình huống nguy hiểm tính mạng, mọi giây đều quan trọng. AI cần phát hiện nhanh, ghi nhận đầy đủ và kết nối đúng người có thể xử lý ngay — không để khách hoặc tài xế phải tự tìm số điện thoại hay chờ hàng chờ thông thường.
 
+> **Trạng thái hiện tại:** Handoff có thể được kích hoạt cho case nghiêm trọng và truyền priority/severity cùng context cho operator. Chưa có Emergency Incident Record, GPS/emergency dispatch hoặc tích hợp 112; toàn bộ AC bên dưới vẫn là yêu cầu an toàn mục tiêu trước production.
+
 **User stories**
 
 1. Là khách hàng hoặc tài xế, tôi muốn AI nhận ra ngay khi tôi báo tai nạn và kết nối tôi với tổng đài viên có chuyên môn ngay lập tức.
@@ -285,14 +307,16 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 ## 6. Non-functional requirements
 
 - **Dễ dùng (Usability):** Người dùng phổ thông bắt đầu cuộc gọi trong tối đa 3 thao tác từ trang chủ. Cỡ chữ tối thiểu 16px; nút bấm tối thiểu 44×44px. Hỗ trợ tăng cỡ chữ và giảm tốc độ giọng nói AI cho người lớn tuổi.
-- **Độ tin cậy (Reliability):** Hệ thống không tạo booking trùng trong cùng phiên. Toàn bộ ngữ cảnh cuộc gọi được chuyển nguyên vẹn khi handoff. Khi AI gặp lỗi nội bộ, hệ thống hiển thị thông báo thân thiện — **không để lộ lỗi kỹ thuật**. Luồng khẩn cấp (F9) phải hoạt động kể cả khi các module khác đang lỗi.
-- **Bảo mật & Riêng tư (Privacy & Security):** Ghi âm chỉ sau khi có đồng ý. Số điện thoại và PII không hiển thị đầy đủ. Thông tin thanh toán không đi qua AI — chỉ qua payment gateway đạt chuẩn bảo mật. Mỗi vai trò chỉ truy cập dữ liệu thuộc phạm vi.
+- **Độ tin cậy (Reliability):** Hệ thống không tạo booking trùng trong cùng phiên nhờ confirmation và idempotency. Handoff chuyển context snapshot; raw audio/transcript không được lưu mặc định. Khi AI/provider gặp lỗi, hệ thống hiển thị thông báo thân thiện và retry/fallback/handoff — **không để lộ lỗi kỹ thuật**. Luồng khẩn cấp (F9) vẫn là yêu cầu production chưa hoàn tất.
+- **Bảo mật & Riêng tư (Privacy & Security):** Audio recording, raw transcript và trace recording hiện tắt mặc định; nếu bật ghi âm thì chỉ ghi sau khi có đồng ý. Số điện thoại và PII không hiển thị đầy đủ. Thông tin thanh toán không đi qua AI — chỉ qua payment gateway đạt chuẩn bảo mật khi F6 được tích hợp. Mỗi vai trò chỉ truy cập dữ liệu thuộc phạm vi.
 - **Hiệu năng (Performance):** Trong vòng 500ms sau khi khách dừng nói, màn hình hiển thị chỉ báo "Đang xử lý". Luồng khẩn cấp kết nối tổng đài viên trong **≤ 30 giây**. Giao diện không bị đứng (freeze) trong khi AI xử lý.
-- **Khả năng mở rộng (Scalability):** Kiến trúc hệ thống cho phép thêm kênh giao tiếp mới và nghiệp vụ mới qua cấu hình — không cần viết lại luồng xử lý cốt lõi.
+- **Khả năng mở rộng (Scalability):** Kiến trúc tách REST và LiveKit voice khỏi agent/domain contract; STT, LLM, TTS có thể thay qua configuration/plugin. Có thể thêm kênh giao tiếp và nghiệp vụ mới mà không viết lại luồng xử lý cốt lõi.
 
 ---
 
 ## 7. Definition of Done
+
+> **Ghi chú trạng thái:** Definition of Done và các mục tiêu pilot dưới đây vẫn là tiêu chuẩn của PRD sản phẩm, không phải tuyên bố rằng mọi feature đã hoàn thành trong runtime demo hiện tại.
 
 MVP được xem là hoàn thành khi:
 

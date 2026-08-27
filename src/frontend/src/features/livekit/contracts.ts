@@ -46,6 +46,7 @@ export type BookingState = {
   vehicle_type: "MOTORBIKE" | "CAR_4" | "CAR_7" | "LUXURY" | null;
   quote: QuoteState | null;
   confirmation_status: "not_requested" | "awaiting" | "confirmed";
+  cancellation_confirmation_pending?: boolean;
   booking: BookingResultState | null;
   failure?: VoiceFailureState | null;
   handoff?: HandoffState | null;
