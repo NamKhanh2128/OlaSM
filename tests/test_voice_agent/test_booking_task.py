@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -305,11 +306,9 @@ async def test_booking_task_uses_native_function_tools() -> None:
     tool_names = {tool.id for tool in task.tools}
 
     assert tool_names == {
-        "cancel_booking_flow",
         "confirm_booking",
         "create_booking",
         "estimate_fare",
-        "request_handoff",
         "search_place",
         "select_place",
         "set_vehicle_type",
@@ -351,7 +350,7 @@ async def test_estimate_fare_atomically_starts_confirmation(
         return None
 
     monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
-    context = SimpleNamespace(userdata=userdata, session=object())
+    context = SimpleNamespace(userdata=userdata, session=object(), disallow_interruptions=lambda: None)
 
     result = await BookingTask.estimate_fare._func(task, context)
 
@@ -413,9 +412,18 @@ async def test_location_change_refreshes_existing_quote_and_interrupts_stale_pre
     async def _publish(_: object) -> None:
         return None
 
+    @asynccontextmanager
+    async def _filler(*_: object, **__: object):
+        yield
+
     monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
     task = BookingTask(quotes=_RequoteService(), state_store=EphemeralVoiceStateStore())
-    context = SimpleNamespace(userdata=userdata, session=_Session())
+    context = SimpleNamespace(
+        userdata=userdata,
+        session=_Session(),
+        disallow_interruptions=lambda: None,
+        with_filler=_filler,
+    )
 
     await BookingTask.search_place._func(
         task,
@@ -431,11 +439,7 @@ async def test_location_change_refreshes_existing_quote_and_interrupts_stale_pre
 
 
 def test_terminal_task_tools_follow_livekit_complete_without_narrating_inside_task() -> None:
-    for tool in (
-        BookingTask.create_booking,
-        BookingTask.request_handoff,
-        BookingTask.cancel_booking_flow,
-    ):
+    for tool in (BookingTask.create_booking,):
         assert tool.__annotations__["return"] in {None, type(None), "None"}
 
 
@@ -444,6 +448,12 @@ def test_explicit_confirmation_rejects_negative_or_ambiguous_text() -> None:
     assert is_explicit_confirmation("Đúng rồi, đặt xe đi") is True
     assert is_explicit_confirmation("Không đúng, sửa điểm đến") is False
     assert is_explicit_confirmation("Ừ") is False
+
+
+def test_booking_abandonment_requires_an_explicit_request() -> None:
+    assert booking_module.is_booking_abandonment_request("Thôi không đặt nữa") is True
+    assert booking_module.is_booking_abandonment_request("Đổi xe đi") is False
+    assert booking_module.is_booking_abandonment_request("Ừ") is False
 
 
 def test_native_transcript_confidence_only_blocks_low_confidence_audio() -> None:
@@ -478,7 +488,7 @@ async def test_known_place_candidates_bypass_low_confidence_transcript_guard(
         return None
 
     monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
-    context = SimpleNamespace(userdata=userdata, session=object())
+    context = SimpleNamespace(userdata=userdata, session=object(), disallow_interruptions=lambda: None)
 
     result = await BookingTask.search_place._func(task, context, target="pickup", query="VinUni")
 

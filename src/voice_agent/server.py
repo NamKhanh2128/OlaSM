@@ -152,8 +152,11 @@ def build_agent_session(
                 "false_interruption_timeout": 2.0,
                 "resume_false_interruption": True,
             },
+            # Booking tools can persist a quote and take several seconds.
+            # Wait for their result before generating speech so an early
+            # preemptive response cannot be cancelled and leave the turn silent.
             "preemptive_generation": {
-                "enabled": True,
+                "enabled": False,
                 "preemptive_tts": False,
             },
         },

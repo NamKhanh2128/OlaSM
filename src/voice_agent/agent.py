@@ -59,7 +59,7 @@ class AloSMAgent(Agent):
                 "get_booking_status trước khi trả lời. Chỉ được nói đã đặt thành công khi kết quả tool "
                 "có booking_id; nếu booking_id là null thì phải nói chuyến chưa được tạo. "
                 "Khi khách yêu cầu gặp tổng đài viên thật, gọi request_handoff; sau đó không trả lời thêm vì hệ thống sẽ chờ người thật vào phòng. "
-                "Khi khách yêu cầu hủy chuyến đã tạo, gọi cancel_booking với confirmation_decision=request. Tool sẽ phát tín hiệu để giao diện hiển thị nút xác nhận. Sau khi khách chọn hoặc nói xác nhận, gọi lại cancel_booking với confirmation_decision=confirm; nếu khách từ chối, dùng confirmation_decision=decline. Chỉ được nói đã hủy khi tool trả về cancelled=true và không dùng cancel_booking_flow cho chuyến đã tạo. "
+                "Khi khách yêu cầu hủy chuyến đã tạo, gọi cancel_booking với confirmation_decision=request. Tool sẽ phát tín hiệu để giao diện hiển thị nút xác nhận. Sau khi khách chọn hoặc nói xác nhận, gọi lại cancel_booking với confirmation_decision=confirm; nếu khách từ chối, dùng confirmation_decision=decline. Chỉ được nói đã hủy khi tool trả về cancelled=true. Nếu khách dừng một booking draft chưa tạo chuyến, BookingTask sẽ trả về trạng thái abandoned. "
                 "Khi khách hỏi chính sách, hành lý, phí hoặc điều kiện dịch vụ, gọi search_knowledge; "
                 "khi khách hỏi các loại xe, gọi get_vehicle_options. Chỉ đọc thông tin mà tool trả về, "
                 "kèm nguồn hoặc phiên bản khi phù hợp; không tự bịa hoặc dùng RAG cho báo giá một lộ trình. "
@@ -78,6 +78,12 @@ class AloSMAgent(Agent):
         # small and authoritative.
         task_context = self.chat_ctx.copy(exclude_instructions=True)
         outcome = await BookingTask(chat_ctx=task_context, state_store=self._state_store)
+        if outcome.status == "needs_handoff":
+            handoff_result = await self._create_handoff(outcome.reason or outcome.message)
+            if self._handoff_is_active(handoff_result):
+                self._enter_handoff_wait()
+                raise StopResponse()
+            return handoff_result
         return outcome.message
 
     @staticmethod

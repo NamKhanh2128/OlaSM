@@ -82,6 +82,7 @@ async def test_build_agent_session_uses_livekit_native_pipeline() -> None:
     assert session.options.interruption["mode"] == "vad"
     assert session.options.interruption["min_duration"] == 0.5
     assert session.options.interruption["min_words"] == 0
+    assert session.options.preemptive_generation["enabled"] is False
     assert session.options.transcription_timeout == 5.0
     assert session._conn_options.tts_conn_options.timeout == 30.0
     assert session._conn_options.tts_conn_options.max_retry == 1
