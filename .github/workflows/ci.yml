@@ -2,13 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, feature/agentic-ai, feature/voice-ai]
+    branches: [main, develop, feature/agentic-ai, feature/voice-ai, ci-cd]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, ci-cd]
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: [cohort3, self-hosted]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,7 +36,7 @@ jobs:
           OPENAI_API_KEY: test-only-placeholder
 
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: [cohort3, self-hosted]
     defaults:
       run:
         working-directory: src/frontend
