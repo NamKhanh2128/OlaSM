@@ -438,7 +438,11 @@ class AloSMAgent(Agent):
                 "instruction": (
                     "Chỉ trả lời dựa trên results và nói rõ khi không có kết quả."
                     if results
-                    else "Không có chính sách phù hợp trong catalog; không được suy đoán."
+                    else (
+                        "Hãy nói rõ: Dạ, hiện tại tôi chưa tìm thấy thông tin chính sách đã được xác minh "
+                        "cho yêu cầu này trong hệ thống. Nếu cần hỗ trợ thêm, hãy liên hệ tổng đài viên; "
+                        "không được suy đoán hoặc tự tạo chính sách."
+                    )
                 ),
             },
             ensure_ascii=False,

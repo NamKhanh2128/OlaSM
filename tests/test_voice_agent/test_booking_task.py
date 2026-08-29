@@ -163,6 +163,15 @@ async def test_agent_rag_tool_returns_versioned_policy_citation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_agent_rag_tool_explains_when_policy_is_not_verified() -> None:
+    result = await AloSMAgent().search_knowledge("Chính sách hoàn tiền 100% khi trời mưa")
+
+    assert '"found": false' in result
+    assert "chưa tìm thấy thông tin chính sách đã được xác minh" in result
+    assert "tổng đài viên" in result
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("question", "citation"),
     [

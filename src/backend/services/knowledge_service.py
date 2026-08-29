@@ -14,6 +14,11 @@ _STOPWORDS = frozenset(
     """.split()
 )
 
+# A result is grounded only when at least half of the meaningful query is
+# covered by the document. This prevents a known topic word such as "hoàn tiền"
+# from authorizing an answer to an unsupported condition such as "100% khi trời mưa".
+_MIN_GROUNDED_SCORE = 0.5
+
 _CATEGORY_HINTS: dict[str, str] = {
     "account": "tài khoản đăng ký độ tuổi mật khẩu gian lận sử dụng",
     "privacy": "riêng tư dữ liệu cá nhân cookie ghi âm audio transcript marketing quảng cáo consent đồng ý",
@@ -50,9 +55,12 @@ def _score(query: str, query_tokens: set[str], document: KnowledgeDocument) -> f
     if not overlap:
         return 0.0
     coverage = len(overlap) / len(query_tokens)
-    if len(overlap) >= 2:
-        coverage = max(coverage, 0.75)
-    return round(max(alias_score, min(1.0, coverage)), 4)
+    # An alias is a useful boost only when the rest of the query is also
+    # substantially covered. Otherwise a query with an invented qualifier can
+    # incorrectly inherit the score of a broad topic alias.
+    if alias_score and coverage >= _MIN_GROUNDED_SCORE:
+        return round(alias_score, 4)
+    return round(min(1.0, coverage), 4)
 
 
 def _documents(catalog: PolicyCatalog) -> tuple[KnowledgeDocument, ...]:
@@ -107,6 +115,7 @@ class KnowledgeService:
 
     async def retrieve(self, query: str, *, top_k: int = 3) -> list[dict[str, object]]:
         results = await self.retriever.retrieve(query, top_k=top_k)
+        grounded_results = [result for result in results if result.score >= _MIN_GROUNDED_SCORE]
         return [
             {
                 "content": result.document.content,
@@ -118,5 +127,5 @@ class KnowledgeService:
                 "effective_at": result.document.effective_at,
                 "expires_at": result.document.expires_at,
             }
-            for result in results
+            for result in grounded_results
         ]

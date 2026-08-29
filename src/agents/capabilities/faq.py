@@ -59,6 +59,20 @@ def register_faq(registry: ToolRegistry, policy: AgentPolicy) -> None:
         session.persist("faq")
         session.updates.update(clear_pending_tool_updates())
         session.updates.update(current_step=None, retry_count=0)
+        if not documents:
+            fallback = (
+                "Dạ, hiện tại tôi chưa tìm thấy thông tin chính sách đã được xác minh "
+                "cho yêu cầu này trong hệ thống. Nếu cần hỗ trợ thêm, bạn vui lòng liên hệ tổng đài viên nhé."
+            )
+            session.faq.answer = fallback
+            session.persist("faq")
+            session.updates.update(current_workflow=None, current_step=None)
+            return AgentAction(
+                action_type=ActionType.RESPOND,
+                message=fallback,
+                state_updates=session.updates,
+                reason="No grounded policy document met the retrieval threshold; returned a safe fallback.",
+            )
         return ContinueToolLoop(
             {
                 "knowledge_result": [item.model_dump(mode="json") for item in documents],
