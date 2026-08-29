@@ -19,7 +19,7 @@ env:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: [cohort3, self-hosted]
 
     steps:
       - name: Checkout
@@ -72,11 +72,14 @@ jobs:
 
           compose_b64="$(base64 -w0 docker-compose.staging.yml)"
           script_b64="$(base64 -w0 scripts/deploy-staging.sh)"
+          caddyfile_b64="$(base64 -w0 Caddyfile)"
           parameters="$(jq -cn \
             --arg compose "$compose_b64" \
             --arg script "$script_b64" \
+            --arg caddyfile "$caddyfile_b64" \
             '{commands:[
               ("printf %s " + $compose + " | base64 -d > /opt/p160-staging/docker-compose.staging.yml"),
+              ("printf %s " + $caddyfile + " | base64 -d > /opt/p160-staging/Caddyfile"),
               ("printf %s " + $script + " | base64 -d > /opt/p160-staging/deploy-staging.sh"),
               "chmod 700 /opt/p160-staging/deploy-staging.sh",
               "bash /opt/p160-staging/deploy-staging.sh"

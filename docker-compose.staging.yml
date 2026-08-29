@@ -34,11 +34,27 @@ services:
   frontend:
     image: ghcr.io/ai20k-build-phase-cohort-3/p-160:frontend-development
     restart: unless-stopped
-    ports:
-      - "80:80"
+    expose:
+      - "80"
     depends_on:
       backend:
         condition: service_healthy
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend:
+        condition: service_started
+
 volumes:
   app-data:
+  caddy-data:
+  caddy-config:
