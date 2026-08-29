@@ -14,6 +14,7 @@ DEPLOY_DIR="${DEPLOY_DIR:-/opt/p160-staging}"
 COMPOSE_FILE="${DEPLOY_DIR}/docker-compose.staging.yml"
 ENV_FILE="${DEPLOY_DIR}/.env.production"
 GOOGLE_CREDENTIALS_FILE="${DEPLOY_DIR}/google-service-account.json"
+GOOGLE_CREDENTIALS_CONTAINER_FILE="/run/secrets/google-service-account.json"
 
 install -d -m 700 "${DEPLOY_DIR}"
 
@@ -42,7 +43,7 @@ google_credentials="$(aws --region "${AWS_REGION}" ssm get-parameter \
   --output text)"
 printf '%s' "${google_credentials}" > "${GOOGLE_CREDENTIALS_FILE}"
 chmod 600 "${GOOGLE_CREDENTIALS_FILE}"
-printf 'GOOGLE_APPLICATION_CREDENTIALS=%s\n' "${GOOGLE_CREDENTIALS_FILE}" >> "${env_tmp}"
+printf 'GOOGLE_APPLICATION_CREDENTIALS=%s\n' "${GOOGLE_CREDENTIALS_CONTAINER_FILE}" >> "${env_tmp}"
 
 install -m 600 "${env_tmp}" "${ENV_FILE}"
 

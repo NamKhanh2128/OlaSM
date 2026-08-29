@@ -8,6 +8,7 @@ services:
       - /opt/p160-staging/.env.production
     volumes:
       - app-data:/app/data
+      - /opt/p160-staging/google-service-account.json:/run/secrets/google-service-account.json:ro
     expose:
       - "8000"
     user: root
@@ -25,6 +26,7 @@ services:
       - /opt/p160-staging/.env.production
     volumes:
       - app-data:/app/data
+      - /opt/p160-staging/google-service-account.json:/run/secrets/google-service-account.json:ro
     healthcheck:
       disable: true
     depends_on:
