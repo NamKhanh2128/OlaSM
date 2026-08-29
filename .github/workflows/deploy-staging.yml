@@ -1,0 +1,123 @@
+name: Deploy staging
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  AWS_REGION: ap-southeast-1
+  AWS_ROLE_ARN: arn:aws:iam::006127064063:role/p160-github-actions-staging
+  EC2_INSTANCE_ID: i-0b63e11dd13894269
+  IMAGE_NAME: ghcr.io/ai20k-build-phase-cohort-3/p-160
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:development
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/AI20K-Build-Phase-Cohort-3/P-160
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./src/frontend
+          file: ./src/frontend/Dockerfile
+          push: true
+          build-args: |
+            VITE_API_URL=
+            VITE_API_BASE_URL=
+          tags: |
+            ${{ env.IMAGE_NAME }}:frontend-development
+            ${{ env.IMAGE_NAME }}:frontend-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/AI20K-Build-Phase-Cohort-3/P-160
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy through SSM
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          compose_b64="$(base64 -w0 docker-compose.staging.yml)"
+          script_b64="$(base64 -w0 scripts/deploy-staging.sh)"
+          parameters="$(jq -cn \
+            --arg compose "$compose_b64" \
+            --arg script "$script_b64" \
+            '{commands:[
+              ("printf %s " + $compose + " | base64 -d > /opt/p160-staging/docker-compose.staging.yml"),
+              ("printf %s " + $script + " | base64 -d > /opt/p160-staging/deploy-staging.sh"),
+              "chmod 700 /opt/p160-staging/deploy-staging.sh",
+              "bash /opt/p160-staging/deploy-staging.sh"
+            ]}')"
+
+          command_id="$(aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "P-160 staging deploy ${GITHUB_SHA}" \
+            --parameters "$parameters" \
+            --query 'Command.CommandId' \
+            --output text)"
+
+          for attempt in $(seq 1 36); do
+            status="$(aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query 'Status' \
+              --output text)"
+
+            case "$status" in
+              Success)
+                aws ssm get-command-invocation \
+                  --command-id "$command_id" \
+                  --instance-id "$EC2_INSTANCE_ID" \
+                  --query 'StandardOutputContent' \
+                  --output text
+                exit 0
+                ;;
+              Failed|Cancelled|TimedOut|Cancelling)
+                aws ssm get-command-invocation \
+                  --command-id "$command_id" \
+                  --instance-id "$EC2_INSTANCE_ID" \
+                  --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}' \
+                  --output json
+                exit 1
+                ;;
+            esac
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for SSM command: $command_id"
+          exit 1
