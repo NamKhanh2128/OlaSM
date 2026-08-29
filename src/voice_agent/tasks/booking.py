@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 import unicodedata
 from typing import Literal
 
@@ -251,9 +252,16 @@ class BookingTask(AgentTask[BookingOutcome]):
             return quote
 
     async def _commit(self, context: RunContext[AloSMSessionData]) -> None:
+        commit_started = time.perf_counter()
+        state_started = time.perf_counter()
         try:
             await self._state_store.save(context.userdata)
         except VoiceStateConflictError as exc:
+            logger.info(
+                "[PERF-VOICE] stage=task.commit.state_store call_id=%s duration_ms=%.3f result=conflict",
+                context.userdata.call_id,
+                (time.perf_counter() - state_started) * 1000,
+            )
             context.userdata.record_failure(
                 "STATE_CONFLICT",
                 "Phiên này vừa được cập nhật ở kết nối khác.",
@@ -262,7 +270,17 @@ class BookingTask(AgentTask[BookingOutcome]):
             )
             await publish_booking_state(context.session)
             raise ToolError("STATE_CONFLICT") from exc
+        logger.info(
+            "[PERF-VOICE] stage=task.commit.state_store call_id=%s duration_ms=%.3f result=ok",
+            context.userdata.call_id,
+            (time.perf_counter() - state_started) * 1000,
+        )
         await publish_booking_state(context.session)
+        logger.info(
+            "[PERF-VOICE] stage=task.commit.total call_id=%s duration_ms=%.3f result=ok",
+            context.userdata.call_id,
+            (time.perf_counter() - commit_started) * 1000,
+        )
 
     @function_tool()
     async def search_place(
@@ -573,28 +591,32 @@ class BookingTask(AgentTask[BookingOutcome]):
         # while this very short demo operation is being committed.
         context.disallow_interruptions()
         draft = self._draft(context)
-        try:
-            booking = await self._bookings.create(
-                user_id=context.userdata.user_id,
-                app_session_id=context.userdata.app_session_id,
-                draft=draft,
-            )
-            draft.set_booking(booking)
-            context.userdata.lifecycle_status = "completed"
-        except ValueError as exc:
-            raise ToolError(str(exc)) from exc
-        except Exception as exc:
-            logger.exception("failed to create booking handoff session=%s", context.userdata.app_session_id)
-            context.userdata.record_failure(
-                "BOOKING_RESULT_UNKNOWN",
-                "Chưa xác định được kết quả tạo chuyến; không tự động tạo lại.",
-                retryable=False,
-                fallback_action="handoff",
-            )
+        async with context.with_filler(
+            "Đang hoàn tất đặt chuyến, bạn chờ một chút nhé.",
+            delay=0.8,
+        ):
+            try:
+                booking = await self._bookings.create(
+                    user_id=context.userdata.user_id,
+                    app_session_id=context.userdata.app_session_id,
+                    draft=draft,
+                )
+                draft.set_booking(booking)
+                context.userdata.lifecycle_status = "completed"
+            except ValueError as exc:
+                raise ToolError(str(exc)) from exc
+            except Exception as exc:
+                logger.exception("failed to create booking handoff session=%s", context.userdata.app_session_id)
+                context.userdata.record_failure(
+                    "BOOKING_RESULT_UNKNOWN",
+                    "Chưa xác định được kết quả tạo chuyến; không tự động tạo lại.",
+                    retryable=False,
+                    fallback_action="handoff",
+                )
+                await self._commit(context)
+                raise ToolError("BOOKING_RESULT_UNKNOWN") from exc
+            context.userdata.clear_failure()
             await self._commit(context)
-            raise ToolError("BOOKING_RESULT_UNKNOWN") from exc
-        context.userdata.clear_failure()
-        await self._commit(context)
         outcome = BookingOutcome(
             status="created",
             booking=booking,

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from collections.abc import Mapping
+import time
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -399,21 +400,34 @@ class PersistenceRepository:
         state: Mapping[str, object],
         *,
         expected_revision: int,
+        terminal_updates: Mapping[str, object] | None = None,
     ) -> dict[str, object] | None:
         """Optimistically persist one LiveKit state revision in a short transaction."""
 
         async with self.factory() as db, db.begin():
+            values: dict[str, object] = {
+                "voice_agent_state": dict(state),
+                "voice_state_revision": RideSession.voice_state_revision + 1,
+                "updated_at": datetime.now(UTC),
+            }
+            if terminal_updates:
+                allowed_terminal_fields = {
+                    "status",
+                    "booking_id",
+                    "booking_lifecycle_status",
+                    "confirmation_status",
+                    "end_reason",
+                    "ended_at",
+                }
+                values.update({key: value for key, value in terminal_updates.items() if key in allowed_terminal_fields})
+                values["version"] = RideSession.version + 1
             statement = (
                 update(RideSession)
                 .where(
                     RideSession.id == session_id,
                     RideSession.voice_state_revision == expected_revision,
                 )
-                .values(
-                    voice_agent_state=dict(state),
-                    voice_state_revision=RideSession.voice_state_revision + 1,
-                    updated_at=datetime.now(UTC),
-                )
+                .values(**values)
                 .returning(RideSession.voice_state_revision)
             )
             revision = (await db.execute(statement)).scalar_one_or_none()
@@ -795,22 +809,51 @@ class PersistenceRepository:
         pickup: dict | None,
         destination: dict | None,
         eta_minutes: int | None,
+        pickup_place_id: str | None = None,
+        destination_place_id: str | None = None,
+        vehicle_type: str | None = None,
+        quote_verifier: Callable[[dict[str, object]], Awaitable[None]] | None = None,
     ) -> dict[str, object]:
         now = datetime.now(UTC)
+        transaction_started = time.perf_counter()
         async with self.factory() as db, db.begin():
+            stage_started = time.perf_counter()
             previous = await db.get(
                 IdempotencyRecord, {"scope": "CREATE_BOOKING", "idempotency_key": idempotency_key}, with_for_update=True
             )
+            logger.info(
+                "[PERF-BOOKING] stage=repository.create_booking.idempotency_lookup session_id=%s duration_ms=%.3f result=%s",
+                session_id,
+                (time.perf_counter() - stage_started) * 1000,
+                "hit" if previous is not None else "miss",
+            )
+            stage_started = time.perf_counter()
+            quote = (
+                await db.execute(select(FareQuote).where(FareQuote.id == quote_id).with_for_update())
+            ).scalar_one_or_none()
+            logger.info(
+                "[PERF-BOOKING] stage=repository.create_booking.quote_lock session_id=%s duration_ms=%.3f result=%s",
+                session_id,
+                (time.perf_counter() - stage_started) * 1000,
+                "ok" if quote is not None else "missing",
+            )
+            if quote is None:
+                raise ValueError("QUOTE_NOT_FOUND")
+            if quote_verifier is not None:
+                await quote_verifier(self._quote_dict(quote))
+            expected = {
+                "pickup_place_id": pickup_place_id,
+                "destination_place_id": destination_place_id,
+                "vehicle_type": vehicle_type,
+            }
+            for field, value in expected.items():
+                if value is not None and str(value) != str(getattr(quote, field)):
+                    raise ValueError("QUOTE_CONTEXT_MISMATCH")
             if previous is not None:
                 if previous.request_hash != request_hash:
                     raise ValueError("IDEMPOTENCY_KEY_REUSED")
                 if previous.response_snapshot:
                     return {**previous.response_snapshot, "status": "ALREADY_CREATED"}
-            quote = (
-                await db.execute(select(FareQuote).where(FareQuote.id == quote_id).with_for_update())
-            ).scalar_one_or_none()
-            if quote is None:
-                raise ValueError("QUOTE_NOT_FOUND")
             if quote.user_id != user_id or quote.session_id != session_id:
                 raise ValueError("QUOTE_OWNERSHIP_MISMATCH")
             if _as_utc(quote.expires_at) <= now:
@@ -835,7 +878,7 @@ class PersistenceRepository:
                 estimated_fare=quote.total_amount,
                 quoted_fare_amount=quote.total_amount,
                 currency=quote.currency,
-                eta_minutes=eta_minutes,
+                eta_minutes=eta_minutes if eta_minutes is not None else int(int(quote.route_snapshot["duration_seconds"]) / 60),
                 pricing_version=quote.pricing_snapshot.get("pricing_version"),
                 pricing_snapshot=quote.pricing_snapshot,
                 route_snapshot=quote.route_snapshot,
@@ -864,8 +907,20 @@ class PersistenceRepository:
                     payload={"booking_id": booking.id, "quote_id": quote.id},
                 )
             )
+            stage_started = time.perf_counter()
             await db.flush()
-            return _booking_dict(booking)
+            logger.info(
+                "[PERF-BOOKING] stage=repository.create_booking.flush session_id=%s duration_ms=%.3f result=ok",
+                session_id,
+                (time.perf_counter() - stage_started) * 1000,
+            )
+            result = _booking_dict(booking)
+        logger.info(
+            "[PERF-BOOKING] stage=repository.create_booking.transaction_total session_id=%s duration_ms=%.3f result=created",
+            session_id,
+            (time.perf_counter() - transaction_started) * 1000,
+        )
+        return result
 
     async def booking(self, booking_id: str) -> dict[str, object] | None:
         async with self.factory() as db:

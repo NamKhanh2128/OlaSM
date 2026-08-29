@@ -31,20 +31,48 @@ export function extractErrorMessage(errorBody: unknown, status: number): string 
   return `Request failed with status ${status}`;
 }
 
-export async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
+export type FetchApiOptions = RequestInit & { timeoutMs?: number };
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
+export async function fetchApi<T>(endpoint: string, options?: FetchApiOptions): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    throw new ApiError(extractErrorMessage(errorBody, response.status), response.status);
+  const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, signal: callerSignal, ...requestOptions } = options ?? {};
+  const controller = new AbortController();
+  let timedOut = false;
+  const onCallerAbort = () => controller.abort();
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort();
+    else callerSignal.addEventListener("abort", onCallerAbort, { once: true });
   }
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
 
-  return response.json();
+  try {
+    const response = await fetch(url, {
+      ...requestOptions,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...requestOptions.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => null);
+      throw new ApiError(extractErrorMessage(errorBody, response.status), response.status);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (timedOut) {
+      throw new ApiError("Hệ thống phản hồi quá lâu. Bạn vui lòng thử lại.", 408);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+    callerSignal?.removeEventListener("abort", onCallerAbort);
+  }
 }

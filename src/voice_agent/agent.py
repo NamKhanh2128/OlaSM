@@ -84,6 +84,13 @@ class AloSMAgent(Agent):
         if self._session_data is not None and self._session_data.handoff is not None:
             if self._session_data.handoff.status in {"pending", "accepted", "connected"}:
                 return "Đang chờ tổng đài viên nhận cuộc gọi; không được tiếp tục đặt xe."
+        if self._session_data is not None:
+            existing_booking = self._session_data.booking_draft.booking
+            if existing_booking is not None and existing_booking.status != "CANCELLED":
+                return (
+                    f"Chuyến xe đã được đặt thành công với mã {existing_booking.booking_id}. "
+                    "Không tạo thêm chuyến mới."
+                )
         # LiveKit recommends carrying conversation history into a task while
         # excluding the parent instructions, so the focused task prompt remains
         # small and authoritative.

@@ -60,6 +60,25 @@ const stateLabels = {
   failed: "Kết nối thất bại",
 } as const;
 
+const LIVEKIT_TEXT_SEND_TIMEOUT_MS = 10_000;
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new Error("Không nhận được phản hồi từ kết nối. Bạn vui lòng thử lại.")),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  }
+}
+
 function LiveKitAudioTrackDiagnostics({ room }: { room: Room }) {
   useEffect(() => {
     const report = (
@@ -128,10 +147,12 @@ function LiveKitCallContent({
   autoRetry: boolean;
 }) {
   const agent = useAgent();
-  const { messages, send, isSending } = useSessionMessages();
+  const { messages, send } = useSessionMessages();
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const [speakerMuted, setSpeakerMuted] = useState(false);
   const [draft, setDraft] = useState("");
+  const [textSendPending, setTextSendPending] = useState(false);
+  const [textError, setTextError] = useState<string | null>(null);
   const [bookingState, setBookingState] = useState<BookingState | null>(null);
   const [wasConnected, setWasConnected] = useState(false);
   const { message: bookingStateMessage } = useDataChannel(BOOKING_STATE_TOPIC);
@@ -181,17 +202,37 @@ function LiveKitCallContent({
 
   const submitText = useCallback(async () => {
     const text = draft.trim();
-    if (!text || isSending) return;
-    setDraft("");
-    await send(text);
-  }, [draft, isSending, send]);
+    if (!text || textSendPending) return;
+    setTextSendPending(true);
+    setTextError(null);
+    try {
+      await withTimeout(send(text), LIVEKIT_TEXT_SEND_TIMEOUT_MS);
+      setDraft((current) => (current === text ? "" : current));
+    } catch (error) {
+      setTextError(error instanceof Error ? error.message : "Không thể gửi tin nhắn. Bạn vui lòng thử lại.");
+      setDraft((current) => current || text);
+    } finally {
+      setTextSendPending(false);
+    }
+  }, [draft, textSendPending, send]);
 
   const submitCancellationDecision = useCallback(
     async (decision: "confirm" | "decline") => {
-      if (isSending) return;
-      await send(decision === "confirm" ? "Xác nhận hủy chuyến" : "Không hủy chuyến");
+      if (textSendPending) return;
+      setTextSendPending(true);
+      setTextError(null);
+      try {
+        await withTimeout(
+          send(decision === "confirm" ? "Xác nhận hủy chuyến" : "Không hủy chuyến"),
+          LIVEKIT_TEXT_SEND_TIMEOUT_MS,
+        );
+      } catch (error) {
+        setTextError(error instanceof Error ? error.message : "Không thể gửi lựa chọn hủy chuyến.");
+      } finally {
+        setTextSendPending(false);
+      }
     },
-    [isSending, send],
+    [textSendPending, send],
   );
 
   return (
@@ -245,7 +286,7 @@ function LiveKitCallContent({
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
-                  disabled={isSending}
+                  disabled={textSendPending}
                   onClick={() => void submitCancellationDecision("confirm")}
                   className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                 >
@@ -253,7 +294,7 @@ function LiveKitCallContent({
                 </button>
                 <button
                   type="button"
-                  disabled={isSending}
+                  disabled={textSendPending}
                   onClick={() => void submitCancellationDecision("decline")}
                   className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-300 disabled:opacity-50 dark:bg-white/10 dark:text-white dark:ring-white/20"
                 >
@@ -301,6 +342,12 @@ function LiveKitCallContent({
         )}
       </div>
 
+      {textError ? (
+        <p role="status" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+          {textError} Bạn có thể giữ nguyên nội dung và gửi lại.
+        </p>
+      ) : null}
+
       <div className="mt-4 flex gap-2">
         <input
           value={draft}
@@ -314,7 +361,7 @@ function LiveKitCallContent({
         <button
           type="button"
           onClick={() => void submitText()}
-          disabled={!draft.trim() || isSending}
+          disabled={!draft.trim() || textSendPending}
           className="grid h-10 w-10 place-items-center rounded-xl bg-[#00A99D] text-white disabled:opacity-40"
           aria-label="Gửi tin nhắn"
         >

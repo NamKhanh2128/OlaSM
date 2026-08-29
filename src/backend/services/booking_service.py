@@ -1,10 +1,14 @@
 import hashlib
 import json
+import logging
+import time
 from datetime import UTC, datetime
 from uuid import uuid4
 
 from src.backend.repositories.persistence_repository import PersistenceRepository
 from src.backend.services.quote_service import QuoteService
+
+logger = logging.getLogger(__name__)
 
 
 class BookingService:
@@ -15,38 +19,59 @@ class BookingService:
         self._quote_service = quote_service or QuoteService(repository=self._repository)
 
     async def create_booking_from_quote(self, payload: dict[str, object]) -> dict[str, object]:
+        started = time.perf_counter()
         quote_id = str(payload.get("quote_id") or payload.get("fare_estimate_id") or "")
         user_id = str(payload.get("user_id") or "")
         session_id = str(payload.get("session_id") or "")
         idempotency_key = str(payload.get("idempotency_key") or "")
         if not all((quote_id, user_id, session_id, idempotency_key)):
             raise ValueError("BOOKING_QUOTE_CONTEXT_REQUIRED")
-        quote = await self._repository.get_quote(quote_id)
-        if quote is None:
-            raise ValueError("QUOTE_NOT_FOUND")
-        await self._quote_service.verify_quote(quote)
+
         expected = {
             "pickup_place_id": payload.get("pickup_place_id"),
             "destination_place_id": payload.get("destination_place_id"),
             "vehicle_type": payload.get("vehicle_type"),
         }
-        for field, value in expected.items():
-            if value is not None and str(value) != str(quote[field]):
-                raise ValueError("QUOTE_CONTEXT_MISMATCH")
         request_payload = {"quote_id": quote_id, "user_id": user_id, "session_id": session_id, **expected}
         request_hash = hashlib.sha256(
             json.dumps(request_payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
-        return await self._repository.create_booking_from_quote(
-            quote_id=quote_id,
-            user_id=user_id,
-            session_id=session_id,
-            idempotency_key=idempotency_key,
-            request_hash=request_hash,
-            pickup=payload.get("pickup") if isinstance(payload.get("pickup"), dict) else None,
-            destination=payload.get("destination") if isinstance(payload.get("destination"), dict) else None,
-            eta_minutes=int(int(dict(quote["route_snapshot"])["duration_seconds"]) / 60),
+        create_started = time.perf_counter()
+        try:
+            result = await self._repository.create_booking_from_quote(
+                quote_id=quote_id,
+                user_id=user_id,
+                session_id=session_id,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                pickup=payload.get("pickup") if isinstance(payload.get("pickup"), dict) else None,
+                destination=payload.get("destination") if isinstance(payload.get("destination"), dict) else None,
+                eta_minutes=None,
+                pickup_place_id=str(expected["pickup_place_id"]) if expected["pickup_place_id"] is not None else None,
+                destination_place_id=(
+                    str(expected["destination_place_id"]) if expected["destination_place_id"] is not None else None
+                ),
+                vehicle_type=str(expected["vehicle_type"]) if expected["vehicle_type"] is not None else None,
+                quote_verifier=self._quote_service.verify_quote,
+            )
+        except Exception:
+            logger.info(
+                "[PERF-BOOKING] stage=booking.create_transaction session_id=%s duration_ms=%.3f result=error",
+                session_id,
+                (time.perf_counter() - create_started) * 1000,
+            )
+            raise
+        logger.info(
+            "[PERF-BOOKING] stage=booking.create_transaction session_id=%s duration_ms=%.3f result=ok",
+            session_id,
+            (time.perf_counter() - create_started) * 1000,
         )
+        logger.info(
+            "[PERF-BOOKING] stage=booking_service.create_booking_from_quote session_id=%s duration_ms=%.3f result=ok",
+            session_id,
+            (time.perf_counter() - started) * 1000,
+        )
+        return result
 
     async def get_booking_durable(self, booking_id: str) -> dict[str, object] | None:
         return await self._repository.booking(booking_id)

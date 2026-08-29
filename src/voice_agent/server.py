@@ -54,7 +54,14 @@ def _configure_worker_console_logging() -> None:
 
     for logger_name in _NOISY_WORKER_LOGGERS:
         logging.getLogger(logger_name).setLevel(logging.WARNING)
-    logging.getLogger("src.voice_agent.observability").setLevel(logging.INFO)
+    for logger_name in (
+        "src.voice_agent.observability",
+        "src.voice_agent.persistence",
+        "src.voice_agent.tasks.booking",
+        "src.voice_agent.state_sync",
+        "src.backend.services.booking_service",
+    ):
+        logging.getLogger(logger_name).setLevel(logging.INFO)
 
 
 def register_room_audio_track_logging(ctx: JobContext, event_log: SessionEventLog) -> None:

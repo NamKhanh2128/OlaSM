@@ -29,6 +29,11 @@ _GAZETTEER_PATH = _data_path("place_names.json")
 _ALIASES_PATH = _data_path("hanoi_place_aliases.json")
 _LANDMARK_PICKUP_POINTS_PATH = _data_path("hanoi_landmark_pickup_points.json")
 
+# A generic noun such as "trường" is not a concrete destination. It can
+# happen to be a substring of exactly one gazetteer name (for example "Quảng
+# trường Ba Đình"), but resolving that result would silently invent context.
+_GENERIC_LOCATION_TERMS = frozenset({"truong", "ho", "duong", "pho", "cong", "ben"})
+
 
 @lru_cache
 def _load_place_names() -> tuple[str, ...]:
@@ -190,6 +195,10 @@ class PlaceSearchService:
                 if normalized_query in _normalize(name) or _normalize(name) in normalized_query
             ]
         match_provider = "local_gazetteer"
+        if len(matches) == 1 and normalized_query in _GENERIC_LOCATION_TERMS:
+            # Keep ambiguous generic words unresolved so the agent asks for a
+            # name/address instead of auto-selecting an unrelated landmark.
+            return []
         if not matches:
             fuzzy_match = _fuzzy_canonical_match(normalized_query)
             matches = [fuzzy_match] if fuzzy_match else []

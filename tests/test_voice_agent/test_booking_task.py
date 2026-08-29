@@ -206,6 +206,29 @@ async def test_parent_booking_status_never_invents_a_booking_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_repeated_booking_request_does_not_reenter_completed_booking() -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    userdata.booking_draft.booking = booking_module.BookingResult(
+        booking_id="book-existing",
+        status="SEARCHING_DRIVER",
+        estimated_fare=100_000,
+        currency="VND",
+        eta_minutes=15,
+    )
+    agent = AloSMAgent(session_data=userdata)
+
+    result = await AloSMAgent.start_booking._func(agent)
+
+    assert "book-existing" in result
+    assert "đã được đặt thành công" in result
+
+
+@pytest.mark.asyncio
 async def test_cancel_booking_uses_llm_decision_before_backend_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

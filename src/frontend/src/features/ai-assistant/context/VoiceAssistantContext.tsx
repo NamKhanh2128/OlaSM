@@ -118,9 +118,9 @@ export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = (
   );
 
   const sendText = useCallback(
-    async (value: string) => {
+    async (value: string): Promise<boolean> => {
       const message = value.trim();
-      if (!message || !sessionId || sessionEnded || statusRef.current === "processing") return;
+      if (!message || !sessionId || sessionEnded || statusRef.current === "processing") return false;
       setMessages((items) => [...items, { id: `user-${Date.now()}`, role: "user", text: message }]);
       setStatus("processing");
       setNotice(null);
@@ -130,10 +130,12 @@ export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = (
         applyTurnResult(result);
         handleEndOfTurnActions(result);
         setStatus("idle");
+        return true;
       } catch (error) {
         setStatus("error");
-        if (redirectToLoginIfUnauthorized(error, navigate)) return;
+        if (redirectToLoginIfUnauthorized(error, navigate)) return false;
         setNotice(error instanceof Error ? error.message : "Không thể gửi tin nhắn. Vui lòng thử lại.");
+        return false;
       }
     },
     [sessionId, sessionEnded, applyTurnResult, handleEndOfTurnActions, navigate],
