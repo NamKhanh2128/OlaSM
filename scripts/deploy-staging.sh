@@ -9,6 +9,7 @@ GOOGLE_CREDENTIALS_PARAMETER="${GOOGLE_CREDENTIALS_PARAMETER:-/p160/staging/goog
 GHCR_USERNAME="${GHCR_USERNAME:-hyeiu142}"
 IMAGE_NAME="${IMAGE_NAME:-ghcr.io/ai20k-build-phase-cohort-3/p-160}"
 IMAGE_TAG="${IMAGE_TAG:-development}"
+PUBLIC_HOSTNAME="${PUBLIC_HOSTNAME:-staging.alosm.nairyuuu.site}"
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/p160-staging}"
 COMPOSE_FILE="${DEPLOY_DIR}/docker-compose.staging.yml"
 ENV_FILE="${DEPLOY_DIR}/.env.production"
@@ -57,6 +58,9 @@ docker compose -f "${COMPOSE_FILE}" pull
 docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans
 docker logout ghcr.io >/dev/null
 
-curl --fail --silent --show-error http://127.0.0.1/health
+curl --fail --silent --show-error --location --max-time 60 \
+  --resolve "${PUBLIC_HOSTNAME}:80:127.0.0.1" \
+  --resolve "${PUBLIC_HOSTNAME}:443:127.0.0.1" \
+  "http://${PUBLIC_HOSTNAME}/health"
 printf '\n'
 docker compose -f "${COMPOSE_FILE}" ps
