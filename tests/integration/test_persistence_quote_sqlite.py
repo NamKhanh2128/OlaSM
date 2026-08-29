@@ -67,6 +67,8 @@ async def test_durable_quote_booking_survives_engine_restart(tmp_path: Path) -> 
     assert booking["quoted_fare_amount"] == quote["fare_amount"]
     assert booking["pricing_snapshot"] == quote["pricing_snapshot"]
     assert booking["route_snapshot"] == quote["route_snapshot"]
+    activity_bookings = await repository.bookings_for_user(str(user["user_id"]))
+    assert [item["booking_id"] for item in activity_bookings] == [booking["booking_id"]]
 
     tampered = {**quote, "fare_amount": int(quote["fare_amount"]) + 1}
     with pytest.raises(ValueError, match="QUOTE_INTEGRITY_INVALID"):

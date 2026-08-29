@@ -17,6 +17,7 @@ import {
   type RemoteTrackPublication,
 } from "livekit-client";
 import { Mic, MicOff, PhoneOff, Send, Volume2, VolumeX } from "lucide-react";
+import { notifyBookingCreated } from "@/app/events";
 import { getCurrentUser } from "@/features/auth/api";
 import { CURRENT_POLICY_VERSION } from "@/features/policies/api";
 import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssistant";
@@ -154,6 +155,7 @@ function LiveKitCallContent({
   const [textSendPending, setTextSendPending] = useState(false);
   const [textError, setTextError] = useState<string | null>(null);
   const [bookingState, setBookingState] = useState<BookingState | null>(null);
+  const announcedBookingId = useRef<string | null>(null);
   const [wasConnected, setWasConnected] = useState(false);
   const { message: bookingStateMessage } = useDataChannel(BOOKING_STATE_TOPIC);
   const agentFailure = agent.failureReasons?.join("; ") ?? "";
@@ -176,6 +178,14 @@ function LiveKitCallContent({
       // Ignore malformed/older packets; conversation audio must keep running.
     }
   }, [bookingStateMessage]);
+
+  useEffect(() => {
+    const bookingId = bookingState?.booking?.booking_id ?? null;
+    if (bookingId && announcedBookingId.current !== bookingId) {
+      announcedBookingId.current = bookingId;
+      notifyBookingCreated(bookingId);
+    }
+  }, [bookingState?.booking?.booking_id]);
 
   useEffect(() => {
     // Let livekit-client attempt its native Room reconnect first. If the managed

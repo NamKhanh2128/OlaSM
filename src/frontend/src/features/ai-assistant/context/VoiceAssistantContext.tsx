@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { notifyBookingCreated } from "@/app/events";
 import { getCurrentUser } from "@/features/auth/api";
 import { redirectToLoginIfUnauthorized } from "@/features/auth/sessionGuard";
 import { clearSessionId, getAccessToken, getSessionId, getUserName, saveAuthSession } from "@/features/auth/storage";
@@ -127,6 +128,9 @@ export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = (
       try {
         const result = await sendRideMessage(sessionId, message, "TEXT");
         setMessages((items) => [...items, { id: result.message_id, role: "assistant", text: result.message }]);
+        if (result.booking?.booking_id && result.state?.booking_lifecycle_status === "SUCCESS") {
+          notifyBookingCreated(result.booking.booking_id);
+        }
         applyTurnResult(result);
         handleEndOfTurnActions(result);
         setStatus("idle");
