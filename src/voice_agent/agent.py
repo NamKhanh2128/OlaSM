@@ -59,7 +59,7 @@ class AloSMAgent(Agent):
                 "get_booking_status trước khi trả lời. Chỉ được nói đã đặt thành công khi kết quả tool "
                 "có booking_id; nếu booking_id là null thì phải nói chuyến chưa được tạo. "
                 "Khi khách yêu cầu gặp tổng đài viên thật, gọi request_handoff; sau đó không trả lời thêm vì hệ thống sẽ chờ người thật vào phòng. "
-                "Khi khách yêu cầu hủy chuyến đã tạo, gọi cancel_booking với confirmation_decision=request. Tool sẽ phát tín hiệu để giao diện hiển thị nút xác nhận. Sau khi khách chọn hoặc nói xác nhận, gọi lại cancel_booking với confirmation_decision=confirm; nếu khách từ chối, dùng confirmation_decision=decline. Chỉ được nói đã hủy khi tool trả về cancelled=true và không dùng cancel_booking_flow cho chuyến đã tạo. "
+                "Khi khách yêu cầu hủy chuyến đã tạo, gọi cancel_booking với confirmation_decision=request. Tool sẽ phát tín hiệu để giao diện hiển thị nút xác nhận. Sau khi khách chọn hoặc nói xác nhận, gọi lại cancel_booking với confirmation_decision=confirm; nếu khách từ chối, dùng confirmation_decision=decline. Chỉ được nói đã hủy khi tool trả về cancelled=true. Nếu khách dừng một booking draft chưa tạo chuyến, BookingTask sẽ trả về trạng thái abandoned. "
                 "Khi khách hỏi chính sách, hành lý, phí hoặc điều kiện dịch vụ, gọi search_knowledge; "
                 "khi khách hỏi các loại xe, gọi get_vehicle_options. Chỉ đọc thông tin mà tool trả về, "
                 "kèm nguồn hoặc phiên bản khi phù hợp; không tự bịa hoặc dùng RAG cho báo giá một lộ trình. "
@@ -69,15 +69,39 @@ class AloSMAgent(Agent):
 
     @function_tool()
     async def start_booking(self) -> str:
-        """Start or resume the native AloSM ride-booking task for this call."""
+        """Bắt đầu hoặc tiếp tục quy trình đặt xe trong cuộc gọi hiện tại.
+
+        Gọi khi khách muốn đặt xe hoặc tiếp tục booking draft dang dở. Tool
+        chuyển quyền tạm thời cho BookingTask để thu thập địa điểm, loại xe,
+        báo giá, xác nhận và tạo chuyến.
+
+        Không gọi để kiểm tra trạng thái chuyến, hỏi danh sách loại xe, hỏi
+        chính sách, hủy chuyến đã tạo hoặc yêu cầu gặp tổng đài viên. Không tự
+        suy đoán đã đặt thành công; chỉ thông báo thành công khi kết quả có
+        booking_id. Nếu task trả về abandoned, thông báo rằng yêu cầu đã dừng
+        và không có chuyến mới.
+        """
         if self._session_data is not None and self._session_data.handoff is not None:
             if self._session_data.handoff.status in {"pending", "accepted", "connected"}:
                 return "Đang chờ tổng đài viên nhận cuộc gọi; không được tiếp tục đặt xe."
+        if self._session_data is not None:
+            existing_booking = self._session_data.booking_draft.booking
+            if existing_booking is not None and existing_booking.status != "CANCELLED":
+                return (
+                    f"Chuyến xe đã được đặt thành công với mã {existing_booking.booking_id}. "
+                    "Không tạo thêm chuyến mới."
+                )
         # LiveKit recommends carrying conversation history into a task while
         # excluding the parent instructions, so the focused task prompt remains
         # small and authoritative.
         task_context = self.chat_ctx.copy(exclude_instructions=True)
         outcome = await BookingTask(chat_ctx=task_context, state_store=self._state_store)
+        if outcome.status == "needs_handoff":
+            handoff_result = await self._create_handoff(outcome.reason or outcome.message)
+            if self._handoff_is_active(handoff_result):
+                self._enter_handoff_wait()
+                raise StopResponse()
+            return handoff_result
         return outcome.message
 
     @staticmethod
@@ -167,6 +191,24 @@ class AloSMAgent(Agent):
 
     @function_tool()
     async def request_handoff(self, reason: str) -> str:
+        """Tạo yêu cầu chuyển cuộc gọi tới tổng đài viên thật.
+
+        Chỉ gọi khi khách yêu cầu rõ ràng gặp người thật, tổng đài viên, nhân
+        viên hỗ trợ, operator hoặc yêu cầu chuyển máy. Đây là capability của
+        AloSMAgent; BookingTask chỉ trả về needs_handoff để Supervisor xử lý.
+
+        Không gọi cho câu hỏi mà tool khác có thể xử lý và không dùng để thay
+        thế việc hỏi lại booking còn thiếu nếu khách chưa yêu cầu người thật.
+
+        Args:
+            reason: Lý do ngắn gọn, trung thực, có thể dùng nguyên văn yêu cầu
+                của khách; không thêm suy đoán nhạy cảm.
+
+        Returns:
+            JSON chứa status và handoff_id khi tạo thành công, hoặc status
+            failed nếu chưa thể tạo. Với status pending, hệ thống sẽ báo khách
+            chờ tổng đài viên và AI không tiếp tục hội thoại đặt xe.
+        """
         result = await self._create_handoff(reason)
         if self._handoff_is_active(result):
             self._enter_handoff_wait()
@@ -180,7 +222,29 @@ class AloSMAgent(Agent):
         reason: str,
         confirmation_decision: Literal["request", "confirm", "decline"] = "request",
     ) -> str:
-        """Request or execute cancellation based on the LLM decision."""
+        """Yêu cầu xác nhận hoặc thực hiện hủy một chuyến đã được tạo.
+
+        Chỉ dùng cho chuyến có booking_id trong cuộc gọi hiện tại. Không dùng
+        để dừng booking draft chưa tạo chuyến; BookingTask sẽ trả về
+        abandoned.
+
+        Luồng gồm hai bước: lần đầu gọi với request để yêu cầu xác nhận; chỉ
+        gọi lại với confirm sau khi khách xác nhận rõ ràng bằng lời nói hoặc
+        nút trên giao diện. Nếu khách từ chối, dùng decline. Không gọi confirm
+        cho câu hỏi về giá, đồng ý thông tin khác, “đúng rồi”, “ừ” hoặc quyết
+        định hủy còn mơ hồ.
+
+        Args:
+            reason: Lý do hủy do khách cung cấp, viết ngắn gọn; không tự bịa.
+            confirmation_decision: request để bắt đầu hoặc tiếp tục hỏi,
+                confirm chỉ sau xác nhận hủy rõ ràng, hoặc decline khi khách từ
+                chối.
+
+        Returns:
+            JSON chứa cancelled, confirmation_required, booking_id và
+            instruction tiếp theo. Chỉ khi cancelled=true mới được nói chuyến
+            đã hủy thành công.
+        """
 
         if self._session_data is None or self._session_data.booking_draft.booking is None:
             return json.dumps(
@@ -269,10 +333,22 @@ class AloSMAgent(Agent):
 
     @function_tool()
     async def get_booking_status(self) -> str:
-        """Read the authoritative booking status and real booking ID for this call.
+        """Đọc trạng thái booking chính thức của cuộc gọi hiện tại.
 
-        This tool must be used before answering whether a ride was created or
-        giving the customer a booking ID.
+        Bắt buộc gọi tool này trước khi trả lời khách rằng chuyến đã được tạo,
+        đã bị hủy, hoặc trước khi đọc booking_id. Chỉ dựa trên các trường trong
+        kết quả tool; không suy đoán từ việc khách đã nhận báo giá, đã nói xác
+        nhận, hoặc một tool khác đã chạy.
+
+        Đây là tool chỉ đọc: không tạo chuyến, không hủy chuyến, không sửa
+        booking draft và không tạo booking_id. Nếu booking_id là null, phải
+        nói rõ rằng chuyến chưa được tạo. Nếu booking đã CANCELLED, không được
+        nói chuyến đặt thành công.
+
+        Returns:
+            JSON chứa created, booking_id, booking_status,
+            confirmation_status, handoff_status, summary và instruction. Làm
+            theo instruction trong kết quả khi thông báo trạng thái cho khách.
         """
         if self._session_data is None:
             return json.dumps(
@@ -309,10 +385,28 @@ class AloSMAgent(Agent):
 
     @function_tool()
     async def search_knowledge(self, query: str, top_k: int = 3) -> str:
-        """Retrieve approved AloSM policy/FAQ context for a non-booking question.
+        """Tra cứu chính sách và câu hỏi thường gặp đã được phê duyệt.
 
-        This is a local, read-only lookup over the versioned policy catalog. It
-        must not be used to calculate a route quote or mutate booking state.
+        Gọi khi khách hỏi về chính sách AloSM, hành lý, phụ phí, điều kiện sử
+        dụng hoặc thông tin dịch vụ không gắn với một lộ trình cụ thể. Đây là
+        tra cứu cục bộ, chỉ đọc, trên policy catalog có phiên bản. Chỉ trả lời
+        dựa trên results mà tool cung cấp và nói rõ khi không có kết quả phù
+        hợp.
+
+        Không dùng tool này để tính giá hoặc ETA cho một lộ trình, kiểm tra
+        trạng thái booking, trả lời dữ liệu thời gian thực, hoặc thay đổi
+        booking state. Không tự bịa chính sách khi catalog không có kết quả.
+
+        Args:
+            query: Câu hỏi hoặc chủ đề chính sách cần tra cứu, viết ngắn gọn và
+                giữ các điều kiện quan trọng mà khách đã nêu.
+            top_k: Số kết quả tối đa cần lấy; truyền số nguyên từ 1 đến 3. Mặc
+                định là 3 và không cần tăng quá giới hạn này.
+
+        Returns:
+            JSON chứa found, catalog_version, results với content, source,
+            citation_id, score và effective_at, cùng instruction về cách trả
+            lời. Chỉ đọc nội dung phù hợp trong results.
         """
         normalized_query = query.strip()
         if not normalized_query:
@@ -344,7 +438,11 @@ class AloSMAgent(Agent):
                 "instruction": (
                     "Chỉ trả lời dựa trên results và nói rõ khi không có kết quả."
                     if results
-                    else "Không có chính sách phù hợp trong catalog; không được suy đoán."
+                    else (
+                        "Hãy nói rõ: Dạ, hiện tại tôi chưa tìm thấy thông tin chính sách đã được xác minh "
+                        "cho yêu cầu này trong hệ thống. Nếu cần hỗ trợ thêm, hãy liên hệ tổng đài viên; "
+                        "không được suy đoán hoặc tự tạo chính sách."
+                    )
                 ),
             },
             ensure_ascii=False,
@@ -352,10 +450,22 @@ class AloSMAgent(Agent):
 
     @function_tool()
     async def get_vehicle_options(self) -> str:
-        """List the vehicle classes and luggage capacity from the pricing catalog.
+        """Liệt kê các loại xe và sức chứa hành lý trong pricing catalog.
 
-        This read-only catalog lookup intentionally does not calculate a fare;
-        route-specific pricing remains inside BookingTask.estimate_fare.
+        Gọi khi khách hỏi AloSM có những loại xe nào, mỗi loại chở được bao
+        nhiêu người hoặc bao nhiêu hành lý. Đây là tra cứu catalog chỉ đọc; đọc
+        tên hiển thị, sức chứa và hành lý từ kết quả, không tự bổ sung thông tin
+        ngoài catalog.
+
+        Tool này không tính giá cho lộ trình, không chọn hoặc cập nhật loại xe
+        trong booking draft, không tạo booking và không thay thế
+        BookingTask.estimate_fare. Khi khách muốn đặt hoặc đổi loại xe, tiếp
+        tục quy trình đặt xe bằng start_booking.
+
+        Returns:
+            JSON chứa catalog_version, region, pricing_status, currency và
+            options. Mỗi option có vehicle_type, display_name, capacity và
+            luggage_capacity. Không đọc mã vehicle_type cho khách nếu không cần.
         """
         catalog = self._pricing_service.catalog
         return json.dumps(

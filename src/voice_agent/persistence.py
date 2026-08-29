@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Protocol
 
 from src.backend.repositories.persistence_repository import PersistenceRepository
 from src.voice_agent.session_data import AloSMSessionData
+
+logger = logging.getLogger(__name__)
 
 
 class VoiceStateConflictError(RuntimeError):
@@ -29,6 +33,7 @@ class VoiceStateRepository(Protocol):
         state: Mapping[str, object],
         *,
         expected_revision: int,
+        terminal_updates: Mapping[str, object] | None = None,
     ) -> dict[str, object] | None: ...
 
     async def update_session(
@@ -71,32 +76,51 @@ class DatabaseVoiceStateStore:
     async def save(self, userdata: AloSMSessionData) -> None:
         if not userdata.persistence_enabled:
             return
-        result = await self._repository.save_voice_agent_state(
-            userdata.app_session_id,
-            userdata.durable_state(),
-            expected_revision=userdata.persistence_revision,
-        )
-        if result is None:
-            raise VoiceStateConflictError("VOICE_STATE_CONFLICT")
-        userdata.persistence_revision = int(result["revision"])
+
+        terminal_updates: dict[str, object] | None = None
         if userdata.lifecycle_status in {"completed", "cancelled"}:
             reason = "BOOKING_COMPLETED" if userdata.lifecycle_status == "completed" else "USER_CANCELLED"
-            booking = userdata.booking_draft.booking
-            terminal_updates: dict[str, object] = {
+            terminal_updates = {
                 "status": "ENDED",
                 "end_reason": reason,
                 "ended_at": datetime.now(UTC),
             }
+            booking = userdata.booking_draft.booking
             if booking is not None:
                 terminal_updates.update(
                     booking_id=booking.booking_id,
                     booking_lifecycle_status="SUCCESS",
                     confirmation_status="confirmed",
                 )
-            await self._repository.update_session(
+
+        state_started = time.perf_counter()
+        try:
+            result = await self._repository.save_voice_agent_state(
                 userdata.app_session_id,
-                terminal_updates,
+                userdata.durable_state(),
+                expected_revision=userdata.persistence_revision,
+                terminal_updates=terminal_updates,
             )
+        except Exception:
+            logger.info(
+                "[PERF-VOICE] stage=state.save_voice_agent_state call_id=%s duration_ms=%.3f result=error",
+                userdata.call_id,
+                (time.perf_counter() - state_started) * 1000,
+            )
+            raise
+        if result is None:
+            logger.info(
+                "[PERF-VOICE] stage=state.save_voice_agent_state call_id=%s duration_ms=%.3f result=conflict",
+                userdata.call_id,
+                (time.perf_counter() - state_started) * 1000,
+            )
+            raise VoiceStateConflictError("VOICE_STATE_CONFLICT")
+        logger.info(
+            "[PERF-VOICE] stage=state.save_voice_agent_state call_id=%s duration_ms=%.3f result=ok",
+            userdata.call_id,
+            (time.perf_counter() - state_started) * 1000,
+        )
+        userdata.persistence_revision = int(result["revision"])
 
 
 class EphemeralVoiceStateStore:

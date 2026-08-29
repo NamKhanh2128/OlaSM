@@ -166,6 +166,38 @@ async def test_trip_result_is_reduced_to_typed_state_then_spoken_by_model():
 
 
 @pytest.mark.asyncio
+async def test_faq_without_grounded_documents_returns_a_safe_fallback():
+    agent = LLMAgent(conversation_model=ScriptedConversationModel())
+    state = AgentState(
+        session_id="session-1",
+        current_workflow=WorkflowType.FAQ,
+        current_step="WAITING_FOR_KNOWLEDGE",
+        pending_tool_call_id="rag-1",
+        pending_tool_name="retrieve_knowledge",
+        collected_data={"faq": {"question": "hoàn tiền 100% khi trời mưa"}},
+    )
+
+    action = await agent.handle(
+        AgentInput(
+            session_id=state.session_id,
+            turn_id="tool-1",
+            tool_result=ToolResult(
+                tool_name="retrieve_knowledge",
+                call_id="rag-1",
+                status=ToolStatus.SUCCESS,
+                data={"documents": []},
+            ),
+        ),
+        state,
+    )
+
+    assert action.action_type is ActionType.RESPOND
+    assert "chưa tìm thấy thông tin chính sách đã được xác minh" in (action.message or "")
+    assert "tổng đài viên" in (action.message or "")
+    assert action.state_updates["current_workflow"] is None
+
+
+@pytest.mark.asyncio
 async def test_faq_response_is_grounded_in_current_backend_documents():
     agent = LLMAgent(
         conversation_model=ScriptedConversationModel(

@@ -48,6 +48,13 @@ async def test_policy_rag_returns_versioned_citation_for_refund():
 
 
 @pytest.mark.asyncio
+async def test_policy_rag_rejects_known_topic_with_unsupported_condition():
+    documents = await KnowledgeService().retrieve("Chính sách hoàn tiền 100% khi trời mưa", top_k=3)
+
+    assert documents == []
+
+
+@pytest.mark.asyncio
 async def test_policy_rag_never_claims_green_sm_contact_is_alosm_contact():
     documents = await KnowledgeService().retrieve("hotline pháp nhân liên hệ AloSM", top_k=3)
     legal = next(item for item in documents if item["citation_id"] == "policy-legal-identity")

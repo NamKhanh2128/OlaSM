@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Clock, ChevronRight, RotateCcw, Car, AlertCircle, Sparkles } from "lucide-react";
+import { BOOKING_CREATED_EVENT } from "@/app/events";
 import { listBookings, locationLabel, statusLabel, type BookingSummary } from "@/features/activity/api";
 import { redirectToLoginIfUnauthorized } from "@/features/auth/sessionGuard";
 import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssistant";
@@ -34,21 +35,21 @@ export const ActivityList: React.FC<ActivityListProps> = ({ activeFilter = "all"
   const [bookings, setBookings] = useState<BookingSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    listBookings()
-      .then((data) => {
-        if (!cancelled) setBookings(data);
-      })
+  const loadBookings = useCallback(() => {
+    setError(null);
+    void listBookings()
+      .then((data) => setBookings(data))
       .catch((cause) => {
-        if (cancelled) return;
         if (redirectToLoginIfUnauthorized(cause, navigate)) return;
         setError(cause instanceof Error ? cause.message : "Không thể tải lịch sử chuyến đi.");
       });
-    return () => {
-      cancelled = true;
-    };
   }, [navigate]);
+
+  useEffect(() => {
+    loadBookings();
+    window.addEventListener(BOOKING_CREATED_EVENT, loadBookings);
+    return () => window.removeEventListener(BOOKING_CREATED_EVENT, loadBookings);
+  }, [loadBookings]);
 
   // Đặt lại 1 chuyến đã có giờ cũng nối thẳng vào AI Assistant (kèm sẵn tuyến đường
   // cũ trong câu mở đầu) thay vì tự mở form/modal riêng — cùng 1 đường đặt xe duy

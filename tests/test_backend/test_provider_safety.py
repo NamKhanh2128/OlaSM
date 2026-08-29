@@ -15,6 +15,10 @@ def test_unknown_free_form_address_is_not_marked_resolved_by_gazetteer():
     assert PlaceSearchService().search("999 đường hoàn toàn không có") == []
 
 
+def test_generic_location_word_is_not_resolved_to_an_unrelated_landmark():
+    assert PlaceSearchService().search("trường") == []
+
+
 def test_hanoi_gazetteer_requires_specific_vinuni_and_ho_guom_points():
     service = PlaceSearchService()
 

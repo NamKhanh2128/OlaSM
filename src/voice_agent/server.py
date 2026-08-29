@@ -54,7 +54,14 @@ def _configure_worker_console_logging() -> None:
 
     for logger_name in _NOISY_WORKER_LOGGERS:
         logging.getLogger(logger_name).setLevel(logging.WARNING)
-    logging.getLogger("src.voice_agent.observability").setLevel(logging.INFO)
+    for logger_name in (
+        "src.voice_agent.observability",
+        "src.voice_agent.persistence",
+        "src.voice_agent.tasks.booking",
+        "src.voice_agent.state_sync",
+        "src.backend.services.booking_service",
+    ):
+        logging.getLogger(logger_name).setLevel(logging.INFO)
 
 
 def register_room_audio_track_logging(ctx: JobContext, event_log: SessionEventLog) -> None:
@@ -152,8 +159,11 @@ def build_agent_session(
                 "false_interruption_timeout": 2.0,
                 "resume_false_interruption": True,
             },
+            # Booking tools can persist a quote and take several seconds.
+            # Wait for their result before generating speech so an early
+            # preemptive response cannot be cancelled and leave the turn silent.
             "preemptive_generation": {
-                "enabled": True,
+                "enabled": False,
                 "preemptive_tts": False,
             },
         },
