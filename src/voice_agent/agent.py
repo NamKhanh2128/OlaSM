@@ -2,13 +2,14 @@
 
 import json
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 from livekit.agents import Agent, StopResponse, function_tool, llm
 
 from src.backend.services.knowledge_service import KnowledgeService
 from src.backend.services.pricing_service import PricingService
 from src.voice_agent.persistence import EphemeralVoiceStateStore, VoiceStateStore
+from src.voice_agent.safety import SafetyClassifier
 from src.voice_agent.session_data import AloSMSessionData, HandoffState
 from src.voice_agent.state_sync import publish_booking_state
 from src.voice_agent.tasks import BookingTask
@@ -29,10 +30,13 @@ class AloSMAgent(Agent):
         knowledge_service: KnowledgeService | None = None,
         pricing_service: PricingService | None = None,
         bookings: BookingToolsService | None = None,
+        handoffs: HandoffToolsService | None = None,
+        safety_classifier: SafetyClassifier | None = None,
     ) -> None:
         self._state_store = state_store or EphemeralVoiceStateStore()
         self._session_data = session_data
-        self._handoffs = HandoffToolsService()
+        self._safety_classifier = safety_classifier or SafetyClassifier()
+        self._handoffs = handoffs or HandoffToolsService(safety_classifier=self._safety_classifier)
         self._bookings = bookings or BookingToolsService()
         self._handoff_wait_started = False
         # These catalogs are local, validated and cached.  They are injected so
@@ -112,15 +116,21 @@ class AloSMAgent(Agent):
             return False
         return status in {"pending", "accepted", "connected"}
 
-    def _enter_handoff_wait(self) -> None:
+    def _enter_handoff_wait(
+        self,
+        *,
+        acknowledgement_text: str | None = None,
+        acknowledgement_handle: Any | None = None,
+    ) -> None:
         """Keep the Room alive for the operator while making the AI quiescent."""
 
         if self._handoff_wait_started:
             return
         self._handoff_wait_started = True
         self.session.input.set_audio_enabled(False)
-        acknowledgement = self.session.say(
-            "Tôi đã chuyển yêu cầu của bạn đến tổng đài viên. Vui lòng chờ trong giây lát.",
+        acknowledgement = acknowledgement_handle or self.session.say(
+            acknowledgement_text
+            or "Tôi đã chuyển yêu cầu của bạn đến tổng đài viên. Vui lòng chờ trong giây lát.",
             allow_interruptions=False,
         )
         acknowledgement.add_done_callback(lambda _: self.session.output.set_audio_enabled(False))
@@ -183,8 +193,18 @@ class AloSMAgent(Agent):
         current = self._session_data.handoff if self._session_data is not None else None
         if current is not None and current.status in {"pending", "accepted", "connected"}:
             raise StopResponse()
-        if HandoffToolsService.is_handoff_request(new_message.text_content or ""):
-            result = await self._create_handoff(new_message.text_content or "")
+        user_text = new_message.text_content or ""
+        if self._safety_classifier.assess(user_text).is_emergency:
+            safety_acknowledgement = self.session.say(
+                self._safety_classifier.emergency_guidance(),
+                allow_interruptions=False,
+            )
+            result = await self._create_handoff(user_text)
+            if self._handoff_is_active(result):
+                self._enter_handoff_wait(acknowledgement_handle=safety_acknowledgement)
+            raise StopResponse()
+        if HandoffToolsService.is_handoff_request(user_text):
+            result = await self._create_handoff(user_text)
             if self._handoff_is_active(result):
                 self._enter_handoff_wait()
                 raise StopResponse()
