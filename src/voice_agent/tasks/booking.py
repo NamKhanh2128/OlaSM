@@ -561,8 +561,20 @@ class BookingTask(AgentTask[BookingOutcome]):
         latest_user_text = latest.text_content if latest is not None else ""
         if not is_explicit_confirmation(latest_user_text):
             raise ToolError("LATEST_USER_MESSAGE_IS_NOT_EXPLICIT_BOOKING_CONFIRMATION")
+        draft = self._draft(context)
+        existing_booking = draft.booking
+        if existing_booking is not None and existing_booking.status != "CANCELLED":
+            return (
+                f"Chuyến xe đã được đặt thành công với mã {existing_booking.booking_id}. "
+                "Không tạo thêm chuyến mới."
+            )
+        if draft.confirmation_status == "confirmed":
+            if draft.quote is None or draft.confirmation_fingerprint != draft.quote.fingerprint:
+                raise ToolError("BOOKING_CONTEXT_CHANGED")
+            context.userdata.clear_failure()
+            return "Khách đã xác nhận rõ ràng; có thể gọi create_booking."
         try:
-            self._draft(context).confirm()
+            draft.confirm()
         except ValueError as exc:
             raise ToolError(str(exc)) from exc
         context.userdata.clear_failure()
