@@ -29,6 +29,7 @@ RUN mkdir -p /app/data && chmod -R 777 /app/data
 RUN mkdir -p /app/config/policies && \
     cp -r /app/data/policies/* /app/config/policies/ && \
     cp -r /app/data/pricing /app/config/ && \
+    cp -r /app/data/safety /app/config/ && \
     cp -r /app/data/gazetteer /app/config/ 2>/dev/null || true
 
 EXPOSE 8000
