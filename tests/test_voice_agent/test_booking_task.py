@@ -392,6 +392,84 @@ async def test_estimate_fare_atomically_starts_confirmation(
 
 
 @pytest.mark.asyncio
+async def test_duplicate_confirmation_is_idempotent_before_booking_creation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    pickup = PlaceCandidate(
+        place_id="pickup",
+        display_name="Cổng chính VinUni",
+        address="Đường San Hô, Gia Lâm, Hà Nội",
+        provider="test",
+    )
+    destination = PlaceCandidate(
+        place_id="destination",
+        display_name="Bưu điện Hà Nội",
+        address="Đinh Tiên Hoàng, Hoàn Kiếm, Hà Nội",
+        provider="test",
+    )
+    draft = userdata.booking_draft
+    draft.set_candidates("pickup", "VinUni", [pickup])
+    draft.select_place("pickup", pickup.place_id)
+    draft.set_candidates("destination", "Bưu điện Hà Nội", [destination])
+    draft.select_place("destination", destination.place_id)
+    draft.set_vehicle_type("CAR_4")
+    draft.set_quote(
+        QuoteSnapshot(
+            quote_id="quote-regression",
+            pickup_place_id=pickup.place_id,
+            destination_place_id=destination.place_id,
+            vehicle_type="CAR_4",
+            fare_amount=95_180,
+            currency="VND",
+            distance_km=20.0,
+            eta_minutes=16,
+            expires_at="2099-01-01T00:00:00+00:00",
+            estimated=True,
+        )
+    )
+    draft.request_confirmation()
+
+    async def _publish(_: object) -> None:
+        return None
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
+    chat_ctx = llm.ChatContext.empty()
+    chat_ctx.add_message(role="user", content="Tôi xác nhận đặt chuyến này.")
+    task = BookingTask(
+        chat_ctx=chat_ctx,
+        state_store=EphemeralVoiceStateStore(),
+    )
+    context = SimpleNamespace(
+        userdata=userdata,
+        session=object(),
+        disallow_interruptions=lambda: None,
+    )
+
+    first = await BookingTask.confirm_booking._func(task, context)
+
+    second_chat_ctx = llm.ChatContext.empty()
+    second_chat_ctx.add_message(role="user", content="Tôi xác nhận lại, cứ đặt chuyến này nhé.")
+    second_task = BookingTask(
+        chat_ctx=second_chat_ctx,
+        state_store=EphemeralVoiceStateStore(),
+    )
+    second = await BookingTask.confirm_booking._func(second_task, context)
+
+    assert first == "Khách đã xác nhận rõ ràng; có thể gọi create_booking."
+    assert second == first
+    assert draft.confirmation_status == "confirmed"
+    assert draft.quote is not None
+    assert draft.quote.quote_id == "quote-regression"
+    assert draft.booking is None
+
+
+@pytest.mark.asyncio
 async def test_location_change_refreshes_existing_quote_and_interrupts_stale_preamble(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
