@@ -6,6 +6,7 @@ __pycache__/
 dist/
 build/
 .eggs/
+.ua/
 
 # Virtual environments
 venv/
@@ -113,3 +114,6 @@ infra/maps/nominatim/data/
 
 # Deployment bundles may contain environment/database artifacts
 *.tar.gz
+
+# Local manual-review screenshots and notes are evidence artifacts, not source.
+test_cases/

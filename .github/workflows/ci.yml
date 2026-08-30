@@ -2,9 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, feature/agentic-ai, feature/voice-ai, ci-cd]
   pull_request:
-    branches: [main, develop, ci-cd]
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
@@ -26,14 +33,21 @@ jobs:
         env:
           APP_ENV: test
           DATABASE_URL: sqlite:///./data/ci.db
-      - name: Tests
-        run: pytest -q
+      - name: Tests with coverage
+        run: pytest -q --cov=src --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=60
         env:
           APP_ENV: test
           DATABASE_URL: sqlite:///./data/ci.db
           AGENT_LLM_ENABLED: "false"
           AGENT_REWRITE_ENABLED: "false"
           OPENAI_API_KEY: test-only-placeholder
+      - name: Upload backend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-${{ github.run_id }}
+          path: coverage.xml
+          if-no-files-found: warn
 
   frontend:
     runs-on: [cohort3, self-hosted]
@@ -49,4 +63,15 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm run test
       - run: npm run build
+
+  deploy-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: [backend, frontend]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-staging.yml
+    secrets: inherit

@@ -1,10 +1,7 @@
 name: Deploy staging
 
 on:
-  push:
-    branches:
-      - develop
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -16,6 +13,10 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::006127064063:role/p160-github-actions-staging
   EC2_INSTANCE_ID: i-0b63e11dd13894269
   IMAGE_NAME: ghcr.io/ai20k-build-phase-cohort-3/p-160
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
