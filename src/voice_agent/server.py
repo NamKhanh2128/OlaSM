@@ -24,7 +24,7 @@ from livekit.agents import (
 )
 from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.agents.voice.events import ErrorEvent
-from livekit.agents.voice.room_io import AudioInputOptions, RoomOptions
+from livekit.agents.voice.room_io import AudioInputOptions, RoomOptions, TextInputEvent, TextInputOptions
 
 from src.backend.services.handoff_service import HandoffService
 from src.backend.services.knowledge_service import KnowledgeService
@@ -40,6 +40,18 @@ from src.voice_agent.transcript_rewrite import build_transcript_rewriter
 from src.voice_agent.tts_text import vietnamese_currency_tts_transform
 
 logger = logging.getLogger(__name__)
+
+
+async def _handle_text_input(session: AgentSession, event: TextInputEvent) -> None:
+    """Route chat text through a forced LiveKit interruption.
+
+    The default RoomIO callback uses a non-forced interruption and can reject
+    text sent while the current speech explicitly disallows interruptions.
+    """
+    async with session._claim_user_turn():
+        await session.interrupt(force=True)
+        session.generate_reply(user_input=event.text)
+
 
 _STATE_STORE_KEY = "alosm_voice_state_store"
 _PROCESS_STORE_READY_KEY = "alosm_process_store_ready"
@@ -597,7 +609,7 @@ async def alosm_voice_session(ctx: JobContext) -> None:
         ),
         record=settings.livekit_record_audio,
         room_options=RoomOptions(
-            text_input=True,
+            text_input=TextInputOptions(text_input_cb=_handle_text_input),
             audio_input=AudioInputOptions(
                 # Native LiveKit input processing. Enhanced cancellation remains
                 # opt-in because its plugin is separately metered and not installed.

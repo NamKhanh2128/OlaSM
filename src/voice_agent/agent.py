@@ -99,8 +99,7 @@ class AloSMAgent(Agent):
             existing_booking = self._session_data.booking_draft.booking
             if existing_booking is not None and existing_booking.status != "CANCELLED":
                 return (
-                    f"Chuyến xe đã được đặt thành công với mã {existing_booking.booking_id}. "
-                    "Không tạo thêm chuyến mới."
+                    f"Chuyến xe đã được đặt thành công với mã {existing_booking.booking_id}. Không tạo thêm chuyến mới."
                 )
         # LiveKit recommends carrying conversation history into a task while
         # excluding the parent instructions, so the focused task prompt remains
@@ -109,10 +108,15 @@ class AloSMAgent(Agent):
         outcome = await BookingTask(
             chat_ctx=task_context,
             state_store=self._state_store,
+            handoff_handler=self._create_handoff,
             session_data=self._session_data,
             transcript_rewriter=self._transcript_rewriter,
         )
         if outcome.status == "needs_handoff":
+            current = self._session_data.handoff if self._session_data is not None else None
+            if current is not None and current.status in {"pending", "accepted", "connected"}:
+                self._enter_handoff_wait()
+                raise StopResponse()
             handoff_result = await self._create_handoff(outcome.reason or outcome.message)
             if self._handoff_is_active(handoff_result):
                 self._enter_handoff_wait()
@@ -141,8 +145,7 @@ class AloSMAgent(Agent):
         self._handoff_wait_started = True
         self.session.input.set_audio_enabled(False)
         acknowledgement = acknowledgement_handle or self.session.say(
-            acknowledgement_text
-            or "Tôi đã chuyển yêu cầu của bạn đến tổng đài viên. Vui lòng chờ trong giây lát.",
+            acknowledgement_text or "Tôi đã chuyển yêu cầu của bạn đến tổng đài viên. Vui lòng chờ trong giây lát.",
             allow_interruptions=False,
         )
         acknowledgement.add_done_callback(lambda _: self.session.output.set_audio_enabled(False))
@@ -161,6 +164,7 @@ class AloSMAgent(Agent):
             )
         room = getattr(getattr(self.session, "room_io", None), "room", None)
         room_name = getattr(room, "name", None)
+        logger.info("handoff_create_started session=%s", self._session_data.app_session_id)
         try:
             record = await self._handoffs.create(self._session_data, reason=reason, room_name=room_name)
             self._session_data.handoff_requested = True
@@ -178,6 +182,11 @@ class AloSMAgent(Agent):
             )
             await self._state_store.save(self._session_data)
             await publish_booking_state(self.session)
+            logger.info(
+                "handoff_created session=%s handoff_id=%s status=pending",
+                self._session_data.app_session_id,
+                record["handoff_id"],
+            )
             return json.dumps(
                 {
                     "status": "pending",
@@ -252,11 +261,6 @@ class AloSMAgent(Agent):
             if self._handoff_is_active(result):
                 self._enter_handoff_wait(acknowledgement_handle=safety_acknowledgement)
             raise StopResponse()
-        if HandoffToolsService.is_handoff_request(user_text):
-            result = await self._create_handoff(user_text)
-            if self._handoff_is_active(result):
-                self._enter_handoff_wait()
-                raise StopResponse()
 
     @function_tool()
     async def request_handoff(self, reason: str) -> str:
@@ -283,7 +287,6 @@ class AloSMAgent(Agent):
             self._enter_handoff_wait()
             raise StopResponse()
         return result
-
 
     @function_tool()
     async def cancel_booking(
@@ -326,7 +329,12 @@ class AloSMAgent(Agent):
         assert booking is not None
         if booking.status == "CANCELLED":
             return json.dumps(
-                {"cancelled": False, "already_cancelled": True, "booking_id": booking.booking_id, "instruction": "Chuyến này đã được hủy trước đó."},
+                {
+                    "cancelled": False,
+                    "already_cancelled": True,
+                    "booking_id": booking.booking_id,
+                    "instruction": "Chuyến này đã được hủy trước đó.",
+                },
                 ensure_ascii=False,
             )
 
@@ -384,7 +392,11 @@ class AloSMAgent(Agent):
             )
         if cancelled is None:
             return json.dumps(
-                {"cancelled": False, "booking_id": booking.booking_id, "instruction": "Không tìm thấy chuyến thuộc phiên này."},
+                {
+                    "cancelled": False,
+                    "booking_id": booking.booking_id,
+                    "instruction": "Không tìm thấy chuyến thuộc phiên này.",
+                },
                 ensure_ascii=False,
             )
         draft.mark_booking_cancelled(cancelled)

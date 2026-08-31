@@ -5,6 +5,7 @@ from src.backend.config import get_settings
 from src.backend.repositories.handoff_repository import HandoffRepository, get_handoff_repository
 from src.backend.repositories.persistence_repository import PersistenceRepository
 from src.backend.schemas.handoff import HandoffStatus
+from src.backend.services.handoff_privacy import sanitize_handoff_payload, sanitize_handoff_record
 
 
 class HandoffService:
@@ -13,6 +14,7 @@ class HandoffService:
         self._persistence = PersistenceRepository()
 
     async def create_handoff_durable(self, payload: dict[str, object]) -> dict[str, object]:
+        payload = sanitize_handoff_payload(payload)
         if get_settings().app_env == "test":
             return self.create_handoff(payload)
         values = {
@@ -29,17 +31,20 @@ class HandoffService:
             "room_name": payload.get("room_name"),
             "context_snapshot": payload.get("context_snapshot"),
         }
-        return await self._persistence.create_handoff(values)
+        return sanitize_handoff_record(await self._persistence.create_handoff(values))
 
     async def list_handoffs_durable(self, status: str) -> list[dict[str, object]]:
         if get_settings().app_env == "test":
             return self.list_handoffs(status)
-        return await self._persistence.list_handoffs(HandoffStatus(status).value)
+        records = await self._persistence.list_handoffs(HandoffStatus(status).value)
+        return [sanitize_handoff_record(record) for record in records]
 
     async def get_handoff_durable(self, handoff_id: str) -> dict[str, object] | None:
         if get_settings().app_env == "test":
-            return self._repository.get(handoff_id)
-        return await self._persistence.get_handoff(handoff_id)
+            record = self._repository.get(handoff_id)
+        else:
+            record = await self._persistence.get_handoff(handoff_id)
+        return sanitize_handoff_record(record) if record is not None else None
 
     async def accept_handoff_durable(self, handoff_id: str, operator_id: str | None = None) -> dict[str, object]:
         if get_settings().app_env == "test":
@@ -59,28 +64,31 @@ class HandoffService:
             record = self._repository.get(handoff_id)
             if record is None or record.get("status") != "accepted" or record.get("operator_id") != operator_id:
                 raise KeyError("Handoff không ở trạng thái accepted")
-            return self._repository.update(
+            updated = self._repository.update(
                 handoff_id, {"status": HandoffStatus.CONNECTED.value, "connected_at": datetime.now(UTC)}
-            ) or record
+            )
+            return sanitize_handoff_record(updated or record)
         record = await self._persistence.connect_handoff(handoff_id, operator_id)
         if record is None:
             raise KeyError("Handoff không ở trạng thái accepted")
-        return record
+        return sanitize_handoff_record(record)
 
     async def resolve_handoff_durable(self, handoff_id: str, operator_id: str) -> dict[str, object]:
         if get_settings().app_env == "test":
             record = self._repository.get(handoff_id)
             if record is None or record.get("operator_id") != operator_id:
                 raise KeyError("Không có quyền kết thúc handoff")
-            return self._repository.update(
+            updated = self._repository.update(
                 handoff_id, {"status": HandoffStatus.RESOLVED.value, "resolved_at": datetime.now(UTC)}
-            ) or record
+            )
+            return sanitize_handoff_record(updated or record)
         record = await self._persistence.resolve_handoff(handoff_id, operator_id)
         if record is None:
             raise KeyError("Không có quyền kết thúc handoff")
-        return record
+        return sanitize_handoff_record(record)
 
     def create_handoff(self, payload: dict[str, object]) -> dict[str, object]:
+        payload = sanitize_handoff_payload(payload)
         record = {
             "handoff_id": f"handoff_{uuid4().hex[:8]}",
             "session_id": payload.get("session_id", ""),
@@ -101,11 +109,11 @@ class HandoffService:
             "room_name": payload.get("room_name"),
             "context_snapshot": payload.get("context_snapshot"),
         }
-        return self._repository.create(record)
+        return sanitize_handoff_record(self._repository.create(record))
 
     def list_handoffs(self, status: str) -> list[dict[str, object]]:
         normalized = HandoffStatus(status).value
-        return self._repository.list_by_status(normalized)
+        return [sanitize_handoff_record(record) for record in self._repository.list_by_status(normalized)]
 
     def accept_handoff(self, handoff_id: str, operator_id: str | None = None) -> dict[str, object]:
         accepted_at = datetime.now(UTC)

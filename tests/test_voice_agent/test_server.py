@@ -314,3 +314,35 @@ async def test_state_restore_timeout_falls_back_without_blocking_voice_session()
     assert userdata.persistence_enabled is False
     assert userdata.last_failure is not None
     assert userdata.last_failure.code == "SESSION_RECOVERY_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_text_input_callback_forces_interrupt_before_generating_reply() -> None:
+    from types import SimpleNamespace
+
+    from src.voice_agent.server import _handle_text_input
+
+    class _TurnClaim:
+        async def __aenter__(self) -> None:
+            return None
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+    class _Session:
+        def __init__(self) -> None:
+            self.interrupt_force: bool | None = None
+            self.generated_text: str | None = None
+
+        def _claim_user_turn(self) -> _TurnClaim:
+            return _TurnClaim()
+
+        async def interrupt(self, *, force: bool = False) -> None:
+            self.interrupt_force = force
+
+        def generate_reply(self, *, user_input: str) -> None:
+            self.generated_text = user_input
+
+    session = _Session()
+
+    await _handle_text_input(session, SimpleNamespace(text="Kết nối tôi với người hỗ trợ"))
