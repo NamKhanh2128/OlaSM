@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -162,6 +163,15 @@ async def test_agent_rag_tool_returns_versioned_policy_citation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_agent_rag_tool_explains_when_policy_is_not_verified() -> None:
+    result = await AloSMAgent().search_knowledge("Chính sách hoàn tiền 100% khi trời mưa")
+
+    assert '"found": false' in result
+    assert "chưa tìm thấy thông tin chính sách đã được xác minh" in result
+    assert "tổng đài viên" in result
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("question", "citation"),
     [
@@ -202,6 +212,29 @@ async def test_parent_booking_status_never_invents_a_booking_id() -> None:
     assert '"created": false' in status
     assert '"booking_id": null' in status
     assert "Chuyến chưa được tạo" in status
+
+
+@pytest.mark.asyncio
+async def test_repeated_booking_request_does_not_reenter_completed_booking() -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    userdata.booking_draft.booking = booking_module.BookingResult(
+        booking_id="book-existing",
+        status="SEARCHING_DRIVER",
+        estimated_fare=100_000,
+        currency="VND",
+        eta_minutes=15,
+    )
+    agent = AloSMAgent(session_data=userdata)
+
+    result = await AloSMAgent.start_booking._func(agent)
+
+    assert "book-existing" in result
+    assert "đã được đặt thành công" in result
 
 
 @pytest.mark.asyncio
@@ -305,11 +338,9 @@ async def test_booking_task_uses_native_function_tools() -> None:
     tool_names = {tool.id for tool in task.tools}
 
     assert tool_names == {
-        "cancel_booking_flow",
         "confirm_booking",
         "create_booking",
         "estimate_fare",
-        "request_handoff",
         "search_place",
         "select_place",
         "set_vehicle_type",
@@ -351,13 +382,91 @@ async def test_estimate_fare_atomically_starts_confirmation(
         return None
 
     monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
-    context = SimpleNamespace(userdata=userdata, session=object())
+    context = SimpleNamespace(userdata=userdata, session=object(), disallow_interruptions=lambda: None)
 
     result = await BookingTask.estimate_fare._func(task, context)
 
     assert draft.confirmation_status == "awaiting"
     assert draft.confirmation_fingerprint == draft.quote.fingerprint
     assert "Hãy hỏi xác nhận rõ ràng" in result
+
+
+@pytest.mark.asyncio
+async def test_duplicate_confirmation_is_idempotent_before_booking_creation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    pickup = PlaceCandidate(
+        place_id="pickup",
+        display_name="Cổng chính VinUni",
+        address="Đường San Hô, Gia Lâm, Hà Nội",
+        provider="test",
+    )
+    destination = PlaceCandidate(
+        place_id="destination",
+        display_name="Bưu điện Hà Nội",
+        address="Đinh Tiên Hoàng, Hoàn Kiếm, Hà Nội",
+        provider="test",
+    )
+    draft = userdata.booking_draft
+    draft.set_candidates("pickup", "VinUni", [pickup])
+    draft.select_place("pickup", pickup.place_id)
+    draft.set_candidates("destination", "Bưu điện Hà Nội", [destination])
+    draft.select_place("destination", destination.place_id)
+    draft.set_vehicle_type("CAR_4")
+    draft.set_quote(
+        QuoteSnapshot(
+            quote_id="quote-regression",
+            pickup_place_id=pickup.place_id,
+            destination_place_id=destination.place_id,
+            vehicle_type="CAR_4",
+            fare_amount=95_180,
+            currency="VND",
+            distance_km=20.0,
+            eta_minutes=16,
+            expires_at="2099-01-01T00:00:00+00:00",
+            estimated=True,
+        )
+    )
+    draft.request_confirmation()
+
+    async def _publish(_: object) -> None:
+        return None
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
+    chat_ctx = llm.ChatContext.empty()
+    chat_ctx.add_message(role="user", content="Tôi xác nhận đặt chuyến này.")
+    task = BookingTask(
+        chat_ctx=chat_ctx,
+        state_store=EphemeralVoiceStateStore(),
+    )
+    context = SimpleNamespace(
+        userdata=userdata,
+        session=object(),
+        disallow_interruptions=lambda: None,
+    )
+
+    first = await BookingTask.confirm_booking._func(task, context)
+
+    second_chat_ctx = llm.ChatContext.empty()
+    second_chat_ctx.add_message(role="user", content="Tôi xác nhận lại, cứ đặt chuyến này nhé.")
+    second_task = BookingTask(
+        chat_ctx=second_chat_ctx,
+        state_store=EphemeralVoiceStateStore(),
+    )
+    second = await BookingTask.confirm_booking._func(second_task, context)
+
+    assert first == "Khách đã xác nhận rõ ràng; có thể gọi create_booking."
+    assert second == first
+    assert draft.confirmation_status == "confirmed"
+    assert draft.quote is not None
+    assert draft.quote.quote_id == "quote-regression"
+    assert draft.booking is None
 
 
 @pytest.mark.asyncio
@@ -413,9 +522,18 @@ async def test_location_change_refreshes_existing_quote_and_interrupts_stale_pre
     async def _publish(_: object) -> None:
         return None
 
+    @asynccontextmanager
+    async def _filler(*_: object, **__: object):
+        yield
+
     monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
     task = BookingTask(quotes=_RequoteService(), state_store=EphemeralVoiceStateStore())
-    context = SimpleNamespace(userdata=userdata, session=_Session())
+    context = SimpleNamespace(
+        userdata=userdata,
+        session=_Session(),
+        disallow_interruptions=lambda: None,
+        with_filler=_filler,
+    )
 
     await BookingTask.search_place._func(
         task,
@@ -431,11 +549,7 @@ async def test_location_change_refreshes_existing_quote_and_interrupts_stale_pre
 
 
 def test_terminal_task_tools_follow_livekit_complete_without_narrating_inside_task() -> None:
-    for tool in (
-        BookingTask.create_booking,
-        BookingTask.request_handoff,
-        BookingTask.cancel_booking_flow,
-    ):
+    for tool in (BookingTask.create_booking,):
         assert tool.__annotations__["return"] in {None, type(None), "None"}
 
 
@@ -444,6 +558,12 @@ def test_explicit_confirmation_rejects_negative_or_ambiguous_text() -> None:
     assert is_explicit_confirmation("Đúng rồi, đặt xe đi") is True
     assert is_explicit_confirmation("Không đúng, sửa điểm đến") is False
     assert is_explicit_confirmation("Ừ") is False
+
+
+def test_booking_abandonment_requires_an_explicit_request() -> None:
+    assert booking_module.is_booking_abandonment_request("Thôi không đặt nữa") is True
+    assert booking_module.is_booking_abandonment_request("Đổi xe đi") is False
+    assert booking_module.is_booking_abandonment_request("Ừ") is False
 
 
 def test_native_transcript_confidence_only_blocks_low_confidence_audio() -> None:
@@ -478,7 +598,7 @@ async def test_known_place_candidates_bypass_low_confidence_transcript_guard(
         return None
 
     monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
-    context = SimpleNamespace(userdata=userdata, session=object())
+    context = SimpleNamespace(userdata=userdata, session=object(), disallow_interruptions=lambda: None)
 
     result = await BookingTask.search_place._func(task, context, target="pickup", query="VinUni")
 

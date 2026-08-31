@@ -1,0 +1,25 @@
+schema_version: "1.0.0"
+policy_version: "2026-08-30"
+status: "APPROVED"
+emergency:
+  reason_code: "EMERGENCY"
+  risk_level: "CRITICAL"
+  priority: 100
+  severity: "CRITICAL"
+  queue: "EMERGENCY_OPERATOR"
+  requires_immediate_transfer: true
+  signals:
+    - "cấp cứu"
+    - "nguy hiểm"
+    - "bất tỉnh"
+    - "không thở"
+    - "ngừng thở"
+    - "chảy máu"
+    - "tai nạn"
+    - "va chạm"
+    - "đột quỵ"
+    - "co giật"
+    - "đau ngực"
+    - "bị đánh"
+    - "đe dọa"
+  guidance: "Nếu có nguy hiểm đến tính mạng, hãy gọi 115 ngay. Tôi đang ưu tiên kết nối bạn với hỗ trợ khẩn cấp."

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import unicodedata
 from typing import Protocol
 
 from src.backend.services.handoff_service import HandoffService
+from src.voice_agent.safety import SafetyClassifier, normalize_user_text
 from src.voice_agent.session_data import AloSMSessionData
 
 
@@ -14,14 +14,17 @@ class DurableHandoffService(Protocol):
 
 
 class HandoffToolsService:
-    def __init__(self, service: DurableHandoffService | None = None) -> None:
+    def __init__(
+        self,
+        service: DurableHandoffService | None = None,
+        safety_classifier: SafetyClassifier | None = None,
+    ) -> None:
         self._service = service or HandoffService()
+        self._safety_classifier = safety_classifier or SafetyClassifier()
 
     @staticmethod
     def is_handoff_request(text: str) -> bool:
-        folded = unicodedata.normalize("NFKD", text.casefold())
-        normalized = "".join(char for char in folded if not unicodedata.combining(char))
-        normalized = " ".join(normalized.replace("đ", "d").split())
+        normalized = normalize_user_text(text)
         return any(
             phrase in normalized
             for phrase in (
@@ -36,12 +39,17 @@ class HandoffToolsService:
             )
         )
 
-    @staticmethod
-    def _classify(reason: str) -> tuple[str, int, str, str, bool]:
-        folded = unicodedata.normalize("NFKD", reason.casefold())
-        text = "".join(char for char in folded if not unicodedata.combining(char))
-        if any(token in text for token in ("tai nan", "nguy hiem", "de doa", "cap cuu", "bi danh")):
-            return "EMERGENCY", 100, "CRITICAL", "EMERGENCY_OPERATOR", True
+    def _classify(self, reason: str) -> tuple[str, int, str, str, bool]:
+        safety = self._safety_classifier.assess(reason)
+        if safety.is_emergency:
+            return (
+                safety.reason_code,
+                safety.priority,
+                safety.severity,
+                safety.queue,
+                safety.requires_immediate_transfer,
+            )
+        text = normalize_user_text(reason)
         if any(token in text for token in ("tai xe khong cho", "tai xe khong den", "khong nhan chuyen", "bo khach")):
             return "ACTIVE_TRIP_NO_SHOW", 90, "HIGH", "ACTIVE_TRIP_SUPPORT", True
         if any(token in text for token in ("tru tien sai", "thanh toan", "hoan tien", "khieu nai")):

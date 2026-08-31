@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { notifyBookingCreated } from "@/app/events";
 import { getCurrentUser } from "@/features/auth/api";
 import { redirectToLoginIfUnauthorized } from "@/features/auth/sessionGuard";
 import { clearSessionId, getAccessToken, getSessionId, getUserName, saveAuthSession } from "@/features/auth/storage";
@@ -118,22 +119,27 @@ export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = (
   );
 
   const sendText = useCallback(
-    async (value: string) => {
+    async (value: string): Promise<boolean> => {
       const message = value.trim();
-      if (!message || !sessionId || sessionEnded || statusRef.current === "processing") return;
+      if (!message || !sessionId || sessionEnded || statusRef.current === "processing") return false;
       setMessages((items) => [...items, { id: `user-${Date.now()}`, role: "user", text: message }]);
       setStatus("processing");
       setNotice(null);
       try {
         const result = await sendRideMessage(sessionId, message, "TEXT");
         setMessages((items) => [...items, { id: result.message_id, role: "assistant", text: result.message }]);
+        if (result.booking?.booking_id && result.state?.booking_lifecycle_status === "SUCCESS") {
+          notifyBookingCreated(result.booking.booking_id);
+        }
         applyTurnResult(result);
         handleEndOfTurnActions(result);
         setStatus("idle");
+        return true;
       } catch (error) {
         setStatus("error");
-        if (redirectToLoginIfUnauthorized(error, navigate)) return;
+        if (redirectToLoginIfUnauthorized(error, navigate)) return false;
         setNotice(error instanceof Error ? error.message : "Không thể gửi tin nhắn. Vui lòng thử lại.");
+        return false;
       }
     },
     [sessionId, sessionEnded, applyTurnResult, handleEndOfTurnActions, navigate],

@@ -190,23 +190,24 @@ Một tính năng chỉ được coi là **hoàn thành** khi đáp ứng đủ 
 
 | Tính năng | Trạng thái | Ghi chú |
 |-----------|------------|---------|
-| US-01 Đặt xe happy path | ✅ DEMO | Luồng đầy đủ, dùng dữ liệu fake có nhãn |
-| US-02 Chọn địa điểm | ✅ DEMO | Tìm trong bộ dữ liệu mẫu |
-| US-03 ASR tin cậy thấp | ✅ IMPLEMENTED | Phát hiện và yêu cầu nói lại |
-| US-04 Sửa thông tin | ✅ IMPLEMENTED | Tự động xóa giá cũ khi sửa |
-| US-05 Chuyển người thật | ✅ DEMO | Lifecycle đủ, chuyển điện thoại thật là bước tiếp theo |
-| US-06 Khôi phục phiên | ✅ IMPLEMENTED | Đọc lại trạng thái khi gọi lại |
-| Maps API thật | ⏳ EXTERNAL_BLOCKED | Cần chọn provider và API key — xem `mustdo.md` |
-| Giá/ETA thật | ⏳ EXTERNAL_BLOCKED | Cần dữ liệu nghiệp vụ từ Product/Finance |
-| Chuyển điện thoại thật | ⏳ RELEASE_GATED | Cần hạ tầng telephony/SIP |
+| US-01 Đặt xe happy path | ✅ STAGING_ONLY | LiveKit web voice, local catalog/pricing và booking demo/idempotent |
+| US-02 Chọn địa điểm | ✅ DEMO | Gazetteer/mock catalog; chưa phải Places production |
+| US-03 ASR tin cậy thấp | ✅ IMPLEMENTED | Có guard cho trường quan trọng và yêu cầu nói lại/text fallback |
+| US-04 Sửa thông tin | ✅ IMPLEMENTED | Invalidate quote và tính lại theo state contract |
+| US-05 Chuyển người thật | ✅ STAGING_ONLY | Context snapshot và cùng LiveKit Room; chưa có telephony/queue SLA |
+| US-06 Khôi phục phiên | ✅ IMPLEMENTED | State restore/persist có revision; cần tiếp tục đánh giá reconnect |
+| FAQ/policy có nguồn | ✅ STAGING_ONLY | Approved local catalog, version/source, read-only search |
+| TTS primary/fallback | ✅ STAGING_ONLY | Gemini `Kore`, Chirp 3 HD fallback; cần human listening/device matrix |
+| Payment/refund/complaint/driver/emergency | ⏳ EXTERNAL_BLOCKED / RELEASE_GATED | Chưa có gateway, CRM, driver role, emergency record/dispatch hoặc 112 |
 
 ---
 
 ## Ghi chú cho buổi demo
 
-1. **Dữ liệu địa điểm:** Dùng bộ mẫu có sẵn — tên địa điểm thật, tọa độ thật, nhưng là dữ liệu tĩnh.
-2. **Giá và ETA:** Được tính theo công thức đơn giản để demo — gắn nhãn ước tính, không phải giá thật từ nhà cung cấp.
-3. **Booking:** Tạo được mã booking, lưu trong phiên — chưa kết nối hệ thống dispatch thật.
-4. **Giọng nói:** Hoạt động qua trình duyệt web — chưa phải số điện thoại thật.
+1. **Kênh voice:** Dùng LiveKit Room trên trình duyệt — chưa phải số điện thoại/SIP thật.
+2. **Dữ liệu địa điểm:** Dùng bộ mẫu có sẵn — tên địa điểm thật, tọa độ thật, nhưng là dữ liệu tĩnh.
+3. **Giá và ETA:** Được tính theo công thức đơn giản để demo — gắn nhãn ước tính, không phải giá thật từ nhà cung cấp.
+4. **Booking:** Tạo được mã booking, lưu trong phiên — chưa kết nối hệ thống dispatch thật.
+5. **TTS:** Gemini `Kore` là primary; Chirp 3 HD có thể được dùng khi primary lỗi/timeout, nên voice có thể thay đổi trong staging.
 
 Tất cả giới hạn trên đều được ghi rõ trong code và tài liệu — không có phần nào giả vờ là production mà chưa đủ điều kiện.

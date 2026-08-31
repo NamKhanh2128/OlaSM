@@ -1,0 +1,62 @@
+name: p160-staging
+
+services:
+  backend:
+    image: ghcr.io/ai20k-build-phase-cohort-3/p-160:development
+    restart: unless-stopped
+    env_file:
+      - /opt/p160-staging/.env.production
+    volumes:
+      - app-data:/app/data
+      - /opt/p160-staging/google-service-account.json:/run/secrets/google-service-account.json:ro
+    expose:
+      - "8000"
+    user: root
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  voice-worker:
+    image: ghcr.io/ai20k-build-phase-cohort-3/p-160:development
+    command: ["python", "-m", "src.voice_agent.server", "dev"]
+    restart: unless-stopped
+    env_file:
+      - /opt/p160-staging/.env.production
+    volumes:
+      - app-data:/app/data
+      - /opt/p160-staging/google-service-account.json:/run/secrets/google-service-account.json:ro
+    healthcheck:
+      disable: true
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  frontend:
+    image: ghcr.io/ai20k-build-phase-cohort-3/p-160:frontend-development
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend:
+        condition: service_started
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:

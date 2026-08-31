@@ -1,4 +1,4 @@
-import { createContext } from "react";
+import { createContext, type Dispatch, type SetStateAction } from "react";
 import type { BookingLifecycleStatus, BookingProgress } from "@/features/ride/api";
 import type { CompletedBooking } from "@/features/ai-assistant/components/BookingSuccessPanel";
 
@@ -32,7 +32,7 @@ export interface VoiceAssistantValue {
   // Mở popup và điền bản nháp có thể sửa; không tự gửi CTA thành lời của khách.
   openWithPrefill: (prefill: string) => void;
   draft: string;
-  setDraft: (value: string) => void;
+  setDraft: Dispatch<SetStateAction<string>>;
 
   // Hội thoại
   status: AssistantStatus;
@@ -40,7 +40,7 @@ export interface VoiceAssistantValue {
   notice: string | null;
   sessionId: string | null;
   sessionEnded: boolean;
-  sendText: (value: string) => Promise<void>;
+  sendText: (value: string) => Promise<boolean>;
   endSession: () => Promise<void>;
   newSession: () => Promise<boolean>;
   resetConversation: () => Promise<void>;

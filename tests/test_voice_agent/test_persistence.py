@@ -28,11 +28,15 @@ class FakePersistenceRepository:
         state: Mapping[str, object],
         *,
         expected_revision: int,
+        terminal_updates: Mapping[str, object] | None = None,
     ) -> dict[str, object] | None:
         if expected_revision != self.revision:
             return None
         self.state = dict(state)
         self.revision += 1
+        if terminal_updates:
+            self.session_updates.append(dict(terminal_updates))
+            self.status = str(terminal_updates.get("status") or self.status)
         return {"session_id": session_id, "revision": self.revision}
 
     async def update_session(

@@ -1,6 +1,6 @@
 # Journal — Team P-160 (AloSM Voice AI)
 
-> Nhật ký kỹ thuật thực tế của project, tổng hợp từ commit, branch, PR, test và evaluation artifact. Worklog ghi “ai làm gì”; journal ghi “vì sao làm, kết quả, vấn đề và bài học”.
+> Nhật ký kỹ thuật thực tế của project, tổng hợp từ commit, branch, PR, test và evaluation artifact. Cập nhật đến **2026-08-31**. **Trạng thái tài liệu: APPROVED.** Worklog ghi “ai làm gì”; journal ghi “vì sao làm, kết quả, vấn đề và bài học”.
 
 ---
 
@@ -539,7 +539,7 @@ Sau các lần merge, tài liệu cũ không còn phản ánh runtime hiện t�
 
 Team đã đi từ product baseline đến web assistant, Core Agent, booking workflow, grounded FAQ, human handoff, backend persistence và LiveKit-native voice runtime. Người dùng hiện có thể đi qua text/voice booking flow, sửa thông tin, nhận quote/confirmation, tra cứu/hủy chuyến và chuyển sang operator theo contract.
 
-Các phần vẫn đang ở trạng thái demo/staging hoặc cần release gate gồm pricing/maps/fleet realtime, production database operations, payment/refund, CRM, emergency flow, browser/device matrix, load/soak, CI và evaluation regression.
+Các phần vẫn đang ở trạng thái demo/staging hoặc cần release gate gồm pricing/maps/fleet realtime production, production database operations, payment/refund, CRM, browser/device matrix, load/soak, LiveKit provider thật và operator transfer. Emergency safety, mock fleet, staging deployment và các regression chính đã có implementation/test tương ứng nhưng chưa tự động trở thành production sign-off.
 
 Worklog ghi lịch sử task/output theo thành viên; journal này ghi reasoning, kết quả, evidence và các vấn đề cần giải quyết tiếp.
 
@@ -578,3 +578,129 @@ không đồng bộ với LiveKit baseline hiện tại.
 Live provider, database migration production, browser/device matrix và operator
 transfer vẫn được đánh dấu release-gated; không gọi chúng là production-ready khi
 chưa có external evidence.
+
+---
+
+## 2026-08-28 — CI, concurrency và booking supervision
+
+### Người tham gia
+
+- @PivePipiopia — commits ad51559, 807b248, 2f00eb6 và b4e650f.
+- @DanielK345 — commits edcfef4, 54fa266 và b4f2fd0.
+- Team — PR #15.
+
+### Bối cảnh và quyết định
+
+Sau khi runtime LiveKit được hợp nhất, team cần kiểm tra khả năng chạy đồng thời và làm rõ ranh giới supervision của booking task. CI cũng phải chạy trên runner phù hợp với môi trường cohort thay vì chỉ phụ thuộc vào máy local.
+
+### Kết quả
+
+- Thêm offline concurrent workflow load test và test cho chính load-test script.
+- Refactor supervision boundary của `BookingTask` để task chịu trách nhiệm rõ hơn về lifecycle, timeout và kết quả booking.
+- Bổ sung tài liệu tiếng Việt cho LiveKit booking tools và hướng dẫn deploy Render.
+- Cập nhật CI dùng cohort3 self-hosted runner; xử lý các lỗi merge giữa agentic-ai và backend-data.
+
+### Kiểm chứng và vấn đề
+
+Các test boundary cho booking, LiveKit và concurrency đã được thêm vào repository. Load test offline không thay thế được soak test trên provider và hạ tầng staging thật; CI/deployment vẫn phụ thuộc runner, secrets và quyền cloud.
+
+### Bước tiếp theo
+
+Harden voice turn, bổ sung staging deployment tự động và kiểm tra các lỗi review còn lại trong booking/persistence.
+
+---
+
+## 2026-08-29 — Voice context, reset session và staging deployment
+
+### Người tham gia
+
+- @DanielK345 — commits b13a2e9, e9f249e, 88a3371, 286a6eb, 98b0d6d, a7d0e1d, f297cae, 6ae45f4, 03684af, 81f762a và 8605bd5.
+- @PivePipiopia — commits c9fbda0, 79bd445, e0dfea6, 5c2993c, fdeb950, a0f88bf, 7e96692, 9d1f136, a2e6161, 5f0906d, 099fb11, be92200 và 8baac2a.
+- @Nguyen Hong Yen — commits 9c16e65, a37c1f9, e4c8d6f, 0424d5c và f4f9de1.
+
+### Bối cảnh và quyết định
+
+Voice turn vẫn có các failure mode khi người dùng nói filler, bị interruption hoặc transcript rewrite timeout trong lúc booking. Đồng thời demo cần hiển thị trạng thái booking/driver, reset voice memory đúng scope và có đường deploy staging có thể tái chạy.
+
+### Kết quả
+
+- Ghép context hội thoại trước transcript rewrite, bỏ qua filler không mang nghĩa, chốt một transcript cho mỗi utterance và giữ booking slots khi rewrite timeout.
+- Thêm reset conversation memory bằng Redis TTL cache; reset chat không làm mất trạng thái đăng nhập.
+- Hiển thị booking state và matched mock driver details trong UI; bổ sung idempotency và refresh activity history sau booking.
+- Cho unknown policy query fail safely thay vì suy đoán câu trả lời.
+- Bổ sung workflow staging deploy qua GHCR/SSM, self-hosted runner, HTTPS bằng Caddy và mount Google credentials; token GHCR được lấy từ secret/SSM theo flow cuối cùng.
+
+### Kiểm chứng và vấn đề
+
+Regression tests cho voice rewrite, booking state/task, persistence, policy safety, session reset và mock driver đã được thêm/cập nhật. Staging pipeline đã có build, push, deploy và health check, nhưng kết quả deploy thực tế vẫn phụ thuộc secrets, AWS instance, LiveKit và provider credentials.
+
+### Bước tiếp theo
+
+Đảm bảo duplicate confirmation không tạo booking thứ hai và đưa emergency safety gate lên trước LLM.
+
+---
+
+## 2026-08-30 — Idempotent confirmation và emergency safety
+
+### Người tham gia
+
+- @PivePipiopia — commits 79ef6d9, bdcbd00 và 75a2c79.
+- @Nguyen Hong Yen — commit 4b628cc.
+
+### Bối cảnh và quyết định
+
+Nút xác nhận hoặc retry mạng có thể gửi lại cùng một yêu cầu tạo booking. Ngoài ra, tín hiệu nguy hiểm không được chờ LLM phân loại vì có thể làm chậm hoặc làm sai hướng xử lý. Team tách hai yêu cầu này thành idempotency contract và policy safety được version hóa.
+
+### Kết quả
+
+- Duplicate booking confirmation được xử lý idempotently để cùng một intent không tạo chuyến thứ hai.
+- Thêm `data/safety/emergency_policy.yaml` với schema/version, tín hiệu tiếng Việt, mức `CRITICAL`, queue `EMERGENCY_OPERATOR` và hướng dẫn gọi 115.
+- Thêm safety classifier chuẩn hóa tiếng Việt và emergency handoff metadata cho voice runtime.
+- Bổ sung test cho duplicate confirmation và emergency safety.
+
+### Kiểm chứng và vấn đề
+
+Các regression test liên quan booking task và emergency safety đã pass trong full suite hiện tại. Safety policy và handoff logic đã có contract local; việc kết nối operator/emergency service thật và kiểm chứng vận hành vẫn là release gate.
+
+### Bước tiếp theo
+
+Đảm bảo emergency signal được chặn trước LLM ở mọi voice turn và ghi lại giới hạn của mock location trong staging.
+
+---
+
+## 2026-08-31 — Issue #34 và safety gate trước LLM
+
+### Người tham gia
+
+- @Nguyen Hong Yen — commits 2501c0b và 38ee88c.
+- @PivePipiopia — commit 613b94d.
+- Team — PR #44.
+
+### Bối cảnh và quyết định
+
+Issue #34 báo cáo booking không phản hồi khi người dùng đổi đồng thời pickup, destination và loại xe sau khi đã có quote. Việc tái hiện trên staging còn phụ thuộc catalog địa điểm mock, nên cần ghi rõ danh sách canonical locations và quy trình test. Song song đó, emergency signal phải được xử lý trước khi khởi động LLM.
+
+### Kết quả
+
+- Thêm [issue-34-research](verification/issue-34-research.md) với code path, reducer sequence, giới hạn mock locations và hướng dẫn tái hiện trên staging.
+- Xác nhận flow correction giữ pickup/destination/vehicle mới, xóa resolved locations cũ, invalidate quote cũ và estimate lại quote mới.
+- Sửa thứ tự voice runtime để safety assessment và emergency handoff xảy ra trước LLM; emergency response có priority/queue/guidance rõ ràng.
+- PR #44 được merge; tài liệu issue và evidence được lưu trong repository.
+
+### Kiểm chứng và vấn đề
+
+- Full pytest hiện tại: `476 passed, 3 skipped`.
+- Issue-shaped/core booking tests: `35 passed`; nhóm agent và booking-state: `254 passed`; nhóm voice booking/persistence/server: `40 passed` theo evidence issue #34.
+- Local và staging xác nhận thay đổi đồng thời hoạt động khi dùng đúng canonical mock locations. Chưa có dedicated end-to-end regression cho một utterance đổi cả ba field; live provider, operator transfer và production database vẫn release-gated.
+
+### Bước tiếp theo
+
+Bổ sung test end-to-end cho simultaneous correction, chạy browser/device và reconnect matrix, rồi cập nhật release readiness bằng external evidence trước khi kết luận production-ready.
+
+---
+
+## Tổng kết hiện tại — 2026-08-31
+
+Đến thời điểm hiện tại, team đã có product baseline, web assistant, Core Agent, booking workflow, grounded FAQ, human handoff, durable persistence và LiveKit-native voice runtime. Booking đã có quote/confirmation, correction và duplicate-confirmation idempotency; voice có transcript rewrite/recovery, reset memory và emergency safety gate trước LLM. Staging có mock locations/fleet, CI build-publish-deploy và health-check path.
+
+Evidence local hiện tại là `476 passed, 3 skipped`. Tuy vậy, pricing/maps/fleet realtime production, production database operations, payment/refund, CRM, browser/device matrix, load/soak, live provider reliability và operator transfer thật vẫn cần release gate/external evidence. Journal giữ reasoning, kết quả và giới hạn; worklog giữ task/output theo thành viên.
