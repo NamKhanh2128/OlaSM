@@ -15,6 +15,7 @@ from src.voice_agent.state_sync import publish_booking_state
 from src.voice_agent.tasks import BookingTask
 from src.voice_agent.tools.bookings import BookingToolsService
 from src.voice_agent.tools.handoffs import HandoffToolsService
+from src.voice_agent.transcript_rewrite import TranscriptRewriter, rewrite_livekit_user_turn
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +33,14 @@ class AloSMAgent(Agent):
         bookings: BookingToolsService | None = None,
         handoffs: HandoffToolsService | None = None,
         safety_classifier: SafetyClassifier | None = None,
+        transcript_rewriter: TranscriptRewriter | None = None,
     ) -> None:
         self._state_store = state_store or EphemeralVoiceStateStore()
         self._session_data = session_data
         self._safety_classifier = safety_classifier or SafetyClassifier()
         self._handoffs = handoffs or HandoffToolsService(safety_classifier=self._safety_classifier)
         self._bookings = bookings or BookingToolsService()
+        self._transcript_rewriter = transcript_rewriter
         self._handoff_wait_started = False
         # These catalogs are local, validated and cached.  They are injected so
         # the LiveKit process can preload them once instead of reading files on
@@ -99,7 +102,12 @@ class AloSMAgent(Agent):
         # excluding the parent instructions, so the focused task prompt remains
         # small and authoritative.
         task_context = self.chat_ctx.copy(exclude_instructions=True)
-        outcome = await BookingTask(chat_ctx=task_context, state_store=self._state_store)
+        outcome = await BookingTask(
+            chat_ctx=task_context,
+            state_store=self._state_store,
+            session_data=self._session_data,
+            transcript_rewriter=self._transcript_rewriter,
+        )
         if outcome.status == "needs_handoff":
             handoff_result = await self._create_handoff(outcome.reason or outcome.message)
             if self._handoff_is_active(handoff_result):
@@ -189,6 +197,14 @@ class AloSMAgent(Agent):
             )
 
     async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
+        if self._session_data is not None:
+            await rewrite_livekit_user_turn(
+                rewriter=self._transcript_rewriter,
+                userdata=self._session_data,
+                turn_ctx=turn_ctx,
+                new_message=new_message,
+            )
+
         # Stop this turn before the LLM can add a second AI reply after a handoff.
         current = self._session_data.handoff if self._session_data is not None else None
         if current is not None and current.status in {"pending", "accepted", "connected"}:

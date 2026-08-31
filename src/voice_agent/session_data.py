@@ -117,6 +117,7 @@ class BookingDraft(BaseModel):
     destination_query: str | None = None
     destination: PlaceCandidate | None = None
     destination_candidates: list[PlaceCandidate] = Field(default_factory=list)
+    pending_candidate_target: BookingTarget | None = None
     vehicle_type: VehicleType | None = None
     quote: QuoteSnapshot | None = None
     confirmation_status: ConfirmationStatus = "not_requested"
@@ -146,6 +147,7 @@ class BookingDraft(BaseModel):
             self.destination_query = query
             self.destination = None
             self.destination_candidates = candidates
+        self.pending_candidate_target = target if candidates else None
         self._invalidate_quote_and_confirmation()
         self.revision += 1
 
@@ -162,7 +164,34 @@ class BookingDraft(BaseModel):
                 self.destination = selected
             self._invalidate_quote_and_confirmation()
             self.revision += 1
+        if self.pending_candidate_target == target:
+            self.pending_candidate_target = None
         return selected
+
+    def pending_place_clarification(self) -> dict[str, object] | None:
+        """Expose only display-safe candidate data for the current UI prompt."""
+
+        target = self.pending_candidate_target
+        if target is None:
+            return None
+        candidates = self.pickup_candidates if target == "pickup" else self.destination_candidates
+        selected = self.pickup if target == "pickup" else self.destination
+        query = self.pickup_query if target == "pickup" else self.destination_query
+        if selected is not None or not candidates:
+            return None
+        return {
+            "clarification_id": f"{target}:{self.revision}",
+            "target": target,
+            "query": query,
+            "options": [
+                {
+                    "index": index,
+                    "display_name": candidate.display_name,
+                    "address": candidate.address,
+                }
+                for index, candidate in enumerate(candidates, start=1)
+            ],
+        }
 
     def set_vehicle_type(self, vehicle_type: VehicleType) -> None:
         if self.vehicle_type != vehicle_type:
@@ -251,6 +280,7 @@ class BookingDraft(BaseModel):
             "confirmation_status": self.confirmation_status,
             "cancellation_confirmation_pending": self.cancellation_confirmation_booking_id is not None,
             "booking": self.booking.model_dump() if self.booking else None,
+            "pending_place_clarification": self.pending_place_clarification(),
         }
 
     def conversation_summary(self) -> str:
@@ -295,6 +325,7 @@ class AloSMSessionData(BaseModel):
     consent_granted: bool = True
     recording_enabled: bool = False
     booking_draft: BookingDraft = Field(default_factory=BookingDraft)
+    rewritten_item_ids: list[str] = Field(default_factory=list, exclude=True, repr=False)
     last_asr_confidence: float | None = None
     handoff_requested: bool = False
     critical_confidence_threshold: float = Field(default=0.65, ge=0, le=1)
@@ -304,6 +335,16 @@ class AloSMSessionData(BaseModel):
     last_failure: VoiceFailure | None = None
     handoff: HandoffState | None = None
     lifecycle_status: SessionLifecycle = "active"
+
+    def claim_transcript_rewrite(self, item_id: str, *, limit: int = 128) -> bool:
+        """Claim one finalized LiveKit item so parent/task hooks cannot rewrite twice."""
+
+        normalized = item_id.strip()
+        if not normalized or normalized in self.rewritten_item_ids:
+            return False
+        self.rewritten_item_ids.append(normalized)
+        self.rewritten_item_ids = self.rewritten_item_ids[-max(limit, 1) :]
+        return True
 
     def durable_state(self) -> dict[str, object]:
         """Return only resumable business state; never transcript or raw audio."""

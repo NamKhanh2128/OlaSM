@@ -1,3 +1,4 @@
+import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
@@ -11,6 +12,7 @@ from src.voice_agent.tasks import booking as booking_module
 from src.voice_agent.tasks.booking import (
     BookingTask,
     can_auto_select_place,
+    grounded_ordinal_selection,
     is_explicit_confirmation,
     requires_location_clarification,
 )
@@ -601,11 +603,83 @@ async def test_known_place_candidates_bypass_low_confidence_transcript_guard(
     context = SimpleNamespace(userdata=userdata, session=object(), disallow_interruptions=lambda: None)
 
     result = await BookingTask.search_place._func(task, context, target="pickup", query="VinUni")
+    payload = json.loads(result)
 
     assert "ASR_LOW_CONFIDENCE" not in result
     assert "Cổng chính VinUni" in result
     assert userdata.booking_draft.pickup is None
     assert len(userdata.booking_draft.pickup_candidates) == 3
+    assert payload["spoken_prompt"] == (
+        "Đã tìm thấy 3 địa điểm liên quan đến VinUni trong dữ liệu. "
+        "Vui lòng chọn theo số thứ tự được liệt kê bên dưới."
+    )
+    assert "không đọc tên hay địa chỉ" in payload["instruction"]
+
+
+def test_short_ordinal_selects_from_active_candidate_list() -> None:
+    draft = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    ).booking_draft
+    candidates = PlaceToolsService().search("VinUni")
+    draft.set_candidates("pickup", "VinUni", candidates)
+
+    grounded = grounded_ordinal_selection(draft, "Tôi chọn số 2")
+
+    assert grounded == ("pickup", candidates[1])
+    assert grounded_ordinal_selection(draft, "Tôi chọn số 2 nhưng đổi điểm đến") is None
+
+
+@pytest.mark.asyncio
+async def test_short_ordinal_updates_slot_once_and_moves_to_next_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    candidates = PlaceToolsService().search("VinUni")
+    userdata.booking_draft.set_candidates("pickup", "VinUni", candidates)
+
+    class _Session:
+        def __init__(self) -> None:
+            self.userdata = userdata
+            self.replies: list[str] = []
+
+        def say(self, text: str, *, allow_interruptions: bool) -> None:
+            assert allow_interruptions is True
+            self.replies.append(text)
+
+    session = _Session()
+    task = BookingTask(
+        state_store=EphemeralVoiceStateStore(),
+        session_data=userdata,
+    )
+    task._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
+    published: list[str | None] = []
+
+    async def _publish(current_session: object) -> None:
+        published.append(current_session.userdata.booking_draft.pickup.display_name)
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
+
+    with pytest.raises(StopResponse):
+        await task.on_user_turn_completed(
+            llm.ChatContext.empty(),
+            llm.ChatMessage(role="user", content=["Tôi chọn số 2"]),
+        )
+
+    assert userdata.booking_draft.pickup == candidates[1]
+    assert userdata.booking_draft.pending_candidate_target is None
+    assert published == [candidates[1].display_name]
+    assert session.replies == [
+        f"Đã chọn điểm đón là {candidates[1].display_name}. "
+        "Vui lòng cho biết điểm đến. Nếu muốn đổi, bạn có thể nói lại."
+    ]
 
 
 def test_place_tool_reuses_hanoi_gazetteer_without_echo_fallback() -> None:

@@ -19,8 +19,10 @@ from src.voice_agent.persistence import (
 )
 from src.voice_agent.session_data import (
     AloSMSessionData,
+    BookingDraft,
     BookingResult,
     BookingTarget,
+    PlaceCandidate,
     QuoteSnapshot,
     VehicleType,
     vehicle_spoken_label,
@@ -32,6 +34,7 @@ from src.voice_agent.tools import (
     PlaceToolsService,
     QuoteToolsService,
 )
+from src.voice_agent.transcript_rewrite import TranscriptRewriter, rewrite_livekit_user_turn
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +127,59 @@ def can_auto_select_place(candidates: list[object]) -> bool:
     }
 
 
+_CANDIDATE_NUMBER_TOKENS: dict[str, int] = {
+    "1": 0,
+    "mot": 0,
+    "nhat": 0,
+    "2": 1,
+    "hai": 1,
+    "3": 2,
+    "ba": 2,
+    "4": 3,
+    "bon": 3,
+    "tu": 3,
+    "5": 4,
+    "nam": 4,
+}
+_SHORT_CANDIDATE_SELECTION = re.compile(
+    r"^(?:(?:toi|minh)\s+)?(?:(?:chon|lay)\s+)?(?:(?:phuong\s+an|lua\s+chon)\s+)?"
+    r"(?:(?:so|thu)\s+)?(1|2|3|4|5|mot|hai|ba|bon|tu|nam|nhat)$"
+)
+
+
+def grounded_ordinal_selection(
+    draft: BookingDraft,
+    user_text: str,
+) -> tuple[BookingTarget, PlaceCandidate] | None:
+    """Resolve a short ordinal only against the active server-owned candidate list."""
+
+    normalized = _normalize_confirmation(user_text)
+    match = _SHORT_CANDIDATE_SELECTION.fullmatch(normalized)
+    target = draft.pending_candidate_target
+    if match is None or target is None:
+        return None
+    candidates = draft.pickup_candidates if target == "pickup" else draft.destination_candidates
+    index = _CANDIDATE_NUMBER_TOKENS[match.group(1)]
+    if index >= len(candidates):
+        return None
+    return target, candidates[index]
+
+
+def _target_label(target: BookingTarget) -> str:
+    return "điểm đón" if target == "pickup" else "điểm đến"
+
+
+def _selection_followup(draft: BookingDraft, target: BookingTarget, selected: PlaceCandidate) -> str | None:
+    prefix = f"Đã chọn {_target_label(target)} là {selected.display_name}."
+    if draft.pickup is None:
+        return f"{prefix} Vui lòng cho biết điểm đón. Nếu muốn đổi, bạn có thể nói lại."
+    if draft.destination is None:
+        return f"{prefix} Vui lòng cho biết điểm đến. Nếu muốn đổi, bạn có thể nói lại."
+    if draft.vehicle_type is None:
+        return f"{prefix} Vui lòng cho biết loại xe. Nếu muốn đổi, bạn có thể nói lại."
+    return None
+
+
 class BookingTask(AgentTask[BookingOutcome]):
     """Collect and validate one booking while preserving the single AloSM persona."""
 
@@ -135,11 +191,15 @@ class BookingTask(AgentTask[BookingOutcome]):
         quotes: QuoteToolsService | None = None,
         bookings: BookingToolsService | None = None,
         state_store: VoiceStateStore | None = None,
+        session_data: AloSMSessionData | None = None,
+        transcript_rewriter: TranscriptRewriter | None = None,
     ) -> None:
         self._places = places or PlaceToolsService()
         self._quotes = quotes or QuoteToolsService()
         self._bookings = bookings or BookingToolsService()
         self._state_store = state_store or EphemeralVoiceStateStore()
+        self._session_data = session_data
+        self._transcript_rewriter = transcript_rewriter
         super().__init__(
             chat_ctx=chat_ctx,
             instructions=(
@@ -153,6 +213,9 @@ class BookingTask(AgentTask[BookingOutcome]):
                 "Chỉ dùng select_place với candidate_id có trong kết quả tìm kiếm hiện hành. "
                 "Nếu search_place báo đã tự chọn một kết quả khớp duy nhất thì không hỏi xác nhận "
                 "địa điểm đó lần nữa. Với kết quả mơ hồ, phải hỏi khách chọn candidate. "
+                "Khi có nhiều candidate, chỉ nói số lượng kết quả và yêu cầu khách chọn số hiển thị bên dưới; "
+                "tuyệt đối không đọc tên hoặc địa chỉ trong danh sách vì giao diện đã hiển thị chúng. "
+                "Một lựa chọn theo số hợp lệ cập nhật slot ngay và không cần xác nhận candidate lần hai. "
                 "Thu thập đủ điểm đón, điểm đến và loại xe rồi gọi estimate_fare. "
                 "estimate_fare đồng thời khóa báo giá ở trạng thái chờ xác nhận; đọc lại đầy đủ "
                 "thông tin mà tool trả về và không tự bỏ qua bước này. "
@@ -188,6 +251,42 @@ class BookingTask(AgentTask[BookingOutcome]):
         return None
 
     async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
+        userdata = self._session_data or self.session.userdata
+        await rewrite_livekit_user_turn(
+            rewriter=self._transcript_rewriter,
+            userdata=userdata,
+            turn_ctx=turn_ctx,
+            new_message=new_message,
+        )
+
+        grounded = grounded_ordinal_selection(userdata.booking_draft, new_message.text_content or "")
+        if grounded is not None:
+            target, candidate = grounded
+            selected = userdata.booking_draft.select_place(target, candidate.place_id)
+            try:
+                await self._state_store.save(userdata)
+            except VoiceStateConflictError:
+                userdata.record_failure(
+                    "STATE_CONFLICT",
+                    "Phiên này vừa được cập nhật ở kết nối khác.",
+                    retryable=False,
+                    fallback_action="handoff",
+                )
+                await publish_booking_state(self.session)
+                raise StopResponse() from None
+            await publish_booking_state(self.session)
+            logger.info(
+                "Booking candidate selected deterministically session=%s target=%s index_text=%r place_id=%s",
+                userdata.app_session_id,
+                target,
+                new_message.text_content,
+                selected.place_id,
+            )
+            followup = _selection_followup(userdata.booking_draft, target, selected)
+            if followup is not None:
+                self.session.say(followup, allow_interruptions=True)
+                raise StopResponse()
+
         # Handoff and abandonment are task completions, not booking tools. The
         # supervisor owns call-level handoff and the result remains typed.
         current = self.session.userdata.handoff
@@ -296,8 +395,10 @@ class BookingTask(AgentTask[BookingOutcome]):
         nhất đáng tin cậy, tool có thể tự chọn; nếu booking đã đủ thông tin,
         tool đồng thời tính lại báo giá và trả về báo giá mới.
 
-        Nếu có nhiều candidate, không tự chọn hoặc suy đoán: đọc các lựa chọn
-        và gọi select_place bằng place_id sau khi khách chọn. Nếu không tìm
+        Nếu có nhiều candidate, không tự chọn hoặc suy đoán: giao diện sẽ liệt
+        kê các lựa chọn theo chiều dọc; chỉ nói số lượng kết quả và yêu cầu khách
+        chọn theo số thứ tự, không đọc toàn bộ danh sách. Sau khi khách chọn, gọi
+        select_place bằng place_id. Nếu không tìm
         thấy hoặc transcript có độ tin cậy thấp, yêu cầu khách nói lại hoặc
         nhập địa điểm.
 
@@ -379,7 +480,14 @@ class BookingTask(AgentTask[BookingOutcome]):
             {
                 "target": target,
                 "candidates": [candidate.model_dump() for candidate in candidates],
-                "instruction": "Hỏi khách chọn/xác nhận một candidate trước khi gọi select_place.",
+                "spoken_prompt": (
+                    f"Đã tìm thấy {len(candidates)} địa điểm liên quan đến {query} trong dữ liệu. "
+                    "Vui lòng chọn theo số thứ tự được liệt kê bên dưới."
+                ),
+                "instruction": (
+                    "Đọc nguyên văn spoken_prompt; không đọc tên hay địa chỉ candidates. "
+                    "Danh sách đã được gửi riêng tới giao diện."
+                ),
             },
             ensure_ascii=False,
         )

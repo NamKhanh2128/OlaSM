@@ -162,6 +162,17 @@ function LiveKitCallContent({
   const bookingCompleted = Boolean(bookingState?.booking);
   const handoffConnected = bookingState?.handoff?.status === "connected";
   const connectionLost = wasConnected && agent.state === "disconnected" && !handoffConnected;
+  const clarificationMessageId = useMemo(() => {
+    if (!bookingState?.pending_place_clarification?.options.length) return null;
+    return (
+      [...messages]
+        .reverse()
+        .find((item) => {
+          const isUser = item.type === "userTranscript" || item.from?.identity === localParticipant.identity;
+          return !isUser && item.message.toLocaleLowerCase("vi").includes("số thứ tự");
+        })?.id ?? null
+    );
+  }, [bookingState?.pending_place_clarification, localParticipant.identity, messages]);
 
   useEffect(() => {
     if (["initializing", "idle", "listening", "thinking", "speaking"].includes(agent.state)) {
@@ -335,17 +346,41 @@ function LiveKitCallContent({
         ) : (
           messages.map((item) => {
             const isUser = item.type === "userTranscript" || item.from?.identity === localParticipant.identity;
+            const clarification = bookingState?.pending_place_clarification;
+            const showsClarification =
+              !isUser &&
+              Boolean(clarification?.options.length) &&
+              item.id === clarificationMessageId;
             return (
               <div key={item.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                <p
+                <div
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
                     isUser
                       ? "bg-[#00A99D] text-white"
                       : "bg-white text-slate-700 shadow-sm dark:bg-white/10 dark:text-slate-100"
                   }`}
                 >
-                  {item.message}
-                </p>
+                  <p>{item.message}</p>
+                  {showsClarification && clarification ? (
+                    <ol className="mt-3 space-y-2 border-t border-slate-200 pt-3 dark:border-white/10">
+                      {clarification.options.map((option) => (
+                        <li key={`${clarification.clarification_id}:${option.index}`} className="flex gap-2">
+                          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#00A99D] text-[11px] font-bold text-white">
+                            {option.index}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block font-semibold text-slate-800 dark:text-slate-100">
+                              {option.display_name}
+                            </span>
+                            <span className="block text-xs leading-5 text-slate-500 dark:text-slate-400">
+                              {option.address}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </div>
               </div>
             );
           })

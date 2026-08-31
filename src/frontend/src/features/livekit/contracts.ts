@@ -38,6 +38,17 @@ export type HandoffState = {
   reason_code: string;
 };
 
+export type PlaceClarificationState = {
+  clarification_id: string;
+  target: "pickup" | "destination";
+  query: string | null;
+  options: Array<{
+    index: number;
+    display_name: string;
+    address: string;
+  }>;
+};
+
 export type BookingState = {
   schema_version: "1";
   revision: number;
@@ -51,4 +62,5 @@ export type BookingState = {
   failure?: VoiceFailureState | null;
   handoff?: HandoffState | null;
   recovered?: boolean;
+  pending_place_clarification?: PlaceClarificationState | null;
 };

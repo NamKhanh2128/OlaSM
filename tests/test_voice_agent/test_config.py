@@ -54,6 +54,10 @@ def test_livekit_accepts_complete_native_pipeline_configuration() -> None:
     assert config.livekit_debug_event_log is False
     assert config.livekit_debug_transcripts is False
     assert config.livekit_delete_room_on_close is False
+    assert config.voice_transcript_rewrite_enabled is True
+    assert config.voice_transcript_rewrite_timeout_seconds == 2.0
+    assert config.voice_transcript_rewrite_reasoning_effort == "low"
+    assert config.voice_transcript_rewrite_context_window_turns == 3
     assert str(config.livekit_debug_log_dir) == "logs/livekit"
     config.require_configured()
 

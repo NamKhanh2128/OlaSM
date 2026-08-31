@@ -236,6 +236,29 @@ def test_public_state_excludes_queries_and_candidate_lists() -> None:
     assert public["pickup"]["display_name"] == "VinUni"  # type: ignore[index]
 
 
+def test_public_state_exposes_only_safe_pending_clarification_fields() -> None:
+    draft = BookingDraft()
+    candidates = [_place("first", "Cổng chính VinUni"), _place("second", "Cổng phụ VinUni")]
+    draft.set_candidates("pickup", "VinUni", candidates)
+
+    public = draft.public_state()
+    clarification = public["pending_place_clarification"]
+
+    assert clarification == {
+        "clarification_id": "pickup:1",
+        "target": "pickup",
+        "query": "VinUni",
+        "options": [
+            {"index": 1, "display_name": "Cổng chính VinUni", "address": "Cổng chính VinUni"},
+            {"index": 2, "display_name": "Cổng phụ VinUni", "address": "Cổng phụ VinUni"},
+        ],
+    }
+    assert "place_id" not in str(clarification)
+
+    draft.select_place("pickup", "second")
+    assert draft.public_state()["pending_place_clarification"] is None
+
+
 def test_conversation_summary_is_compact_and_uses_spoken_vehicle_label() -> None:
     draft = _quoted_draft()
 
