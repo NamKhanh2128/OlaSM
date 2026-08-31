@@ -3,6 +3,8 @@
 > Ghi lại công việc đã được implement theo ngày dựa trên commit, branch và PR. Các merge commit được gộp vào task/kết quả tương ứng để tránh lặp.
 >
 > Cột **Time** chỉ ghi thời lượng khi có dữ liệu rõ ràng. Git history không ghi số giờ làm việc nên các mục chưa có dữ liệu được đánh dấu `—`.
+>
+> **Trạng thái tài liệu:** APPROVED · Cập nhật đến **2026-08-31**.
 
 ---
 
@@ -251,12 +253,12 @@
 |------------|---------|
 | Product/UI | Có customer assistant, operator UI, booking progress, confirmation, history, popup và hands-free voice call. |
 | Core Agent | Có intent routing, LangGraph turn, typed state, memory, tool lifecycle, booking, FAQ/RAG, trip lookup và guardrails. |
-| Booking | Có thu thập địa điểm/vehicle, quote, explicit confirmation, thay đổi yêu cầu, idempotency foundation và cancel confirmation. |
+| Booking | Có thu thập địa điểm/vehicle, quote, explicit confirmation, correction flow, quote invalidation, idempotent confirmation và cancel confirmation. |
 | Backend data | Có auth, TOTP, session/booking/trip/handoff repositories, migrations, maps, pricing/policy catalog và quote integrity. |
-| Voice | Có ASR, VAD, transcript normalization/rewrite, TTS/fallback và provider timeout handling. |
+| Voice | Có ASR, VAD, transcript normalization/rewrite, TTS/fallback, provider timeout handling và emergency safety gate trước LLM. |
 | LiveKit | Có Room/WebRTC, AgentServer, AgentSession, state sync/restore, reconnect handling, text fallback và operator takeover. |
-| Evaluation | Có workflow eval, LiveKit smoke runner, structured JSONL evidence, latency/usage observability và release runbook. |
-| Deployment | Có developer setup, Docker image, GHCR scripts, GitHub Actions publish workflow và deployment documentation. |
+| Evaluation | Có workflow eval, LiveKit smoke runner, structured JSONL evidence, latency/usage observability, release runbook và evidence cho issue #34. |
+| Deployment | Có developer setup, Docker image, GHCR scripts, GitHub Actions publish workflow, staging HTTPS/Caddy và staging deploy qua AWS SSM. |
 
 ## Trạng thái kiểm chứng và việc tiếp tục
 
@@ -273,3 +275,52 @@
 | Team | Hardening branch agentic-ai theo review: sửa catalog path, correction flow, provider/docs drift và CI evidence | ✅ Done | `459 passed, 3 skipped`; deterministic eval 6/6; `docs/evaluation.md` | — |
 
 **Tổng kết ngày:** Source hiện tại có thể rebuild/test từ branch, các giới hạn external và release gates được ghi rõ thay vì để reviewer suy đoán.
+
+---
+
+## 2026-08-28
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| @PivePipiopia | Chuyển CI checks sang cohort3 self-hosted runner | ✅ Done | Commit `7e96692`, `.github/workflows/ci.yml` | — |
+| @PivePipiopia | Refactor ranh giới supervision của booking task để tách orchestration khỏi agent/server | ✅ Done | Commit `fdeb950`, `src/voice_agent/tasks/booking.py`, `tests/test_voice_agent/test_booking_task.py` | — |
+| @PivePipiopia | Bổ sung tài liệu tiếng Việt cho các LiveKit booking tools và luồng xử lý booking | ✅ Done | Commit `a0f88bf`, `src/voice_agent/agent.py`, `src/voice_agent/tasks/booking.py` | — |
+
+**Tổng kết ngày:** Booking task và LiveKit tool flow được làm rõ boundary, dễ kiểm thử và dễ bàn giao hơn.
+
+---
+
+## 2026-08-29
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| @PivePipiopia | Sửa các lỗi review ở persistence, booking service, place search, LiveKit state và frontend API; bổ sung performance regression tests | ✅ Done | Commit `79bd445`, `tests/test_backend/test_booking_service_performance.py`, `tests/test_voice_agent/` | — |
+| @PivePipiopia | Làm mới activity history sau khi booking hoàn tất | ✅ Done | Commit `e0dfea6`, `src/frontend/src/app/events.ts`, `ActivityList.tsx` | — |
+| @PivePipiopia | Cho policy/FAQ xử lý an toàn khi query không xác định hoặc không có câu trả lời phù hợp | ✅ Done | Commit `c9fbda0`, `src/agents/capabilities/faq.py`, `src/backend/services/knowledge_service.py` | — |
+| @PivePipiopia | Chuẩn hóa deploy staging với HTTPS Caddy và AWS OIDC/SSM | ✅ Done | Commits `099fb11`, `be92200`, `.github/workflows/deploy-staging.yml`, `Caddyfile` | — |
+| @NamKhanh2128 | Cấu hình GHCR token cho staging deploy | ✅ Done | Commit `f4f9de1`, `.github/workflows/deploy-staging.yml` | — |
+| @PivePipiopia | Mount Google service-account credentials vào backend và voice worker staging | ✅ Done | Commit `8baac2a`, `docker-compose.staging.yml`, `scripts/deploy-staging.sh` | — |
+
+**Tổng kết ngày:** Booking/persistence và policy được harden; staging có pipeline deploy, HTTPS, credential mount và kiểm tra CI phù hợp với hạ tầng team.
+
+---
+
+## 2026-08-30
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| @PivePipiopia | Làm cho thao tác xác nhận booking lặp lại có tính idempotent, không tạo duplicate booking khi retry | ✅ Done | Commit `bdcbd00`, `src/voice_agent/tasks/booking.py`, `tests/test_voice_agent/test_booking_task.py` | — |
+| @PivePipiopia | Thêm emergency safety gate nhận diện tín hiệu nguy hiểm trước khi gọi LLM và chuyển ngay tới hàng đợi operator khẩn cấp | ✅ Done | Commit `75a2c79`, `data/safety/emergency_policy.yaml`, `src/voice_agent/safety.py`, `src/voice_agent/tools/handoffs.py`, `tests/test_voice_agent/test_emergency_safety.py` | — |
+
+**Tổng kết ngày:** Retry booking được bảo vệ khỏi duplicate side effect; các tín hiệu an toàn nghiêm trọng được ưu tiên xử lý trước hội thoại LLM.
+
+---
+
+## 2026-08-31
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| @PivePipiopia | Kiểm chứng và ghi lại cách reproduce issue thay đổi đồng thời pickup, destination và vehicle sau khi đã có quote | ✅ Done | Commit `613b94d`, `docs/verification/issue-34-research.md` | — |
+| @PivePipiopia | Bổ sung danh sách canonical mock locations và hướng dẫn test staging cho issue #34 | ✅ Done | `docs/verification/issue-34-research.md` | — |
+
+**Tổng kết ngày:** Issue #34 đã có code-path review, test deterministic và hướng dẫn staging; flow thay đổi ba trường có thể tạo quote mới khi dùng mock location hợp lệ.

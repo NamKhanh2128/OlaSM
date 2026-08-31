@@ -2,26 +2,25 @@
 
 > **PRODUCT · CANONICAL** — Yêu cầu sản phẩm mới nhất. Trạng thái triển khai thực tế được đối chiếu với code hiện tại, [mustdo.md](../mustdo.md) và [system design](architecture_diagram.md).
 
-**Phiên bản:** 1.3 · **Trạng thái:** Đang chạy demo, tiếp tục hoàn thiện production · **Primary persona:** Khách hàng ít thành thạo công nghệ / người lớn tuổi
+**Phiên bản:** 1.4 · **Trạng thái:** APPROVED — Baseline demo/staging, tiếp tục hoàn thiện production · **Primary persona:** Khách hàng ít thành thạo công nghệ / người lớn tuổi
 
-> Sản phẩm cho phép khách hàng thực hiện toàn bộ hành trình dịch vụ AloSM — từ đặt xe, thanh toán, khiếu nại đến hỗ trợ tài xế — bằng giọng nói tiếng Việt tự nhiên, thông qua giao diện web. Runtime hiện tại sử dụng LiveKit cho realtime voice, có text fallback và các provider STT/LLM/TTS cấu hình được. AI xử lý các nghiệp vụ có quy trình cố định; con người tiếp nhận các tình huống khẩn cấp, phức tạp và cần phán đoán.
+> Sản phẩm hiện cung cấp voice session tiếng Việt trên web qua LiveKit Room, có text fallback và các provider STT/LLM/TTS cấu hình được. Runtime hiện tự động hóa có kiểm soát luồng đặt xe, hỏi thông tin và handoff; payment, refund/complaint, driver support, emergency dispatch/112 và telephony vẫn là roadmap.
 
 ---
 
-> **Cập nhật triển khai 2026-08-27:** PRD vẫn giữ nguyên các feature và mục tiêu sản phẩm ban đầu. Các thay đổi đã được phản ánh trong tài liệu này là: voice runtime chuyển sang LiveKit AgentServer/AgentSession; STT hiện dùng LiveKit Inference với Deepgram Nova-3, LLM dùng OpenAI qua LiveKit plugin, TTS dùng Google Gemini Flash TTS có Google Chirp 3 HD fallback; text và voice dùng chung state/guardrail contract; booking có quote, explicit confirmation, idempotency và invalidate quote khi đổi yêu cầu; handoff đưa operator vào cùng LiveKit Room và dừng AI audio khi takeover. Các tính năng thanh toán, hoàn tiền, CRM, hỗ trợ tài xế, kho tri thức có màn hình quản trị và emergency integration vẫn được giữ trong PRD nhưng chưa coi là đã hoàn thành.
+> **Cập nhật triển khai 2026-08-31:** Voice runtime dùng LiveKit AgentServer/AgentSession; STT dùng LiveKit Inference/Deepgram Nova-3, LLM dùng OpenAI plugin, TTS dùng Google Gemini Flash `Kore` với Chirp 3 HD fallback. Voice và text dùng chung state/guardrail contract; booking có quote, explicit confirmation, idempotency và invalidate quote khi đổi yêu cầu; handoff lưu context snapshot và đưa operator vào cùng room, sau đó dừng AI audio khi takeover. Payment, refund/complaint ticketing, driver support, emergency dispatch/112, SIP/VoIP và fleet/ETA production chưa hoàn thành.
 
 ---
 
 ## 1. Problem statement
 
-Hiện tại, khách hàng AloSM có hai lựa chọn để đặt xe: dùng ứng dụng di động hoặc gọi hotline 1555. Cả hai đều có giới hạn rõ ràng:
+Baseline hiện tại không phải tổng đài điện thoại. Khách hàng truy cập một voice session trên web qua LiveKit Room; frontend có text fallback khi microphone, provider hoặc kết nối voice không khả dụng.
 
-- **Ứng dụng** yêu cầu người dùng phải biết thao tác màn hình cảm ứng, nhập địa chỉ chính xác và thực hiện nhiều bước. Người lớn tuổi hoặc người ít quen công nghệ thường bỏ cuộc giữa chừng, phải nhờ người thân hỗ trợ, hoặc không đặt được xe.
-- **Hotline 1555** hoạt động nhờ tổng đài viên xử lý từng cuộc gọi thủ công. Giờ cao điểm (sáng sớm, chiều tối) lượng gọi tăng đột biến vượt năng lực phục vụ — khách chờ lâu, tổng đài viên quá tải.
-- **Thanh toán, khiếu nại và hoàn tiền** hiện chỉ xử lý được qua app hoặc tổng đài — người dùng không quen app bị phụ thuộc vào kênh duy nhất là hotline vốn đã quá tải.
-- **Tài xế** cần xác nhận chuyến và cập nhật trạng thái khi đang lái xe, nhưng thao tác app trong khi lái rất bất tiện và không an toàn.
+Vấn đề cần giải quyết trong increment hiện tại là giúp khách hàng ít quen app hoàn tất luồng đặt xe và hỏi thông tin bằng hội thoại tự nhiên mà vẫn bảo toàn business state. Hệ thống phải xác nhận địa điểm, loại xe và quote trước booking; không tự bịa địa chỉ, giá hoặc booking result; không tạo booking trùng; và không làm mất trạng thái khi reconnect hoặc chuyển từ voice sang text.
 
-**Giả thuyết cần kiểm chứng trước sprint 1:** Phần lớn cuộc gọi tổng đài là đặt xe, hỏi giá, tra cứu trạng thái, hỏi về thanh toán và khiếu nại — các nghiệp vụ có quy trình cố định, hoàn toàn có thể tự động hóa. Cần thu thập số liệu vận hành thực tế từ CS Manager trước khi đặt KPI giảm tải cụ thể.
+Khi yêu cầu vượt contract hoặc cần người xử lý, Backend tạo handoff với reason, priority/severity và context snapshot. Operator tiếp tục trong cùng LiveKit Room khi takeover hợp lệ. Payment, CRM/ticketing, driver support, emergency dispatch/112, SIP/VoIP và fleet/ETA production là các phase sau, không phải năng lực hiện tại.
+
+> Các pain point về hotline, thanh toán, khiếu nại, tài xế và khẩn cấp vẫn là lý do sản phẩm dài hạn, nhưng chưa được dùng làm bằng chứng rằng runtime hiện đã hỗ trợ các luồng đó.
 
 ### Pain points ưu tiên
 
@@ -40,52 +39,47 @@ Hiện tại, khách hàng AloSM có hai lựa chọn để đặt xe: dùng ứ
 
 ## 2. Goals & metrics
 
-Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên người lớn tuổi, người ít quen app):
+Trong pilot baseline demo/staging, mục tiêu là kiểm chứng chất lượng voice session trên web, không phải tuyên bố đã đạt SLO production.
 
-- **Task completion (đặt xe):** Ít nhất **80% người tham gia** hoàn tất kịch bản đặt xe bằng giọng nói từ đầu đến khi nhận mã booking, không cần hỗ trợ thêm.
-- **AI resolution:** Ít nhất **65% yêu cầu đặt xe hợp lệ** được AI xử lý thành công mà không cần chuyển sang tổng đài viên; tỉ lệ booking sai địa chỉ **≤ 5%**.
-- **Handoff quality:** **100% cuộc gọi chuyển operator** phải có transcript đầy đủ và tóm tắt ngữ cảnh sẵn sàng trước khi tổng đài viên tiếp nhận — tổng đài viên **không phải hỏi lại từ đầu**.
-- **Emergency response:** **100% tình huống khẩn cấp** (tai nạn, người ngã, cần cấp cứu) được phát hiện và kết nối tổng đài viên chuyên môn trong vòng **30 giây**.
-- **Complaint & refund capture:** **100% yêu cầu hoàn tiền và khiếu nại** được tiếp nhận có ticket đầy đủ thông tin, không để khách phải gọi lại.
-- **Baseline:** Thiết lập được bộ số liệu gốc (số cuộc gọi/ngày, tỉ lệ hoàn thành, CSAT) trong tuần đầu tiên của pilot để làm mốc so sánh cho các giai đoạn tiếp theo.
+- **Task completion:** tối thiểu 80% người tham gia hoàn tất kịch bản đặt xe trong catalog/adapter staging.
+- **Booking integrity:** không tạo booking thứ hai khi khách xác nhận lặp hoặc reconnect; thay đổi pickup, destination hoặc vehicle phải invalidate quote cũ.
+- **Handoff quality:** 100% handoff baseline có reason và context snapshot tối thiểu để operator tiếp tục xử lý.
+- **Voice resilience:** ghi nhận provider, model, voice, TTFB, audio duration và cancelled cho từng lượt TTS; phân biệt primary Gemini `Kore` với Chirp 3 fallback.
+- **Baseline operations:** đo ASR/LLM/TTS latency, fallback rate, reconnect và human listening trước khi đặt SLO production.
+
+Các mục tiêu emergency ≤30 giây, payment/refund ticket capture và giảm tải hotline chỉ được đo sau khi tích hợp tương ứng được triển khai và release-gated.
 
 ---
 
 ## 3. Persona
 
-**Primary — Khách hàng ít quen công nghệ:** không sử dụng thành thạo ứng dụng đặt xe; người thân đã cài sẵn và hướng dẫn cơ bản. Nói chậm, có thể dừng giữa chừng để suy nghĩ. Sợ nói sai địa chỉ và lo lắng khi hệ thống im lặng lâu. Mục tiêu: tự đặt xe, thanh toán và gửi khiếu nại mà không cần nhờ người khác hỗ trợ.
+**Primary — Khách hàng ít quen công nghệ:** không sử dụng thành thạo ứng dụng đặt xe, cần câu ngắn, tốc độ vừa phải và xác nhận rõ địa điểm, loại xe, quote trước khi booking.
 
-*Kịch bản điển hình:* Gọi AI và nói "Tôi muốn đặt xe đi Bệnh viện Bạch Mai, tôi đang ở đường Trần Hưng Đạo, quận Hoàn Kiếm."
+*Kịch bản điển hình:* Mở voice session và nói "Tôi muốn đặt xe đi Bệnh viện Bạch Mai, tôi đang ở khu vực Văn Miếu."
 
-**Secondary — Khách hàng quen công nghệ nhưng bận tay:** thành thạo app, nhưng thường xuyên trong tình huống không thể nhìn hoặc thao tác màn hình (đang mang đồ, di chuyển). Muốn đặt xe, kiểm tra thanh toán hoặc báo sự cố nhanh bằng giọng nói mà không mở app.
+**Secondary — Khách hàng bận tay:** đã đăng nhập trên web nhưng tạm thời không thuận tiện thao tác màn hình; có thể chuyển sang text fallback nếu không dùng được microphone.
 
-*Kịch bản điển hình:* Đang trong thang máy, nói "Cho tôi đặt xe từ Landmark 81 đến sân bay Tân Sơn Nhất."
+**Vai trò liên quan:**
 
-**Secondary — Tài xế đối tác:** cần xác nhận chuyến, tra cứu thông tin và cập nhật trạng thái trong khi đang lái xe. Thao tác điện thoại khi lái nguy hiểm và không hợp pháp.
+- **Operator:** nhận handoff trong cùng LiveKit Room với reason, priority/severity và context snapshot; không mặc định có telephony queue hoặc quyền tự tạo booking.
+- **Product/AI Ops:** quản lý catalog place, pricing và FAQ/policy có version/source để kiểm thử baseline.
 
-*Kịch bản điển hình:* Đang lái xe, nói "Xác nhận tôi đã đón khách" hoặc "Tôi muốn hỏi địa chỉ điểm đến của chuyến này."
-
-**Vai trò liên quan (không phải primary persona):**
-
-- **Tổng đài viên:** tiếp nhận cuộc gọi được chuyển từ AI; cần thấy ngay nội dung hội thoại và tóm tắt ngữ cảnh để tiếp tục hỗ trợ mà không hỏi lại từ đầu.
-- **AI Operations:** quản lý kho tri thức (Knowledge Base) và cấu hình AI Agent; cần công cụ kiểm thử nội dung trước khi đưa vào production và theo dõi chất lượng qua dashboard.
+> Tài xế, payment operator, CRM agent và emergency responder là persona roadmap; chưa có role/runtime tương ứng trong baseline hiện tại.
 
 ---
 
 ## 4. Scope & priority
 
-| Priority | Feature | Giá trị — Pain point được giải quyết |
+| Priority | Feature | Trạng thái hiện tại và định hướng |
 |---|---|---|
-| **Must** | F1 — Đặt xe bằng giọng nói | Xóa rào cản app; bất kỳ ai cũng có thể đặt xe chỉ bằng câu nói tự nhiên |
-| **Must** | F2 — Chuyển giao tổng đài viên (Human-in-the-Loop) | Khách không bị kẹt với AI; tổng đài viên nhận đầy đủ ngữ cảnh ngay lập tức |
-| **Must** | F3 — Tra cứu thông tin và giải đáp câu hỏi thường gặp | Tự động xử lý các cuộc gọi hỏi giá, hỏi trạng thái — giảm tải cho tổng đài |
-| **Must** | F9 — Xử lý tình huống khẩn cấp và tai nạn | An toàn tính mạng không thể chờ; AI phát hiện và kết nối ngay đúng người xử lý |
-| **Should** | F4 — Đăng nhập, đồng ý ghi âm và phân quyền | Bảo vệ dữ liệu cá nhân; mỗi vai trò chỉ thấy đúng thông tin thuộc phạm vi của mình |
-| **Should** | F5 — Quản lý kho tri thức và theo dõi chất lượng | AI Ops cập nhật được nội dung; PO và CS Manager có dữ liệu để cải thiện Agent |
-| **Should** | F6 — Thanh toán qua giọng nói | Người dùng không cần mở app để thanh toán; giảm tải hotline cho nghiệp vụ tài chính cơ bản |
-| **Should** | F7 — Tiếp nhận hoàn tiền và khiếu nại | Mọi phản ánh đều được ghi nhận đầy đủ; tổng đài viên xử lý ca phức tạp có đủ context |
-| **Should** | F8 — Hỗ trợ tài xế qua giọng nói | Tài xế không phải thao tác màn hình khi đang lái — an toàn hơn và cập nhật trạng thái đúng giờ |
-| **Won't** | Tích hợp đa kênh (Zalo, Messenger, WhatsApp), đa ngôn ngữ, app mobile native, can thiệp thuật toán ghép chuyến, tự phê duyệt hoàn tiền không qua con người | Giữ MVP trong phạm vi hội thoại qua web — kiểm soát được và đủ để kiểm chứng giá trị |
+| **Must** | F1 — Đặt xe bằng giọng nói | Baseline demo/staging qua LiveKit web; dùng catalog/adapter, quote và booking contract |
+| **Must** | F2 — Chuyển giao tổng đài viên | Baseline staging; context snapshot và operator takeover cùng LiveKit Room |
+| **Must** | F3 — Tra cứu và FAQ/policy | Baseline staging; approved catalog có version/source, không tự bịa dữ liệu |
+| **Should** | F4 — Đăng nhập, consent, phân quyền | Auth phone/password, policy acceptance, TOTP tùy chọn; recording tắt mặc định |
+| **Should** | F5 — Knowledge và quality operations | Read-only catalog/search hiện có; upload/publish/rollback/dashboard là roadmap |
+| **Must — roadmap** | F9 — Khẩn cấp và tai nạn | Chỉ handoff case nghiêm trọng hiện có; emergency record/dispatch/112 chưa triển khai |
+| **Roadmap** | F6/F7/F8 — Payment, refund/complaint, driver support | Chưa có gateway, CRM/ticketing, driver role hoặc fleet integration |
+| **Won't** | Đa kênh, đa ngôn ngữ, mobile native, tự phê duyệt refund | Không thuộc MVP hiện tại |
 
 ---
 
@@ -99,7 +93,7 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 
 **Pain point giải quyết:** Người lớn tuổi và người ít quen công nghệ không thể đặt xe qua app vì giao diện đòi hỏi quá nhiều thao tác. Tính năng này cho phép họ chỉ cần nói — AI lo phần còn lại.
 
-> **Cập nhật triển khai:** Voice path hiện chạy qua LiveKit Room và một AgentSession cho mỗi cuộc hội thoại; frontend vẫn có text fallback khi mic/LiveKit/provider không khả dụng. Luồng booking thực tế dùng local gazetteer/pricing catalog hoặc maps adapter tùy cấu hình, nên giá và tuyến trong demo là ước tính, chưa phải dữ liệu fleet realtime.
+> **Cập nhật triển khai:** Voice path hiện chạy qua LiveKit Room và một AgentSession cho mỗi cuộc hội thoại; frontend vẫn có text fallback khi mic/LiveKit/provider không khả dụng. Luồng booking thực tế dùng local gazetteer/pricing catalog hoặc maps adapter tùy cấu hình, nên giá và tuyến trong demo là ước tính, chưa phải dữ liệu fleet realtime. TTS primary là Google Gemini Flash `Kore`; khi primary lỗi/timeout, Chirp 3 HD fallback có thể làm voice thay đổi trong staging.
 
 **User stories**
 
@@ -320,9 +314,9 @@ Trong pilot 4–6 tuần với nhóm người dùng mục tiêu (ưu tiên ngư�
 
 MVP được xem là hoàn thành khi:
 
-1. Nhóm người dùng mục tiêu hoàn tất hành trình đầy đủ: **Gọi AI → Nói yêu cầu → AI hỏi và xác nhận thông tin → Thực hiện nghiệp vụ → Nhận kết quả**.
-2. Toàn bộ **Must features (F1, F2, F3, F9) đạt đủ AC** được liệt kê tại mục 5.
-3. Đạt các ngưỡng metric pilot tại mục 2: task completion ≥ 80%, AI resolution ≥ 65%, 100% handoff có context đầy đủ, 100% khẩn cấp kết nối trong ≤ 30 giây.
+1. Nhóm người dùng mục tiêu hoàn tất hành trình voice session trên web: **Mở room → Nói yêu cầu → AI hỏi và xác nhận thông tin → Thực hiện nghiệp vụ → Nhận kết quả**.
+2. Các feature thuộc release increment hiện tại (F1, F2, F3, cùng phần F4/F5 đã được triển khai) đạt AC và có evidence phù hợp.
+3. F9, payment, refund/complaint, driver support, telephony và các tích hợp production chỉ được sign-off sau khi hoàn tất external/release gates tương ứng.
 
 ---
 
@@ -347,7 +341,7 @@ MVP được xem là hoàn thành khi:
 
 ## 9. Sign-off
 
-PRD chỉ chuyển từ **Draft → Approved** khi đủ 4 xác nhận.
+PRD được đánh dấu **APPROVED ở cấp tài liệu/baseline** theo yêu cầu cập nhật ngày **2026-08-31**. Approval này xác nhận phạm vi, mục tiêu và trạng thái demo/staging hiện tại; không phải production sign-off. Các xác nhận vai trò formal bên dưới vẫn cần người phụ trách điền khi đưa vào governance chính thức.
 
 | Vai trò | Phạm vi xác nhận | Người | Ngày | Trạng thái |
 |---|---|---|---|---|
