@@ -31,6 +31,12 @@ _VEHICLE_SPOKEN_LABELS: dict[VehicleType, str] = {
     "CAR_7": "xe ô tô bảy chỗ",
     "LUXURY": "xe cao cấp",
 }
+_VEHICLE_OPTION_DETAILS: dict[VehicleType, str] = {
+    "MOTORBIKE": "Tối đa một hành khách",
+    "CAR_4": "Tối đa bốn hành khách",
+    "CAR_7": "Tối đa bảy hành khách",
+    "LUXURY": "Dòng xe cao cấp",
+}
 
 
 def vehicle_spoken_label(vehicle_type: VehicleType | None) -> str | None:
@@ -168,29 +174,70 @@ class BookingDraft(BaseModel):
             self.pending_candidate_target = None
         return selected
 
-    def pending_place_clarification(self) -> dict[str, object] | None:
-        """Expose only display-safe candidate data for the current UI prompt."""
+    def place_clarification(self, target: BookingTarget) -> dict[str, object] | None:
+        """Return one target-owned candidate list without coupling it to the other slot."""
 
-        target = self.pending_candidate_target
-        if target is None:
-            return None
         candidates = self.pickup_candidates if target == "pickup" else self.destination_candidates
         selected = self.pickup if target == "pickup" else self.destination
         query = self.pickup_query if target == "pickup" else self.destination_query
-        if selected is not None or not candidates:
+        if not candidates:
             return None
+        selected_index = next(
+            (
+                index
+                for index, candidate in enumerate(candidates, start=1)
+                if selected is not None and candidate.place_id == selected.place_id
+            ),
+            None,
+        )
+        fingerprint = hashlib.sha256(
+            "|".join(candidate.place_id for candidate in candidates).encode()
+        ).hexdigest()[:10]
         return {
-            "clarification_id": f"{target}:{self.revision}",
+            "clarification_id": f"{target}:{fingerprint}",
             "target": target,
             "query": query,
+            "selected_index": selected_index,
             "options": [
                 {
                     "index": index,
                     "display_name": candidate.display_name,
-                    "address": candidate.address,
+                    "subtitle": candidate.address,
                 }
                 for index, candidate in enumerate(candidates, start=1)
             ],
+        }
+
+    def pending_place_clarification(self) -> dict[str, object] | None:
+        """Compatibility projection for clients that only understand one active list."""
+
+        target = self.pending_candidate_target
+        return self.place_clarification(target) if target is not None else None
+
+    def booking_clarifications(self) -> dict[str, object | None]:
+        """Publish independent pickup, destination and vehicle choice objects."""
+
+        vehicle_options: dict[str, object] | None = None
+        if self.vehicle_type is None:
+            vehicle_options = {
+                "clarification_id": "vehicle_type:catalog-v1",
+                "target": "vehicle_type",
+                "query": None,
+                "selected_index": None,
+                "options": [
+                    {
+                        "index": index,
+                        "value": vehicle_type,
+                        "display_name": label.capitalize(),
+                        "subtitle": _VEHICLE_OPTION_DETAILS[vehicle_type],
+                    }
+                    for index, (vehicle_type, label) in enumerate(_VEHICLE_SPOKEN_LABELS.items(), start=1)
+                ],
+            }
+        return {
+            "pickup": self.place_clarification("pickup"),
+            "destination": self.place_clarification("destination"),
+            "vehicle_type": vehicle_options,
         }
 
     def set_vehicle_type(self, vehicle_type: VehicleType) -> None:
@@ -281,6 +328,7 @@ class BookingDraft(BaseModel):
             "cancellation_confirmation_pending": self.cancellation_confirmation_booking_id is not None,
             "booking": self.booking.model_dump() if self.booking else None,
             "pending_place_clarification": self.pending_place_clarification(),
+            "clarifications": self.booking_clarifications(),
         }
 
     def conversation_summary(self) -> str:

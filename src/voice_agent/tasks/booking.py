@@ -165,6 +165,79 @@ def grounded_ordinal_selection(
     return target, candidates[index]
 
 
+def _candidate_surfaces(draft: BookingDraft, target: BookingTarget, candidate: PlaceCandidate) -> set[str]:
+    query = draft.pickup_query if target == "pickup" else draft.destination_query
+    normalized_query = _normalize_confirmation(query or "")
+    normalized_name = _normalize_confirmation(candidate.display_name)
+    surfaces = {normalized_name, _normalize_confirmation(candidate.address)}
+    if normalized_query and normalized_name.endswith(normalized_query):
+        short_name = normalized_name[: -len(normalized_query)].strip()
+        if short_name:
+            surfaces.add(short_name)
+    return {surface for surface in surfaces if len(surface) >= 3}
+
+
+def _surface_is_negated(normalized_text: str, surface: str) -> bool:
+    return bool(re.search(rf"\bkhong\s+(?:phai\s+)?(?:la\s+)?{re.escape(surface)}\b", normalized_text))
+
+
+def grounded_named_place_selection(
+    draft: BookingDraft,
+    user_text: str,
+) -> tuple[BookingTarget, PlaceCandidate] | None:
+    """Match exactly one saved candidate name while respecting explicit negation."""
+
+    normalized = _normalize_confirmation(user_text)
+    matches: dict[tuple[BookingTarget, str], PlaceCandidate] = {}
+    for target, candidates in (
+        ("pickup", draft.pickup_candidates),
+        ("destination", draft.destination_candidates),
+    ):
+        current = draft.pickup if target == "pickup" else draft.destination
+        for candidate in candidates:
+            surfaces = _candidate_surfaces(draft, target, candidate)
+            if not any(surface in normalized and not _surface_is_negated(normalized, surface) for surface in surfaces):
+                continue
+            if current is not None and current.place_id == candidate.place_id and "chon" not in normalized:
+                continue
+            matches[(target, candidate.place_id)] = candidate
+    if len(matches) != 1:
+        return None
+    (target, _), candidate = next(iter(matches.items()))
+    return target, candidate
+
+
+_VEHICLE_SURFACES: dict[VehicleType, tuple[str, ...]] = {
+    "MOTORBIKE": ("xe may",),
+    "CAR_4": ("xe 4 cho", "xe bon cho", "o to 4 cho", "o to bon cho"),
+    "CAR_7": ("xe 7 cho", "xe bay cho", "o to 7 cho", "o to bay cho"),
+    "LUXURY": ("xe cao cap", "xe sang"),
+}
+
+
+def grounded_vehicle_selection(draft: BookingDraft, user_text: str) -> VehicleType | None:
+    """Resolve one explicit supported vehicle, including numbered vehicle choices."""
+
+    normalized = _normalize_confirmation(user_text)
+    ordinal = _SHORT_CANDIDATE_SELECTION.fullmatch(normalized)
+    if ordinal is not None and draft.pending_candidate_target is None and draft.vehicle_type is None:
+        index = _CANDIDATE_NUMBER_TOKENS[ordinal.group(1)]
+        vehicle_types = list(_VEHICLE_SURFACES)
+        return vehicle_types[index] if index < len(vehicle_types) else None
+
+    matches = {
+        vehicle_type
+        for vehicle_type, surfaces in _VEHICLE_SURFACES.items()
+        if any(surface in normalized and not _surface_is_negated(normalized, surface) for surface in surfaces)
+    }
+    if len(matches) != 1:
+        return None
+    selected = next(iter(matches))
+    if draft.vehicle_type is not None and draft.vehicle_type == selected:
+        return None
+    return selected
+
+
 def _target_label(target: BookingTarget) -> str:
     return "điểm đón" if target == "pickup" else "điểm đến"
 
@@ -176,8 +249,28 @@ def _selection_followup(draft: BookingDraft, target: BookingTarget, selected: Pl
     if draft.destination is None:
         return f"{prefix} Vui lòng cho biết điểm đến. Nếu muốn đổi, bạn có thể nói lại."
     if draft.vehicle_type is None:
-        return f"{prefix} Vui lòng cho biết loại xe. Nếu muốn đổi, bạn có thể nói lại."
+        return (
+            f"{prefix} Vui lòng chọn loại xe theo số thứ tự được liệt kê bên dưới. "
+            "Nếu muốn đổi, bạn có thể nói lại."
+        )
     return None
+
+
+def _vehicle_followup(draft: BookingDraft, vehicle_type: VehicleType) -> str | None:
+    prefix = f"Đã chọn loại xe là {vehicle_spoken_label(vehicle_type)}."
+    if draft.pickup is None:
+        return f"{prefix} Vui lòng cho biết điểm đón. Nếu muốn đổi, bạn có thể nói lại."
+    if draft.destination is None:
+        return f"{prefix} Vui lòng cho biết điểm đến. Nếu muốn đổi, bạn có thể nói lại."
+    return None
+
+
+def _quote_confirmation_prompt(draft: BookingDraft, acknowledgement: str, quote: QuoteSnapshot) -> str:
+    return (
+        f"{acknowledgement} Bạn xác nhận chuyến xe đón tại {draft.pickup.display_name}, "
+        f"đến {draft.destination.display_name}, đi bằng {vehicle_spoken_label(draft.vehicle_type)}, "
+        f"giá dự kiến {quote.fare_amount} đồng và xe tới sau khoảng {quote.eta_minutes} phút chứ?"
+    )
 
 
 class BookingTask(AgentTask[BookingOutcome]):
@@ -216,6 +309,10 @@ class BookingTask(AgentTask[BookingOutcome]):
                 "Khi có nhiều candidate, chỉ nói số lượng kết quả và yêu cầu khách chọn số hiển thị bên dưới; "
                 "tuyệt đối không đọc tên hoặc địa chỉ trong danh sách vì giao diện đã hiển thị chúng. "
                 "Một lựa chọn theo số hợp lệ cập nhật slot ngay và không cần xác nhận candidate lần hai. "
+                "Sau mọi thay đổi điểm đón, điểm đến hoặc loại xe, câu trả lời bắt buộc phải bắt đầu bằng "
+                "'Đã chọn điểm đón là...', 'Đã chọn điểm đến là...' hoặc 'Đã chọn loại xe là...'; "
+                "chỉ sau câu đó mới hỏi trường tiếp theo. Nếu chưa có loại xe, phải hỏi khách chọn loại xe "
+                "theo số thứ tự được liệt kê bên dưới để giao diện hiện danh sách xe. "
                 "Thu thập đủ điểm đón, điểm đến và loại xe rồi gọi estimate_fare. "
                 "estimate_fare đồng thời khóa báo giá ở trạng thái chờ xác nhận; đọc lại đầy đủ "
                 "thông tin mà tool trả về và không tự bỏ qua bước này. "
@@ -250,6 +347,50 @@ class BookingTask(AgentTask[BookingOutcome]):
                 return item if isinstance(item, llm.ChatMessage) else None
         return None
 
+    async def _respond_after_grounded_change(
+        self,
+        userdata: AloSMSessionData,
+        *,
+        acknowledgement: str,
+        followup: str | None,
+    ) -> None:
+        """Persist one deterministic slot change and speak acknowledgement first."""
+
+        draft = userdata.booking_draft
+        response = followup
+        if response is None and draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None:
+            try:
+                quote = await self._quotes.estimate(
+                    user_id=userdata.user_id,
+                    app_session_id=userdata.app_session_id,
+                    draft=draft,
+                )
+                draft.set_quote(quote)
+                draft.request_confirmation()
+                response = _quote_confirmation_prompt(draft, acknowledgement, quote)
+                userdata.clear_failure()
+            except ValueError:
+                userdata.record_failure(
+                    "QUOTE_UNAVAILABLE",
+                    "Chưa thể tính báo giá từ thông tin mới.",
+                    fallback_action="retry",
+                )
+                response = f"{acknowledgement} Hiện chưa thể tính báo giá, bạn vui lòng thử lại."
+        try:
+            await self._state_store.save(userdata)
+        except VoiceStateConflictError:
+            userdata.record_failure(
+                "STATE_CONFLICT",
+                "Phiên này vừa được cập nhật ở kết nối khác.",
+                retryable=False,
+                fallback_action="handoff",
+            )
+            await publish_booking_state(self.session)
+            raise StopResponse() from None
+        await publish_booking_state(self.session)
+        self.session.say(response or acknowledgement, allow_interruptions=True)
+        raise StopResponse()
+
     async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
         userdata = self._session_data or self.session.userdata
         await rewrite_livekit_user_turn(
@@ -259,33 +400,44 @@ class BookingTask(AgentTask[BookingOutcome]):
             new_message=new_message,
         )
 
-        grounded = grounded_ordinal_selection(userdata.booking_draft, new_message.text_content or "")
+        grounded = grounded_ordinal_selection(
+            userdata.booking_draft,
+            new_message.text_content or "",
+        ) or grounded_named_place_selection(
+            userdata.booking_draft,
+            new_message.text_content or "",
+        )
         if grounded is not None:
             target, candidate = grounded
             selected = userdata.booking_draft.select_place(target, candidate.place_id)
-            try:
-                await self._state_store.save(userdata)
-            except VoiceStateConflictError:
-                userdata.record_failure(
-                    "STATE_CONFLICT",
-                    "Phiên này vừa được cập nhật ở kết nối khác.",
-                    retryable=False,
-                    fallback_action="handoff",
-                )
-                await publish_booking_state(self.session)
-                raise StopResponse() from None
-            await publish_booking_state(self.session)
             logger.info(
-                "Booking candidate selected deterministically session=%s target=%s index_text=%r place_id=%s",
+                "Booking candidate selected deterministically session=%s target=%s user_text=%r place_id=%s",
                 userdata.app_session_id,
                 target,
                 new_message.text_content,
                 selected.place_id,
             )
             followup = _selection_followup(userdata.booking_draft, target, selected)
-            if followup is not None:
-                self.session.say(followup, allow_interruptions=True)
-                raise StopResponse()
+            await self._respond_after_grounded_change(
+                userdata,
+                acknowledgement=f"Đã chọn {_target_label(target)} là {selected.display_name}.",
+                followup=followup,
+            )
+
+        vehicle_type = grounded_vehicle_selection(userdata.booking_draft, new_message.text_content or "")
+        if vehicle_type is not None:
+            userdata.booking_draft.set_vehicle_type(vehicle_type)
+            logger.info(
+                "Booking vehicle selected deterministically session=%s user_text=%r vehicle_type=%s",
+                userdata.app_session_id,
+                new_message.text_content,
+                vehicle_type,
+            )
+            await self._respond_after_grounded_change(
+                userdata,
+                acknowledgement=f"Đã chọn loại xe là {vehicle_spoken_label(vehicle_type)}.",
+                followup=_vehicle_followup(userdata.booking_draft, vehicle_type),
+            )
 
         # Handoff and abandonment are task completions, not booking tools. The
         # supervisor owns call-level handoff and the result remains typed.
@@ -459,6 +611,12 @@ class BookingTask(AgentTask[BookingOutcome]):
             context.userdata.clear_failure()
             if refreshed_quote is None:
                 await self._commit(context)
+            acknowledgement = f"Đã chọn {_target_label(target)} là {selected.display_name}."
+            spoken_prompt = (
+                _quote_confirmation_prompt(draft, acknowledgement, refreshed_quote)
+                if refreshed_quote is not None
+                else _selection_followup(draft, target, selected) or acknowledgement
+            )
             return json.dumps(
                 {
                     "target": target,
@@ -466,10 +624,10 @@ class BookingTask(AgentTask[BookingOutcome]):
                     "place_id": selected.place_id,
                     "display_name": selected.display_name,
                     "quote_refreshed": refreshed_quote is not None,
+                    "spoken_prompt": spoken_prompt,
                     "instruction": (
-                        "Đã cập nhật và tính lại báo giá; đọc giá mới, không dùng giá cũ."
-                        if refreshed_quote is not None
-                        else "Đã tự chọn exact match duy nhất; tiếp tục trường còn thiếu, không hỏi lại."
+                        "Đọc nguyên văn spoken_prompt, bắt đầu bằng xác nhận slot vừa chọn; "
+                        "không bỏ qua xác nhận và không hỏi xác nhận candidate lần hai."
                     ),
                 },
                 ensure_ascii=False,
@@ -538,9 +696,10 @@ class BookingTask(AgentTask[BookingOutcome]):
         context.userdata.clear_failure()
         if refreshed_quote is None:
             await self._commit(context)
-        target_label = "điểm đón" if target == "pickup" else "điểm đến"
-        suffix = " Đã tính lại báo giá mới." if refreshed_quote is not None else ""
-        return f"Đã xác nhận {target_label}: {selected.display_name}, {selected.address}.{suffix}"
+        acknowledgement = f"Đã chọn {_target_label(target)} là {selected.display_name}."
+        if refreshed_quote is not None:
+            return _quote_confirmation_prompt(draft, acknowledgement, refreshed_quote)
+        return _selection_followup(draft, target, selected) or acknowledgement
 
     @function_tool()
     async def set_vehicle_type(
@@ -582,8 +741,10 @@ class BookingTask(AgentTask[BookingOutcome]):
         context.userdata.clear_failure()
         if refreshed_quote is None:
             await self._commit(context)
-        suffix = " Đã tính lại báo giá mới." if refreshed_quote is not None else ""
-        return f"Đã chọn {vehicle_spoken_label(vehicle_type)}.{suffix}"
+        acknowledgement = f"Đã chọn loại xe là {vehicle_spoken_label(vehicle_type)}."
+        if refreshed_quote is not None:
+            return _quote_confirmation_prompt(draft, acknowledgement, refreshed_quote)
+        return _vehicle_followup(draft, vehicle_type) or acknowledgement
 
     @function_tool()
     async def estimate_fare(self, context: RunContext[AloSMSessionData]) -> str:

@@ -244,19 +244,48 @@ def test_public_state_exposes_only_safe_pending_clarification_fields() -> None:
     public = draft.public_state()
     clarification = public["pending_place_clarification"]
 
-    assert clarification == {
-        "clarification_id": "pickup:1",
-        "target": "pickup",
-        "query": "VinUni",
-        "options": [
-            {"index": 1, "display_name": "Cổng chính VinUni", "address": "Cổng chính VinUni"},
-            {"index": 2, "display_name": "Cổng phụ VinUni", "address": "Cổng phụ VinUni"},
-        ],
-    }
+    assert clarification["clarification_id"].startswith("pickup:")  # type: ignore[index]
+    assert clarification["target"] == "pickup"  # type: ignore[index]
+    assert clarification["query"] == "VinUni"  # type: ignore[index]
+    assert clarification["selected_index"] is None  # type: ignore[index]
+    assert clarification["options"] == [  # type: ignore[index]
+        {"index": 1, "display_name": "Cổng chính VinUni", "subtitle": "Cổng chính VinUni"},
+        {"index": 2, "display_name": "Cổng phụ VinUni", "subtitle": "Cổng phụ VinUni"},
+    ]
     assert "place_id" not in str(clarification)
 
     draft.select_place("pickup", "second")
     assert draft.public_state()["pending_place_clarification"] is None
+
+
+def test_pickup_destination_and_vehicle_lists_have_independent_state() -> None:
+    draft = BookingDraft()
+    pickup = [_place("pickup-main", "Cổng chính VinUni"), _place("pickup-side", "Cổng phụ VinUni")]
+    destination = [_place("aeon", "AEON Mall Long Biên"), _place("bridge", "Cầu Long Biên")]
+    draft.set_candidates("pickup", "VinUni", pickup)
+    draft.select_place("pickup", "pickup-side")
+    draft.set_candidates("destination", "Long Biên", destination)
+
+    clarifications = draft.public_state()["clarifications"]
+
+    assert clarifications["pickup"]["selected_index"] == 2  # type: ignore[index]
+    assert [option["display_name"] for option in clarifications["pickup"]["options"]] == [  # type: ignore[index]
+        "Cổng chính VinUni",
+        "Cổng phụ VinUni",
+    ]
+    assert [option["display_name"] for option in clarifications["destination"]["options"]] == [  # type: ignore[index]
+        "AEON Mall Long Biên",
+        "Cầu Long Biên",
+    ]
+    assert [option["value"] for option in clarifications["vehicle_type"]["options"]] == [  # type: ignore[index]
+        "MOTORBIKE",
+        "CAR_4",
+        "CAR_7",
+        "LUXURY",
+    ]
+
+    draft.set_vehicle_type("CAR_4")
+    assert draft.public_state()["clarifications"]["vehicle_type"] is None  # type: ignore[index]
 
 
 def test_conversation_summary_is_compact_and_uses_spoken_vehicle_label() -> None:

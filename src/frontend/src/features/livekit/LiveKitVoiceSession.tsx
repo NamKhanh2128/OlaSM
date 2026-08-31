@@ -23,7 +23,7 @@ import { CURRENT_POLICY_VERSION } from "@/features/policies/api";
 import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssistant";
 import { getRideSession } from "@/features/ride/api";
 import { createAloSMTokenSource, LIVEKIT_AGENT_NAME } from "./tokenSource";
-import { BOOKING_STATE_TOPIC, type BookingState } from "./contracts";
+import { BOOKING_STATE_TOPIC, type BookingState, type ClarificationTarget } from "./contracts";
 
 function generateUUID(): string {
   if (
@@ -62,6 +62,15 @@ const stateLabels = {
 } as const;
 
 const LIVEKIT_TEXT_SEND_TIMEOUT_MS = 10_000;
+
+function clarificationTargetForMessage(message: string): ClarificationTarget | null {
+  const normalized = message.toLocaleLowerCase("vi");
+  if (!normalized.includes("số thứ tự")) return null;
+  if (normalized.includes("điểm đón")) return "pickup";
+  if (normalized.includes("điểm đến")) return "destination";
+  if (normalized.includes("loại xe")) return "vehicle_type";
+  return null;
+}
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   let timeoutId: number | undefined;
@@ -162,17 +171,18 @@ function LiveKitCallContent({
   const bookingCompleted = Boolean(bookingState?.booking);
   const handoffConnected = bookingState?.handoff?.status === "connected";
   const connectionLost = wasConnected && agent.state === "disconnected" && !handoffConnected;
-  const clarificationMessageId = useMemo(() => {
-    if (!bookingState?.pending_place_clarification?.options.length) return null;
-    return (
-      [...messages]
-        .reverse()
-        .find((item) => {
-          const isUser = item.type === "userTranscript" || item.from?.identity === localParticipant.identity;
-          return !isUser && item.message.toLocaleLowerCase("vi").includes("số thứ tự");
-        })?.id ?? null
-    );
-  }, [bookingState?.pending_place_clarification, localParticipant.identity, messages]);
+  const clarificationMessageIds = useMemo(() => {
+    const ids: Partial<Record<ClarificationTarget, string>> = {};
+    for (const item of [...messages].reverse()) {
+      const isUser = item.type === "userTranscript" || item.from?.identity === localParticipant.identity;
+      if (isUser) continue;
+      const target = clarificationTargetForMessage(item.message);
+      if (target && !ids[target] && bookingState?.clarifications?.[target]?.options.length) {
+        ids[target] = item.id;
+      }
+    }
+    return ids;
+  }, [bookingState?.clarifications, localParticipant.identity, messages]);
 
   useEffect(() => {
     if (["initializing", "idle", "listening", "thinking", "speaking"].includes(agent.state)) {
@@ -346,11 +356,15 @@ function LiveKitCallContent({
         ) : (
           messages.map((item) => {
             const isUser = item.type === "userTranscript" || item.from?.identity === localParticipant.identity;
-            const clarification = bookingState?.pending_place_clarification;
+            const clarificationTarget = clarificationTargetForMessage(item.message);
+            const clarification = clarificationTarget
+              ? bookingState?.clarifications?.[clarificationTarget]
+              : null;
             const showsClarification =
               !isUser &&
               Boolean(clarification?.options.length) &&
-              item.id === clarificationMessageId;
+              clarificationTarget !== null &&
+              item.id === clarificationMessageIds[clarificationTarget];
             return (
               <div key={item.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
                 <div
@@ -373,7 +387,7 @@ function LiveKitCallContent({
                               {option.display_name}
                             </span>
                             <span className="block text-xs leading-5 text-slate-500 dark:text-slate-400">
-                              {option.address}
+                              {option.subtitle}
                             </span>
                           </span>
                         </li>

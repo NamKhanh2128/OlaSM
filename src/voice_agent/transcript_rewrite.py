@@ -131,7 +131,6 @@ def build_rewrite_context(
     context_window_turns: int,
 ) -> dict[str, Any]:
     draft = userdata.booking_draft
-    pending = draft.pending_place_clarification()
     return {
         "recent_dialogue_pairs": _recent_dialogue_pairs(
             turn_ctx,
@@ -143,7 +142,7 @@ def build_rewrite_context(
             "destination": draft.destination.display_name if draft.destination else None,
             "vehicle_type": draft.vehicle_type,
             "confirmation_status": draft.confirmation_status,
-            "pending_clarification": pending,
+            "clarifications": draft.booking_clarifications(),
         },
     }
 
