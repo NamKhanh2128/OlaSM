@@ -8,13 +8,16 @@ from livekit.agents import Agent, StopResponse, function_tool, llm
 
 from src.backend.services.knowledge_service import KnowledgeService
 from src.backend.services.pricing_service import PricingService
-from src.voice_agent.persistence import EphemeralVoiceStateStore, VoiceStateStore
+from src.voice_agent.persistence import EphemeralVoiceStateStore, VoiceStateConflictError, VoiceStateStore
 from src.voice_agent.safety import SafetyClassifier
 from src.voice_agent.session_data import AloSMSessionData, HandoffState
 from src.voice_agent.state_sync import publish_booking_state
 from src.voice_agent.tasks import BookingTask
+from src.voice_agent.tasks.booking import seed_complete_booking_turn
 from src.voice_agent.tools.bookings import BookingToolsService
 from src.voice_agent.tools.handoffs import HandoffToolsService
+from src.voice_agent.tools.places import PlaceToolsService
+from src.voice_agent.transcript_rewrite import TranscriptRewriter, rewrite_livekit_user_turn
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +33,18 @@ class AloSMAgent(Agent):
         knowledge_service: KnowledgeService | None = None,
         pricing_service: PricingService | None = None,
         bookings: BookingToolsService | None = None,
+        places: PlaceToolsService | None = None,
         handoffs: HandoffToolsService | None = None,
         safety_classifier: SafetyClassifier | None = None,
+        transcript_rewriter: TranscriptRewriter | None = None,
     ) -> None:
         self._state_store = state_store or EphemeralVoiceStateStore()
         self._session_data = session_data
         self._safety_classifier = safety_classifier or SafetyClassifier()
         self._handoffs = handoffs or HandoffToolsService(safety_classifier=self._safety_classifier)
         self._bookings = bookings or BookingToolsService()
+        self._places = places or PlaceToolsService()
+        self._transcript_rewriter = transcript_rewriter
         self._handoff_wait_started = False
         # These catalogs are local, validated and cached.  They are injected so
         # the LiveKit process can preload them once instead of reading files on
@@ -102,6 +109,8 @@ class AloSMAgent(Agent):
             chat_ctx=task_context,
             state_store=self._state_store,
             handoff_handler=self._create_handoff,
+            session_data=self._session_data,
+            transcript_rewriter=self._transcript_rewriter,
         )
         if outcome.status == "needs_handoff":
             current = self._session_data.handoff if self._session_data is not None else None
@@ -201,10 +210,47 @@ class AloSMAgent(Agent):
             )
 
     async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
+        if self._session_data is not None:
+            await rewrite_livekit_user_turn(
+                rewriter=self._transcript_rewriter,
+                userdata=self._session_data,
+                turn_ctx=turn_ctx,
+                new_message=new_message,
+            )
+
         # Stop this turn before the LLM can add a second AI reply after a handoff.
         current = self._session_data.handoff if self._session_data is not None else None
         if current is not None and current.status in {"pending", "accepted", "connected"}:
             raise StopResponse()
+
+        # The parent sees the first booking utterance before BookingTask owns the
+        # conversation. Seed every explicit slot now so one user turn produces
+        # one coherent red/yellow/green state projection in the UI.
+        userdata = self._session_data
+        if userdata is not None and seed_complete_booking_turn(
+            userdata.booking_draft,
+            self._places,
+            new_message.text_content or "",
+        ):
+            userdata.clear_failure()
+            logger.info(
+                "Parent booking turn seeded session=%s statuses=%s labels=%s",
+                userdata.app_session_id,
+                userdata.booking_draft.slot_statuses(),
+                userdata.booking_draft.slot_labels(),
+            )
+            try:
+                await self._state_store.save(userdata)
+            except VoiceStateConflictError:
+                userdata.record_failure(
+                    "STATE_CONFLICT",
+                    "Phiên này vừa được cập nhật ở kết nối khác.",
+                    retryable=False,
+                    fallback_action="handoff",
+                )
+                await publish_booking_state(self.session)
+                raise StopResponse() from None
+            await publish_booking_state(self.session)
         user_text = new_message.text_content or ""
         if self._safety_classifier.assess(user_text).is_emergency:
             safety_acknowledgement = self.session.say(

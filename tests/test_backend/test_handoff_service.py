@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 
 from src.backend.repositories.handoff_repository import HandoffRepository
@@ -155,3 +157,13 @@ def test_pending_queue_is_sorted_by_priority():
     service.create_handoff({"session_id": "high", "reason": "high", "summary": "high", "priority": 90})
 
     assert [item["session_id"] for item in service.list_handoffs("pending")] == ["high", "low"]
+
+
+def test_pending_queue_is_sorted_newest_first_within_same_priority():
+    service = HandoffService(HandoffRepository())
+    older = service.create_handoff({"session_id": "older", "reason": "older", "summary": "older", "priority": 50})
+    newer = service.create_handoff({"session_id": "newer", "reason": "newer", "summary": "newer", "priority": 50})
+    service._repository.update(older["handoff_id"], {"created_at": datetime(2026, 8, 31, 9, 0, tzinfo=UTC)})
+    service._repository.update(newer["handoff_id"], {"created_at": datetime(2026, 8, 31, 10, 0, tzinfo=UTC)})
+
+    assert [item["session_id"] for item in service.list_handoffs("pending")] == ["newer", "older"]
