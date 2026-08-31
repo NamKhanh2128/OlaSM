@@ -8,6 +8,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 BookingTarget = Literal["pickup", "destination"]
+BookingField = Literal["pickup", "destination", "vehicle_type"]
+BookingSlotStatus = Literal["missing", "needs_clarification", "resolved"]
 VehicleType = Literal["MOTORBIKE", "CAR_4", "CAR_7", "LUXURY"]
 ConfirmationStatus = Literal["not_requested", "awaiting", "confirmed"]
 FailureCode = Literal[
@@ -30,6 +32,12 @@ _VEHICLE_SPOKEN_LABELS: dict[VehicleType, str] = {
     "CAR_4": "xe ô tô bốn chỗ",
     "CAR_7": "xe ô tô bảy chỗ",
     "LUXURY": "xe cao cấp",
+}
+_VEHICLE_OPTION_DETAILS: dict[VehicleType, str] = {
+    "MOTORBIKE": "Tối đa một hành khách",
+    "CAR_4": "Tối đa bốn hành khách",
+    "CAR_7": "Tối đa bảy hành khách",
+    "LUXURY": "Dòng xe cao cấp",
 }
 
 
@@ -117,6 +125,8 @@ class BookingDraft(BaseModel):
     destination_query: str | None = None
     destination: PlaceCandidate | None = None
     destination_candidates: list[PlaceCandidate] = Field(default_factory=list)
+    pending_candidate_target: BookingTarget | None = None
+    vehicle_query: str | None = None
     vehicle_type: VehicleType | None = None
     quote: QuoteSnapshot | None = None
     confirmation_status: ConfirmationStatus = "not_requested"
@@ -132,6 +142,13 @@ class BookingDraft(BaseModel):
         self.cancellation_confirmation_booking_id = None
         self.booking = None
 
+    def _next_pending_candidate_target(self) -> BookingTarget | None:
+        if self.pickup is None and self.pickup_candidates:
+            return "pickup"
+        if self.destination is None and self.destination_candidates:
+            return "destination"
+        return None
+
     def set_candidates(
         self,
         target: BookingTarget,
@@ -146,6 +163,7 @@ class BookingDraft(BaseModel):
             self.destination_query = query
             self.destination = None
             self.destination_candidates = candidates
+        self.pending_candidate_target = self._next_pending_candidate_target()
         self._invalidate_quote_and_confirmation()
         self.revision += 1
 
@@ -162,13 +180,143 @@ class BookingDraft(BaseModel):
                 self.destination = selected
             self._invalidate_quote_and_confirmation()
             self.revision += 1
+        self.pending_candidate_target = self._next_pending_candidate_target()
         return selected
 
+    def place_clarification(self, target: BookingTarget) -> dict[str, object] | None:
+        """Return one target-owned candidate list without coupling it to the other slot."""
+
+        candidates = self.pickup_candidates if target == "pickup" else self.destination_candidates
+        selected = self.pickup if target == "pickup" else self.destination
+        query = self.pickup_query if target == "pickup" else self.destination_query
+        if not candidates:
+            return None
+        selected_index = next(
+            (
+                index
+                for index, candidate in enumerate(candidates, start=1)
+                if selected is not None and candidate.place_id == selected.place_id
+            ),
+            None,
+        )
+        fingerprint = hashlib.sha256(
+            "|".join(candidate.place_id for candidate in candidates).encode()
+        ).hexdigest()[:10]
+        return {
+            "clarification_id": f"{target}:{fingerprint}",
+            "target": target,
+            "query": query,
+            "selected_index": selected_index,
+            "options": [
+                {
+                    "index": index,
+                    "display_name": candidate.display_name,
+                    "subtitle": candidate.address,
+                }
+                for index, candidate in enumerate(candidates, start=1)
+            ],
+        }
+
+    def pending_place_clarification(self) -> dict[str, object] | None:
+        """Compatibility projection for clients that only understand one active list."""
+
+        target = self.pending_candidate_target
+        return self.place_clarification(target) if target is not None else None
+
+    def booking_clarifications(self) -> dict[str, object | None]:
+        """Publish independent pickup, destination and vehicle choice objects."""
+
+        vehicle_options: dict[str, object] | None = None
+        if self.vehicle_type is None:
+            vehicle_options = {
+                "clarification_id": "vehicle_type:catalog-v1",
+                "target": "vehicle_type",
+                "query": self.vehicle_query,
+                "selected_index": None,
+                "options": [
+                    {
+                        "index": index,
+                        "value": vehicle_type,
+                        "display_name": label.capitalize(),
+                        "subtitle": _VEHICLE_OPTION_DETAILS[vehicle_type],
+                    }
+                    for index, (vehicle_type, label) in enumerate(_VEHICLE_SPOKEN_LABELS.items(), start=1)
+                ],
+            }
+        return {
+            "pickup": self.place_clarification("pickup"),
+            "destination": self.place_clarification("destination"),
+            "vehicle_type": vehicle_options,
+        }
+
     def set_vehicle_type(self, vehicle_type: VehicleType) -> None:
-        if self.vehicle_type != vehicle_type:
+        if self.vehicle_type != vehicle_type or self.vehicle_query is not None:
             self.vehicle_type = vehicle_type
+            self.vehicle_query = None
             self._invalidate_quote_and_confirmation()
             self.revision += 1
+
+    def mark_vehicle_needs_clarification(self, query: str) -> None:
+        """Record a vehicle phrase that cannot yet map to one supported class."""
+
+        normalized_query = " ".join(query.split())[:200]
+        if not normalized_query:
+            raise ValueError("VEHICLE_QUERY_REQUIRED")
+        self.vehicle_query = normalized_query
+        self.vehicle_type = None
+        self._invalidate_quote_and_confirmation()
+        self.revision += 1
+
+    def slot_status(self, field: BookingField) -> BookingSlotStatus:
+        """Return the authoritative workflow/UI status for a required slot."""
+
+        if field == "pickup":
+            if self.pickup is not None:
+                return "resolved"
+            if self.pickup_query or self.pickup_candidates:
+                return "needs_clarification"
+            return "missing"
+        if field == "destination":
+            if self.destination is not None:
+                return "resolved"
+            if self.destination_query or self.destination_candidates:
+                return "needs_clarification"
+            return "missing"
+        if self.vehicle_type is not None:
+            return "resolved"
+        if self.vehicle_query:
+            return "needs_clarification"
+        return "missing"
+
+    def slot_statuses(self) -> dict[BookingField, BookingSlotStatus]:
+        return {
+            field: self.slot_status(field)
+            for field in ("pickup", "destination", "vehicle_type")
+        }
+
+    def slot_labels(self) -> dict[BookingField, str | None]:
+        """Expose the verified value or the user's unresolved phrase for each slot."""
+
+        return {
+            "pickup": self.pickup.display_name if self.pickup is not None else self.pickup_query,
+            "destination": (
+                self.destination.display_name if self.destination is not None else self.destination_query
+            ),
+            "vehicle_type": vehicle_spoken_label(self.vehicle_type) or self.vehicle_query,
+        }
+
+    def next_required_field(self) -> BookingField | None:
+        return next(
+            (
+                field
+                for field in ("pickup", "destination", "vehicle_type")
+                if self.slot_status(field) != "resolved"
+            ),
+            None,
+        )
+
+    def all_required_slots_resolved(self) -> bool:
+        return self.next_required_field() is None
 
     def set_quote(self, quote: QuoteSnapshot) -> None:
         if self.pickup is None or self.destination is None or self.vehicle_type is None:
@@ -251,6 +399,12 @@ class BookingDraft(BaseModel):
             "confirmation_status": self.confirmation_status,
             "cancellation_confirmation_pending": self.cancellation_confirmation_booking_id is not None,
             "booking": self.booking.model_dump() if self.booking else None,
+            "slot_statuses": self.slot_statuses(),
+            "slot_labels": self.slot_labels(),
+            "next_required_field": self.next_required_field(),
+            "all_required_slots_resolved": self.all_required_slots_resolved(),
+            "pending_place_clarification": self.pending_place_clarification(),
+            "clarifications": self.booking_clarifications(),
         }
 
     def conversation_summary(self) -> str:
@@ -295,6 +449,7 @@ class AloSMSessionData(BaseModel):
     consent_granted: bool = True
     recording_enabled: bool = False
     booking_draft: BookingDraft = Field(default_factory=BookingDraft)
+    rewritten_item_ids: list[str] = Field(default_factory=list, exclude=True, repr=False)
     last_asr_confidence: float | None = None
     handoff_requested: bool = False
     critical_confidence_threshold: float = Field(default=0.65, ge=0, le=1)
@@ -304,6 +459,16 @@ class AloSMSessionData(BaseModel):
     last_failure: VoiceFailure | None = None
     handoff: HandoffState | None = None
     lifecycle_status: SessionLifecycle = "active"
+
+    def claim_transcript_rewrite(self, item_id: str, *, limit: int = 128) -> bool:
+        """Claim one finalized LiveKit item so parent/task hooks cannot rewrite twice."""
+
+        normalized = item_id.strip()
+        if not normalized or normalized in self.rewritten_item_ids:
+            return False
+        self.rewritten_item_ids.append(normalized)
+        self.rewritten_item_ids = self.rewritten_item_ids[-max(limit, 1) :]
+        return True
 
     def durable_state(self) -> dict[str, object]:
         """Return only resumable business state; never transcript or raw audio."""

@@ -38,6 +38,23 @@ export type HandoffState = {
   reason_code: string;
 };
 
+export type ClarificationTarget = "pickup" | "destination" | "vehicle_type";
+export type BookingSlotKey = ClarificationTarget;
+export type BookingSlotStatus = "missing" | "needs_clarification" | "resolved";
+
+export type BookingClarificationState = {
+  clarification_id: string;
+  target: ClarificationTarget;
+  query: string | null;
+  selected_index?: number | null;
+  options: Array<{
+    index: number;
+    value?: string;
+    display_name: string;
+    subtitle: string;
+  }>;
+};
+
 export type BookingState = {
   schema_version: "1";
   revision: number;
@@ -51,4 +68,14 @@ export type BookingState = {
   failure?: VoiceFailureState | null;
   handoff?: HandoffState | null;
   recovered?: boolean;
+  slot_statuses?: Record<BookingSlotKey, BookingSlotStatus>;
+  slot_labels?: Record<BookingSlotKey, string | null>;
+  next_required_field?: BookingSlotKey | null;
+  all_required_slots_resolved?: boolean;
+  pending_place_clarification?: BookingClarificationState | null;
+  clarifications?: {
+    pickup: BookingClarificationState | null;
+    destination: BookingClarificationState | null;
+    vehicle_type: BookingClarificationState | null;
+  };
 };

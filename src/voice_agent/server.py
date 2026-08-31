@@ -36,6 +36,7 @@ from src.voice_agent.observability import LiveKitSessionObserver, SessionEventLo
 from src.voice_agent.persistence import DatabaseVoiceStateStore, VoiceStateStore
 from src.voice_agent.session_data import AloSMSessionData, FailureCode, FallbackAction, HandoffState
 from src.voice_agent.state_sync import publish_booking_state
+from src.voice_agent.transcript_rewrite import build_transcript_rewriter
 from src.voice_agent.tts_text import vietnamese_currency_tts_transform
 
 logger = logging.getLogger(__name__)
@@ -459,6 +460,33 @@ async def alosm_voice_session(ctx: JobContext) -> None:
     room_connect_duration_ms = await _connect_room_early(ctx)
 
     settings = get_livekit_voice_settings()
+    transcript_rewriter = build_transcript_rewriter(settings)
+    if transcript_rewriter is None:
+        rewrite_uses_openrouter = bool(
+            settings.voice_transcript_rewrite_base_url
+            and "openrouter.ai" in settings.voice_transcript_rewrite_base_url.casefold()
+        )
+        rewrite_key_configured = bool(
+            (
+                settings.openrouter_api_key.get_secret_value()
+                if rewrite_uses_openrouter
+                else settings.openai_api_key.get_secret_value()
+            ).strip()
+        )
+        logger.warning(
+            "Voice transcript rewrite unavailable enabled=%s key_configured=%s",
+            settings.voice_transcript_rewrite_enabled,
+            rewrite_key_configured,
+        )
+    else:
+        logger.info(
+            "Voice transcript rewrite ready model=%s reasoning=%s timeout_seconds=%.2f context_pairs=%d",
+            transcript_rewriter.model,
+            transcript_rewriter.reasoning_effort,
+            transcript_rewriter.timeout_seconds,
+            transcript_rewriter.context_window_turns,
+        )
+        ctx.add_shutdown_callback(transcript_rewriter.client.close)
     userdata = build_session_data(ctx, settings)
     event_log = SessionEventLog(
         enabled=settings.livekit_debug_event_log,
@@ -565,6 +593,7 @@ async def alosm_voice_session(ctx: JobContext) -> None:
             session_data=userdata,
             knowledge_service=knowledge_service,
             pricing_service=pricing_service,
+            transcript_rewriter=transcript_rewriter,
         ),
         record=settings.livekit_record_audio,
         room_options=RoomOptions(
