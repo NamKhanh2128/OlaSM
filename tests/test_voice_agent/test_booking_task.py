@@ -750,6 +750,53 @@ async def test_task_entry_uses_seeded_query_label_instead_of_unclear_placeholder
     assert "chưa rõ" not in session.acknowledgements[0][0]
 
 
+@pytest.mark.asyncio
+async def test_pickup_ordinal_moves_directly_to_saved_destination_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    draft = userdata.booking_draft
+    seed_complete_booking_turn(
+        draft,
+        PlaceToolsService(),
+        "Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm.",
+    )
+    session = _HandoffSession(userdata)
+    task = BookingTask(session_data=userdata, state_store=EphemeralVoiceStateStore())
+    task._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
+
+    async def ignore_publish(_: object) -> bool:
+        return True
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", ignore_publish)
+
+    with pytest.raises(StopResponse):
+        await task.on_user_turn_completed(
+            llm.ChatContext.empty(),
+            llm.ChatMessage(role="user", content=["Tôi chọn số hai"]),
+        )
+
+    assert draft.pickup is not None
+    assert draft.pickup.display_name == "Cổng phụ VinUni"
+    assert draft.destination is None
+    assert draft.destination_query == "Hồ Gươm"
+    assert draft.destination_candidates
+    assert draft.pending_candidate_target == "destination"
+    assert session.acknowledgements == [
+        (
+            "Đã chọn điểm đón là Cổng phụ VinUni. "
+            f"Đã tìm thấy {len(draft.destination_candidates)} địa điểm liên quan đến Hồ Gươm "
+            "cho điểm đến trong dữ liệu. Vui lòng chọn theo số thứ tự được liệt kê bên dưới.",
+            True,
+        )
+    ]
+
+
 def test_short_ordinal_selects_from_active_candidate_list() -> None:
     draft = AloSMSessionData(
         app_session_id="session",
