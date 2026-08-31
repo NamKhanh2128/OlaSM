@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Clock, ChevronRight, RotateCcw, Car, AlertCircle, Sparkles } from "lucide-react";
 import { BOOKING_CREATED_EVENT } from "@/app/events";
@@ -29,7 +29,7 @@ function formatFare(fare: number | null, currency: string): string {
   return `${fare.toLocaleString("vi-VN")} ${currency === "VND" ? "₫" : currency}`;
 }
 
-export const ActivityList: React.FC<ActivityListProps> = ({ activeFilter = "all" }) => {
+export const ActivityList: React.FC<ActivityListProps> = memo(({ activeFilter = "all" }) => {
   const navigate = useNavigate();
   const { open, openWithPrefill } = useVoiceAssistant();
   const [bookings, setBookings] = useState<BookingSummary[] | null>(null);
@@ -73,20 +73,20 @@ export const ActivityList: React.FC<ActivityListProps> = ({ activeFilter = "all"
     return <div className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">Đang tải lịch sử chuyến đi...</div>;
   }
 
-  // Bug thật đã sửa: filter "last_month" (chip "Tháng trước" ở ActivityPage.tsx)
-  // trước đây không có nhánh xử lý, rơi xuống `return true` giống hệt "all" — bấm
-  // vào không lọc được gì, âm thầm sai chứ không lỗi rõ ràng.
-  const filtered = bookings.filter((booking) => {
-    if (activeFilter === "cancelled") return booking.status === "CANCELLED";
-    if (activeFilter === "recent") return booking.status === "COMPLETED";
-    if (activeFilter === "last_month") {
-      if (!booking.created_at) return false;
-      const createdAt = new Date(booking.created_at).getTime();
-      const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-      return createdAt >= thirtyDaysAgo;
-    }
-    return true;
-  });
+  const filtered = useMemo(() => {
+    if (!bookings) return [];
+    return bookings.filter((booking) => {
+      if (activeFilter === "cancelled") return booking.status === "CANCELLED";
+      if (activeFilter === "recent") return booking.status === "COMPLETED";
+      if (activeFilter === "last_month") {
+        if (!booking.created_at) return false;
+        const createdAt = new Date(booking.created_at).getTime();
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        return createdAt >= thirtyDaysAgo;
+      }
+      return true;
+    });
+  }, [bookings, activeFilter]);
 
   if (filtered.length === 0) {
     return (
@@ -190,4 +190,4 @@ export const ActivityList: React.FC<ActivityListProps> = ({ activeFilter = "all"
       })}
     </div>
   );
-};
+});

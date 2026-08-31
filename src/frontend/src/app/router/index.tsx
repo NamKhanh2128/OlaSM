@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { RequireAuth } from "@/features/auth/RequireAuth";
 import { RequireRole } from "@/features/auth/RequireRole";
@@ -6,15 +6,20 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssistant";
 import { LoginPage } from "@/pages/Login/LoginPage";
 import { HomePage } from "@/pages/Home/HomePage";
-import { BookingPage } from "@/pages/Booking/BookingPage";
-import { TrackingPage } from "@/pages/Tracking/TrackingPage";
-import { ActivityPage } from "@/pages/Activity/ActivityPage";
-import { PaymentPage } from "@/pages/Payment/PaymentPage";
-import { ProfilePage } from "@/pages/Profile/ProfilePage";
 import { NotFoundPage } from "@/pages/NotFound/NotFoundPage";
 import { PoliciesPage } from "@/pages/Policies/PoliciesPage";
 import { CookieConsentBanner } from "@/features/policies/CookieConsentBanner";
-import { OperatorPage } from "@/pages/Operator/OperatorPage";
+
+const BookingPage = lazy(() => import("@/pages/Booking/BookingPage").then((m) => ({ default: m.BookingPage })));
+const TrackingPage = lazy(() => import("@/pages/Tracking/TrackingPage").then((m) => ({ default: m.TrackingPage })));
+const ActivityPage = lazy(() => import("@/pages/Activity/ActivityPage").then((m) => ({ default: m.ActivityPage })));
+const PaymentPage = lazy(() => import("@/pages/Payment/PaymentPage").then((m) => ({ default: m.PaymentPage })));
+const ProfilePage = lazy(() => import("@/pages/Profile/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+const OperatorPage = lazy(() => import("@/pages/Operator/OperatorPage").then((m) => ({ default: m.OperatorPage })));
+
+const RouteFallback: React.FC = () => (
+  <div className="mx-auto max-w-6xl p-8 text-sm text-slate-400">Đang tải…</div>
+);
 
 // Voice AI không còn là trang riêng "/assistant" — giờ là nút nổi + popup khả dụng ở
 // mọi trang (xem AppLayout.tsx). Route này chỉ còn để không phá các đường dẫn cũ đã
@@ -48,16 +53,16 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: "/", element: <HomePage /> },
-      { path: "/booking", element: <BookingPage /> },
-      { path: "/tracking", element: <TrackingPage /> },
-      { path: "/activity", element: <ActivityPage /> },
-      { path: "/payment", element: <PaymentPage /> },
-      { path: "/profile", element: <ProfilePage /> },
+      { path: "/booking", element: <Suspense fallback={<RouteFallback />}><BookingPage /></Suspense> },
+      { path: "/tracking", element: <Suspense fallback={<RouteFallback />}><TrackingPage /></Suspense> },
+      { path: "/activity", element: <Suspense fallback={<RouteFallback />}><ActivityPage /></Suspense> },
+      { path: "/payment", element: <Suspense fallback={<RouteFallback />}><PaymentPage /></Suspense> },
+      { path: "/profile", element: <Suspense fallback={<RouteFallback />}><ProfilePage /></Suspense> },
       {
         path: "/operator",
         element: (
           <RequireRole roles={["OPERATOR", "ADMIN"]}>
-            <OperatorPage />
+            <Suspense fallback={<RouteFallback />}><OperatorPage /></Suspense>
           </RequireRole>
         ),
       },
