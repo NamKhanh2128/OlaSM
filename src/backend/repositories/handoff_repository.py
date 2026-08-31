@@ -29,10 +29,10 @@ class HandoffRepository(BaseRepository):
                 for value in self._store.values()
                 if isinstance(value, dict) and value.get("status") == status
             ]
-        return sorted(
-            records,
-            key=lambda item: (-int(item.get("priority", 0)), str(item.get("created_at", ""))),
-        )
+        # Stable two-pass sort: priority remains the primary key, while newest
+        # handoffs appear first within the same priority.
+        records.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+        return sorted(records, key=lambda item: -int(item.get("priority", 0)))
 
     def update(self, handoff_id: str, updates: dict[str, object]) -> dict[str, object] | None:
         with self._lock:
