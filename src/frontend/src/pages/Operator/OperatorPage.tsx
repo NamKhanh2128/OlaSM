@@ -13,6 +13,19 @@ import {
   type HandoffRecord,
 } from "@/features/operator/api";
 
+function formatHandoffTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
 function OperatorRoom({ handoff, onLeave }: { handoff: HandoffRecord; onLeave: () => void }) {
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const [busy, setBusy] = useState(false);
@@ -150,6 +163,9 @@ export const OperatorPage: React.FC = () => {
                 <div>
                   <p className="font-bold text-slate-900 dark:text-white">{handoff.reason_code} · {handoff.queue}</p>
                   <p className="mt-1 text-sm text-slate-500">Ưu tiên {handoff.priority} · {handoff.severity}</p>
+                  <p className="mt-1 text-xs text-slate-400" title={handoff.created_at}>
+                    Tạo lúc {formatHandoffTime(handoff.created_at)}
+                  </p>
                   <p className="mt-3 text-sm text-slate-700 dark:text-slate-200">{handoff.summary}</p>
                 </div>
                 <button type="button" disabled={loadingId === handoff.handoff_id} onClick={() => void accept(handoff)} className="shrink-0 rounded-xl bg-[#00A99D] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
