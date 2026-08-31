@@ -36,6 +36,11 @@ aws --region "${AWS_REGION}" ssm get-parameters-by-path \
     printf '%s=%s\n' "${parameter_key}" "${parameter_value}"
   done > "${env_tmp}"
 
+if ! grep -qE "^OPENAI_API_KEY=.+$" "${env_tmp}"; then
+  echo "Missing OPENAI_API_KEY in SSM path ${PARAM_PATH}" >&2
+  exit 1
+fi
+
 google_credentials="$(aws --region "${AWS_REGION}" ssm get-parameter \
   --name "${GOOGLE_CREDENTIALS_PARAMETER}" \
   --with-decryption \
@@ -56,7 +61,7 @@ printf '%s' "${ghcr_token}" |
   docker login ghcr.io --username "${GHCR_USERNAME}" --password-stdin >/dev/null
 
 docker compose -f "${COMPOSE_FILE}" pull
-docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans
+docker compose -f "${COMPOSE_FILE}" up -d --force-recreate --remove-orphans
 docker logout ghcr.io >/dev/null
 
 curl --fail --silent --show-error --location --max-time 60 \
