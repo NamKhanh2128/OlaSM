@@ -631,6 +631,7 @@ def test_complete_turn_seeds_both_ambiguous_places_and_resolved_vehicle() -> Non
         "destination": "Hồ Gươm",
         "vehicle_type": "xe ô tô bốn chỗ",
     }
+    assert draft.pending_candidate_target == "pickup"
 
 
 def test_complete_route_parser_ignores_short_spoken_fillers() -> None:
@@ -682,7 +683,7 @@ async def test_known_place_candidates_bypass_low_confidence_transcript_guard(
     assert userdata.booking_draft.pickup is None
     assert len(userdata.booking_draft.pickup_candidates) == 3
     assert payload["spoken_prompt"] == (
-        "Đã tìm thấy 3 địa điểm liên quan đến VinUni trong dữ liệu. "
+        "Đã tìm thấy 3 địa điểm liên quan đến VinUni cho điểm đón trong dữ liệu. "
         "Vui lòng chọn theo số thứ tự được liệt kê bên dưới."
     )
     assert "không đọc tên hay địa chỉ" in payload["instruction"]
@@ -718,6 +719,35 @@ async def test_exact_place_tool_requires_acknowledgement_before_next_question(
     assert payload["spoken_prompt"].startswith("Đã chọn điểm đón là Cổng phụ VinUni.")
     assert "Vui lòng cho biết điểm đến" in payload["spoken_prompt"]
     assert "Đọc nguyên văn spoken_prompt" in payload["instruction"]
+
+
+@pytest.mark.asyncio
+async def test_task_entry_uses_seeded_query_label_instead_of_unclear_placeholder() -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    seed_complete_booking_turn(
+        userdata.booking_draft,
+        PlaceToolsService(),
+        "Cho tôi xe 4 chỗ đi từ VinUni tới Long Biên.",
+    )
+    session = _HandoffSession(userdata)
+    task = BookingTask(session_data=userdata)
+    task._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
+
+    await task.on_enter()
+
+    assert session.acknowledgements == [
+        (
+            "Đã tìm thấy 3 địa điểm liên quan đến VinUni cho điểm đón trong dữ liệu. "
+            "Vui lòng chọn theo số thứ tự được liệt kê bên dưới.",
+            True,
+        )
+    ]
+    assert "chưa rõ" not in session.acknowledgements[0][0]
 
 
 def test_short_ordinal_selects_from_active_candidate_list() -> None:

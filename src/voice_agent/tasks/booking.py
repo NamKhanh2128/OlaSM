@@ -306,27 +306,43 @@ def _target_label(target: BookingTarget) -> str:
     return "điểm đón" if target == "pickup" else "điểm đến"
 
 
-def _selection_followup(draft: BookingDraft, target: BookingTarget, selected: PlaceCandidate) -> str | None:
-    prefix = f"Đã chọn {_target_label(target)} là {selected.display_name}."
-    if draft.pickup is None:
-        return f"{prefix} Vui lòng cho biết điểm đón. Nếu muốn đổi, bạn có thể nói lại."
-    if draft.destination is None:
-        return f"{prefix} Vui lòng cho biết điểm đến. Nếu muốn đổi, bạn có thể nói lại."
-    if draft.vehicle_type is None:
+def _candidate_clarification_prompt(draft: BookingDraft, target: BookingTarget) -> str | None:
+    candidates = draft.pickup_candidates if target == "pickup" else draft.destination_candidates
+    selected = draft.pickup if target == "pickup" else draft.destination
+    query = draft.pickup_query if target == "pickup" else draft.destination_query
+    if selected is not None or not candidates or not query:
+        return None
+    return (
+        f"Đã tìm thấy {len(candidates)} địa điểm liên quan đến {query} cho {_target_label(target)} "
+        "trong dữ liệu. Vui lòng chọn theo số thứ tự được liệt kê bên dưới."
+    )
+
+
+def _next_required_prompt(draft: BookingDraft) -> str | None:
+    target = draft.next_required_field()
+    if target in {"pickup", "destination"}:
+        clarification = _candidate_clarification_prompt(draft, target)
+        if clarification is not None:
+            return clarification
+        return f"Vui lòng cho biết {_target_label(target)}. Nếu muốn đổi, bạn có thể nói lại."
+    if target == "vehicle_type":
         return (
-            f"{prefix} Vui lòng chọn loại xe theo số thứ tự được liệt kê bên dưới. "
+            "Vui lòng chọn loại xe theo số thứ tự được liệt kê bên dưới. "
             "Nếu muốn đổi, bạn có thể nói lại."
         )
     return None
 
 
+def _selection_followup(draft: BookingDraft, target: BookingTarget, selected: PlaceCandidate) -> str | None:
+    prefix = f"Đã chọn {_target_label(target)} là {selected.display_name}."
+    prompt = _next_required_prompt(draft)
+    return f"{prefix} {prompt}" if prompt is not None else None
+
+
 def _vehicle_followup(draft: BookingDraft, vehicle_type: VehicleType) -> str | None:
     prefix = f"Đã chọn loại xe là {vehicle_spoken_label(vehicle_type)}."
-    if draft.pickup is None:
-        return f"{prefix} Vui lòng cho biết điểm đón. Nếu muốn đổi, bạn có thể nói lại."
-    if draft.destination is None:
-        return f"{prefix} Vui lòng cho biết điểm đến. Nếu muốn đổi, bạn có thể nói lại."
-    return None
+    prompt = _next_required_prompt(draft)
+    return f"{prefix} {prompt}" if prompt is not None else None
 
 
 def _quote_confirmation_prompt(draft: BookingDraft, acknowledgement: str, quote: QuoteSnapshot) -> str:
@@ -399,7 +415,15 @@ class BookingTask(AgentTask[BookingOutcome]):
         )
 
     async def on_enter(self) -> None:
-        current_state = self.session.userdata.booking_draft.conversation_summary()
+        draft = self.session.userdata.booking_draft
+        prompt = _next_required_prompt(draft)
+        if prompt is not None:
+            # Candidate lists were already seeded by the parent agent. Speaking
+            # this bounded prompt prevents the LLM from replacing the actual
+            # query label (for example VinUni) with the phrase "chưa rõ".
+            self.session.say(prompt, allow_interruptions=True)
+            return
+        current_state = draft.conversation_summary()
         self.session.generate_reply(
             instructions=(
                 f"Trạng thái booking hiện tại: {current_state}. "
@@ -709,10 +733,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             {
                 "target": target,
                 "candidates": [candidate.model_dump() for candidate in candidates],
-                "spoken_prompt": (
-                    f"Đã tìm thấy {len(candidates)} địa điểm liên quan đến {query} trong dữ liệu. "
-                    "Vui lòng chọn theo số thứ tự được liệt kê bên dưới."
-                ),
+                "spoken_prompt": _candidate_clarification_prompt(draft, target),
                 "instruction": (
                     "Đọc nguyên văn spoken_prompt; không đọc tên hay địa chỉ candidates. "
                     "Danh sách đã được gửi riêng tới giao diện."

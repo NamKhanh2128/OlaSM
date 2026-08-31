@@ -288,6 +288,21 @@ def test_pickup_destination_and_vehicle_lists_have_independent_state() -> None:
     assert draft.public_state()["clarifications"]["vehicle_type"] is None  # type: ignore[index]
 
 
+def test_candidate_pointer_follows_booking_order_without_overwriting_lists() -> None:
+    draft = BookingDraft()
+    pickup = [_place("pickup-main", "Cổng chính VinUni"), _place("pickup-side", "Cổng phụ VinUni")]
+    destination = [_place("aeon", "AEON Mall Long Biên"), _place("bridge", "Cầu Long Biên")]
+
+    draft.set_candidates("pickup", "VinUni", pickup)
+    draft.set_candidates("destination", "Long Biên", destination)
+
+    assert draft.pending_candidate_target == "pickup"
+    draft.select_place("pickup", "pickup-main")
+    assert draft.pending_candidate_target == "destination"
+    assert draft.place_clarification("pickup") is not None
+    assert draft.place_clarification("destination") is not None
+
+
 def test_booking_slots_distinguish_missing_unclear_and_resolved() -> None:
     draft = BookingDraft()
 

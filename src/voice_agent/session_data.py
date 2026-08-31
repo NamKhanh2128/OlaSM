@@ -142,6 +142,13 @@ class BookingDraft(BaseModel):
         self.cancellation_confirmation_booking_id = None
         self.booking = None
 
+    def _next_pending_candidate_target(self) -> BookingTarget | None:
+        if self.pickup is None and self.pickup_candidates:
+            return "pickup"
+        if self.destination is None and self.destination_candidates:
+            return "destination"
+        return None
+
     def set_candidates(
         self,
         target: BookingTarget,
@@ -156,7 +163,7 @@ class BookingDraft(BaseModel):
             self.destination_query = query
             self.destination = None
             self.destination_candidates = candidates
-        self.pending_candidate_target = target if candidates else None
+        self.pending_candidate_target = self._next_pending_candidate_target()
         self._invalidate_quote_and_confirmation()
         self.revision += 1
 
@@ -173,8 +180,7 @@ class BookingDraft(BaseModel):
                 self.destination = selected
             self._invalidate_quote_and_confirmation()
             self.revision += 1
-        if self.pending_candidate_target == target:
-            self.pending_candidate_target = None
+        self.pending_candidate_target = self._next_pending_candidate_target()
         return selected
 
     def place_clarification(self, target: BookingTarget) -> dict[str, object] | None:
@@ -225,7 +231,7 @@ class BookingDraft(BaseModel):
             vehicle_options = {
                 "clarification_id": "vehicle_type:catalog-v1",
                 "target": "vehicle_type",
-                "query": None,
+                "query": self.vehicle_query,
                 "selected_index": None,
                 "options": [
                     {
