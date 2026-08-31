@@ -288,6 +288,77 @@ def test_pickup_destination_and_vehicle_lists_have_independent_state() -> None:
     assert draft.public_state()["clarifications"]["vehicle_type"] is None  # type: ignore[index]
 
 
+def test_booking_slots_distinguish_missing_unclear_and_resolved() -> None:
+    draft = BookingDraft()
+
+    assert draft.slot_statuses() == {
+        "pickup": "missing",
+        "destination": "missing",
+        "vehicle_type": "missing",
+    }
+    assert draft.slot_labels() == {
+        "pickup": None,
+        "destination": None,
+        "vehicle_type": None,
+    }
+    assert draft.next_required_field() == "pickup"
+
+    pickup = [_place("pickup-main", "Cổng chính VinUni"), _place("pickup-side", "Cổng phụ VinUni")]
+    destination = [_place("lake-east", "Bưu điện Hà Nội"), _place("lake-west", "Đền Ngọc Sơn")]
+    draft.set_candidates("pickup", "VinUni", pickup)
+    draft.set_candidates("destination", "Hồ Gươm", destination)
+    draft.mark_vehicle_needs_clarification("xe lớn")
+
+    assert draft.slot_statuses() == {
+        "pickup": "needs_clarification",
+        "destination": "needs_clarification",
+        "vehicle_type": "needs_clarification",
+    }
+    assert draft.slot_labels() == {
+        "pickup": "VinUni",
+        "destination": "Hồ Gươm",
+        "vehicle_type": "xe lớn",
+    }
+
+    draft.select_place("pickup", "pickup-main")
+    draft.select_place("destination", "lake-east")
+    draft.set_vehicle_type("CAR_4")
+
+    assert draft.slot_statuses() == {
+        "pickup": "resolved",
+        "destination": "resolved",
+        "vehicle_type": "resolved",
+    }
+    assert draft.slot_labels() == {
+        "pickup": "Cổng chính VinUni",
+        "destination": "Bưu điện Hà Nội",
+        "vehicle_type": "xe ô tô bốn chỗ",
+    }
+    assert draft.next_required_field() is None
+    assert draft.all_required_slots_resolved() is True
+
+
+def test_public_state_publishes_authoritative_slot_projection() -> None:
+    draft = BookingDraft()
+    draft.set_candidates("pickup", "VinUni", [_place("main", "Cổng chính VinUni")])
+    draft.set_vehicle_type("CAR_7")
+
+    public = draft.public_state()
+
+    assert public["slot_statuses"] == {
+        "pickup": "needs_clarification",
+        "destination": "missing",
+        "vehicle_type": "resolved",
+    }
+    assert public["slot_labels"] == {
+        "pickup": "VinUni",
+        "destination": None,
+        "vehicle_type": "xe ô tô bảy chỗ",
+    }
+    assert public["next_required_field"] == "pickup"
+    assert public["all_required_slots_resolved"] is False
+
+
 def test_conversation_summary_is_compact_and_uses_spoken_vehicle_label() -> None:
     draft = _quoted_draft()
 

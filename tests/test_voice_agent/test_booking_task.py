@@ -12,11 +12,14 @@ from src.voice_agent.tasks import booking as booking_module
 from src.voice_agent.tasks.booking import (
     BookingTask,
     can_auto_select_place,
+    extract_complete_route,
+    extract_vehicle_type,
     grounded_named_place_selection,
     grounded_ordinal_selection,
     grounded_vehicle_selection,
     is_explicit_confirmation,
     requires_location_clarification,
+    seed_complete_booking_turn,
 )
 from src.voice_agent.tools import PlaceToolsService
 
@@ -138,6 +141,41 @@ async def test_handoff_wait_rejects_later_customer_turns_without_llm_reply() -> 
             llm.ChatContext.empty(),
             llm.ChatMessage(role="user", content=["Tôi muốn nói thêm"]),
         )
+
+
+@pytest.mark.asyncio
+async def test_parent_agent_seeds_complete_first_booking_turn_before_task_handoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    session = _HandoffSession(userdata)
+    published: list[dict[str, object]] = []
+
+    async def capture_state(_: object) -> bool:
+        published.append(userdata.booking_draft.public_state())
+        return True
+
+    monkeypatch.setattr("src.voice_agent.agent.publish_booking_state", capture_state)
+    agent = AloSMAgent(session_data=userdata)
+    agent._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
+
+    await agent.on_user_turn_completed(
+        llm.ChatContext.empty(),
+        llm.ChatMessage(role="user", content=["Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm."]),
+    )
+
+    expected = {
+        "pickup": "needs_clarification",
+        "destination": "needs_clarification",
+        "vehicle_type": "resolved",
+    }
+    assert userdata.booking_draft.slot_statuses() == expected
+    assert published[-1]["slot_statuses"] == expected
 
 class _RequoteService:
     async def estimate(self, *, draft: object, **_: object) -> QuoteSnapshot:
@@ -345,6 +383,7 @@ async def test_booking_task_uses_native_function_tools() -> None:
         "confirm_booking",
         "create_booking",
         "estimate_fare",
+        "mark_vehicle_needs_clarification",
         "search_place",
         "select_place",
         "set_vehicle_type",
@@ -568,6 +607,37 @@ def test_booking_abandonment_requires_an_explicit_request() -> None:
     assert booking_module.is_booking_abandonment_request("Thôi không đặt nữa") is True
     assert booking_module.is_booking_abandonment_request("Đổi xe đi") is False
     assert booking_module.is_booking_abandonment_request("Ừ") is False
+
+
+def test_complete_turn_seeds_both_ambiguous_places_and_resolved_vehicle() -> None:
+    draft = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    ).booking_draft
+    message = "Cho tôi một xe bốn chỗ đi từ VinUni tới Hồ Gươm."
+
+    assert extract_complete_route(message) == ("VinUni", "Hồ Gươm")
+    assert extract_vehicle_type(message) == "CAR_4"
+    assert seed_complete_booking_turn(draft, PlaceToolsService(), message) is True
+    assert draft.slot_statuses() == {
+        "pickup": "needs_clarification",
+        "destination": "needs_clarification",
+        "vehicle_type": "resolved",
+    }
+    assert draft.slot_labels() == {
+        "pickup": "VinUni",
+        "destination": "Hồ Gươm",
+        "vehicle_type": "xe ô tô bốn chỗ",
+    }
+
+
+def test_complete_route_parser_ignores_short_spoken_fillers() -> None:
+    message = "Cho tôi xe bốn chỗ, ờ, đi từ, ừm, VinUni tới Hồ Gươm."
+
+    assert extract_complete_route(message) == ("VinUni", "Hồ Gươm")
+    assert extract_vehicle_type(message) == "CAR_4"
 
 
 def test_native_transcript_confidence_only_blocks_low_confidence_audio() -> None:

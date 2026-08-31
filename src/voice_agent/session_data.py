@@ -8,6 +8,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 BookingTarget = Literal["pickup", "destination"]
+BookingField = Literal["pickup", "destination", "vehicle_type"]
+BookingSlotStatus = Literal["missing", "needs_clarification", "resolved"]
 VehicleType = Literal["MOTORBIKE", "CAR_4", "CAR_7", "LUXURY"]
 ConfirmationStatus = Literal["not_requested", "awaiting", "confirmed"]
 FailureCode = Literal[
@@ -124,6 +126,7 @@ class BookingDraft(BaseModel):
     destination: PlaceCandidate | None = None
     destination_candidates: list[PlaceCandidate] = Field(default_factory=list)
     pending_candidate_target: BookingTarget | None = None
+    vehicle_query: str | None = None
     vehicle_type: VehicleType | None = None
     quote: QuoteSnapshot | None = None
     confirmation_status: ConfirmationStatus = "not_requested"
@@ -241,10 +244,73 @@ class BookingDraft(BaseModel):
         }
 
     def set_vehicle_type(self, vehicle_type: VehicleType) -> None:
-        if self.vehicle_type != vehicle_type:
+        if self.vehicle_type != vehicle_type or self.vehicle_query is not None:
             self.vehicle_type = vehicle_type
+            self.vehicle_query = None
             self._invalidate_quote_and_confirmation()
             self.revision += 1
+
+    def mark_vehicle_needs_clarification(self, query: str) -> None:
+        """Record a vehicle phrase that cannot yet map to one supported class."""
+
+        normalized_query = " ".join(query.split())[:200]
+        if not normalized_query:
+            raise ValueError("VEHICLE_QUERY_REQUIRED")
+        self.vehicle_query = normalized_query
+        self.vehicle_type = None
+        self._invalidate_quote_and_confirmation()
+        self.revision += 1
+
+    def slot_status(self, field: BookingField) -> BookingSlotStatus:
+        """Return the authoritative workflow/UI status for a required slot."""
+
+        if field == "pickup":
+            if self.pickup is not None:
+                return "resolved"
+            if self.pickup_query or self.pickup_candidates:
+                return "needs_clarification"
+            return "missing"
+        if field == "destination":
+            if self.destination is not None:
+                return "resolved"
+            if self.destination_query or self.destination_candidates:
+                return "needs_clarification"
+            return "missing"
+        if self.vehicle_type is not None:
+            return "resolved"
+        if self.vehicle_query:
+            return "needs_clarification"
+        return "missing"
+
+    def slot_statuses(self) -> dict[BookingField, BookingSlotStatus]:
+        return {
+            field: self.slot_status(field)
+            for field in ("pickup", "destination", "vehicle_type")
+        }
+
+    def slot_labels(self) -> dict[BookingField, str | None]:
+        """Expose the verified value or the user's unresolved phrase for each slot."""
+
+        return {
+            "pickup": self.pickup.display_name if self.pickup is not None else self.pickup_query,
+            "destination": (
+                self.destination.display_name if self.destination is not None else self.destination_query
+            ),
+            "vehicle_type": vehicle_spoken_label(self.vehicle_type) or self.vehicle_query,
+        }
+
+    def next_required_field(self) -> BookingField | None:
+        return next(
+            (
+                field
+                for field in ("pickup", "destination", "vehicle_type")
+                if self.slot_status(field) != "resolved"
+            ),
+            None,
+        )
+
+    def all_required_slots_resolved(self) -> bool:
+        return self.next_required_field() is None
 
     def set_quote(self, quote: QuoteSnapshot) -> None:
         if self.pickup is None or self.destination is None or self.vehicle_type is None:
@@ -327,6 +393,10 @@ class BookingDraft(BaseModel):
             "confirmation_status": self.confirmation_status,
             "cancellation_confirmation_pending": self.cancellation_confirmation_booking_id is not None,
             "booking": self.booking.model_dump() if self.booking else None,
+            "slot_statuses": self.slot_statuses(),
+            "slot_labels": self.slot_labels(),
+            "next_required_field": self.next_required_field(),
+            "all_required_slots_resolved": self.all_required_slots_resolved(),
             "pending_place_clarification": self.pending_place_clarification(),
             "clarifications": self.booking_clarifications(),
         }

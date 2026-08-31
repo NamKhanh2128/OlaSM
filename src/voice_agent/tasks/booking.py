@@ -127,6 +127,70 @@ def can_auto_select_place(candidates: list[object]) -> bool:
     }
 
 
+_SPOKEN_FILLER_PATTERN = re.compile(r"\b(?:ờ+|ơ+|ừm+|ừ+|à+)\b[,\s]*", re.IGNORECASE)
+_COMPLETE_ROUTE_PATTERN = re.compile(
+    r"(?:^|\s)(?:đi\s+)?từ\s*,?\s*(?P<pickup>.+?)\s+(?:tới|đến)\s+"
+    r"(?P<destination>.+?)(?=\s+(?:bằng|với)\s+(?:xe|ô\s*tô)|[.!?;]|$)",
+    re.IGNORECASE,
+)
+
+
+def extract_complete_route(value: str) -> tuple[str, str] | None:
+    """Extract a complete Vietnamese ``từ … tới/đến …`` route."""
+
+    compact = " ".join(_SPOKEN_FILLER_PATTERN.sub(" ", value).split())
+    match = _COMPLETE_ROUTE_PATTERN.search(compact)
+    if match is None:
+        return None
+    pickup = match.group("pickup").strip(" ,")[:200]
+    destination = match.group("destination").strip(" ,")[:200]
+    if not pickup or not destination:
+        return None
+    return pickup, destination
+
+
+def extract_vehicle_type(value: str) -> VehicleType | None:
+    """Map one explicit supported Vietnamese vehicle phrase without an LLM."""
+
+    normalized = _normalize_confirmation(value)
+    if re.search(r"\bxe may\b", normalized):
+        return "MOTORBIKE"
+    if re.search(r"\b(?:bon|4) cho\b", normalized):
+        return "CAR_4"
+    if re.search(r"\b(?:bay|7) cho\b", normalized):
+        return "CAR_7"
+    if re.search(r"\b(?:xe )?(?:cao cap|luxury)\b", normalized):
+        return "LUXURY"
+    return None
+
+
+def seed_complete_booking_turn(
+    draft: BookingDraft,
+    places: PlaceToolsService,
+    value: str,
+) -> bool:
+    """Populate every explicit slot before the conversational LLM asks follow-ups."""
+
+    changed = False
+    vehicle_type = extract_vehicle_type(value)
+    if vehicle_type is not None and draft.slot_status("vehicle_type") != "resolved":
+        draft.set_vehicle_type(vehicle_type)
+        changed = True
+
+    route = extract_complete_route(value)
+    if route is None:
+        return changed
+    for target, query in zip(("pickup", "destination"), route, strict=True):
+        if draft.slot_status(target) == "resolved":
+            continue
+        candidates = places.search(query)
+        draft.set_candidates(target, query, candidates)
+        if can_auto_select_place(candidates):
+            draft.select_place(target, candidates[0].place_id)
+        changed = True
+    return changed
+
+
 _CANDIDATE_NUMBER_TOKENS: dict[str, int] = {
     "1": 0,
     "mot": 0,
@@ -309,6 +373,13 @@ class BookingTask(AgentTask[BookingOutcome]):
                 "Khi có nhiều candidate, chỉ nói số lượng kết quả và yêu cầu khách chọn số hiển thị bên dưới; "
                 "tuyệt đối không đọc tên hoặc địa chỉ trong danh sách vì giao diện đã hiển thị chúng. "
                 "Một lựa chọn theo số hợp lệ cập nhật slot ngay và không cần xác nhận candidate lần hai. "
+                "Mỗi slot có một trạng thái: missing là chưa có và hiển thị đỏ; needs_clarification "
+                "là đã có thông tin nhưng chưa rõ và hiển thị vàng; resolved là đã xác minh và hiển thị xanh. "
+                "Nếu khách cung cấp nhiều slot trong cùng một lượt, phải xử lý tất cả slot đã cung cấp "
+                "bằng các tool tương ứng trước khi hỏi lại, kể cả khi một địa điểm đang mơ hồ. "
+                "Nếu khách có nói loại xe nhưng chưa thể ánh xạ chắc chắn sang một loại hỗ trợ, gọi "
+                "mark_vehicle_needs_clarification trước khi hỏi. Chỉ hỏi slot next_required_field và "
+                "không hỏi lại slot đã resolved. "
                 "Sau mọi thay đổi điểm đón, điểm đến hoặc loại xe, câu trả lời bắt buộc phải bắt đầu bằng "
                 "'Đã chọn điểm đón là...', 'Đã chọn điểm đến là...' hoặc 'Đã chọn loại xe là...'; "
                 "chỉ sau câu đó mới hỏi trường tiếp theo. Nếu chưa có loại xe, phải hỏi khách chọn loại xe "
@@ -745,6 +816,35 @@ class BookingTask(AgentTask[BookingOutcome]):
         if refreshed_quote is not None:
             return _quote_confirmation_prompt(draft, acknowledgement, refreshed_quote)
         return _vehicle_followup(draft, vehicle_type) or acknowledgement
+
+    @function_tool()
+    async def mark_vehicle_needs_clarification(
+        self,
+        context: RunContext[AloSMSessionData],
+        query: str,
+    ) -> str:
+        """Đánh dấu mô tả loại xe đã được nói nhưng chưa ánh xạ chắc chắn.
+
+        Args:
+            query: Nguyên văn phần mô tả loại xe mà khách vừa cung cấp.
+        """
+
+        context.disallow_interruptions()
+        try:
+            self._draft(context).mark_vehicle_needs_clarification(query)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        context.userdata.clear_failure()
+        await self._commit(context)
+        return json.dumps(
+            {
+                "message": "Loại xe cần được làm rõ.",
+                "supported_vehicle_types": ["MOTORBIKE", "CAR_4", "CAR_7", "LUXURY"],
+                "next_required_field": self._draft(context).next_required_field(),
+                "instruction": "Hỏi khách chọn xe máy, ô tô bốn chỗ, ô tô bảy chỗ hoặc xe cao cấp.",
+            },
+            ensure_ascii=False,
+        )
 
     @function_tool()
     async def estimate_fare(self, context: RunContext[AloSMSessionData]) -> str:

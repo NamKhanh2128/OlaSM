@@ -39,6 +39,8 @@ export type HandoffState = {
 };
 
 export type ClarificationTarget = "pickup" | "destination" | "vehicle_type";
+export type BookingSlotKey = ClarificationTarget;
+export type BookingSlotStatus = "missing" | "needs_clarification" | "resolved";
 
 export type BookingClarificationState = {
   clarification_id: string;
@@ -66,6 +68,10 @@ export type BookingState = {
   failure?: VoiceFailureState | null;
   handoff?: HandoffState | null;
   recovered?: boolean;
+  slot_statuses?: Record<BookingSlotKey, BookingSlotStatus>;
+  slot_labels?: Record<BookingSlotKey, string | null>;
+  next_required_field?: BookingSlotKey | null;
+  all_required_slots_resolved?: boolean;
   pending_place_clarification?: BookingClarificationState | null;
   clarifications?: {
     pickup: BookingClarificationState | null;
