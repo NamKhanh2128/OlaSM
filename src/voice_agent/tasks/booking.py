@@ -7,6 +7,7 @@ import logging
 import re
 import time
 import unicodedata
+from collections.abc import Awaitable, Callable
 from typing import Literal
 
 from livekit.agents import AgentTask, RunContext, StopResponse, ToolError, function_tool, llm
@@ -28,7 +29,6 @@ from src.voice_agent.session_data import (
 from src.voice_agent.state_sync import publish_booking_state
 from src.voice_agent.tools import (
     BookingToolsService,
-    HandoffToolsService,
     PlaceToolsService,
     QuoteToolsService,
 )
@@ -47,6 +47,9 @@ class BookingOutcome(BaseModel):
     message: str
     booking: BookingResult | None = None
     reason: str | None = None
+
+
+HandoffHandler = Callable[[str], Awaitable[str]]
 
 
 def _normalize_confirmation(value: str) -> str:
@@ -135,11 +138,13 @@ class BookingTask(AgentTask[BookingOutcome]):
         quotes: QuoteToolsService | None = None,
         bookings: BookingToolsService | None = None,
         state_store: VoiceStateStore | None = None,
+        handoff_handler: HandoffHandler | None = None,
     ) -> None:
         self._places = places or PlaceToolsService()
         self._quotes = quotes or QuoteToolsService()
         self._bookings = bookings or BookingToolsService()
         self._state_store = state_store or EphemeralVoiceStateStore()
+        self._handoff_handler = handoff_handler
         super().__init__(
             chat_ctx=chat_ctx,
             instructions=(
@@ -161,8 +166,9 @@ class BookingTask(AgentTask[BookingOutcome]):
                 "Nếu khách sửa điểm đón, điểm đến hoặc loại xe, gọi tool tương ứng; hệ thống sẽ "
                 "tự xoá giá và xác nhận cũ. Không được tự bịa giá, ETA hoặc mã chuyến. "
                 "Nếu tool báo ASR_LOW_CONFIDENCE thì yêu cầu khách nói lại hoặc nhập tay. "
-                "Nếu khách yêu cầu gặp người thật, tổng đài viên thật, nhân viên thật, operator hoặc yêu cầu chuyển máy, "
-                "hãy kết thúc task với trạng thái cần chuyển tổng đài viên; không tự tạo handoff trong task. "
+                "Nếu khách muốn nói chuyện với người thật hoặc cần được chuyển tới tổng đài viên, "
+                "hãy gọi request_handoff với lý do do khách cung cấp; không trả lời như thể đã chuyển "
+                "nếu tool chưa trả về trạng thái pending, accepted hoặc connected. "
                 "Nếu khách nói rõ không muốn đặt xe nữa, hãy kết thúc task với trạng thái abandoned."
             ),
         )
@@ -193,15 +199,6 @@ class BookingTask(AgentTask[BookingOutcome]):
         current = self.session.userdata.handoff
         if current is not None and current.status in {"pending", "accepted", "connected"}:
             raise StopResponse()
-        if HandoffToolsService.is_handoff_request(new_message.text_content or ""):
-            outcome = BookingOutcome(
-                status="needs_handoff",
-                message="Khách yêu cầu chuyển tới tổng đài viên.",
-                reason=new_message.text_content or "Khách yêu cầu gặp tổng đài viên.",
-            )
-            if not self.done():
-                self.complete(outcome)
-            raise StopResponse()
         if is_booking_abandonment_request(new_message.text_content or ""):
             outcome = BookingOutcome(
                 status="abandoned",
@@ -211,6 +208,35 @@ class BookingTask(AgentTask[BookingOutcome]):
             if not self.done():
                 self.complete(outcome)
             raise StopResponse()
+
+    @function_tool()
+    async def request_handoff(self, context: RunContext[AloSMSessionData], reason: str) -> str:
+        """Chuyển yêu cầu gặp người thật lên bộ điều phối của cuộc gọi.
+
+        Args:
+            reason: Lý do ngắn gọn do khách cung cấp để tổng đài viên hiểu yêu cầu.
+        """
+        context.disallow_interruptions()
+        if self._handoff_handler is None:
+            return json.dumps(
+                {"status": "failed", "message": "Chưa cấu hình xử lý chuyển tổng đài viên."},
+                ensure_ascii=False,
+            )
+        result = await self._handoff_handler(reason)
+        try:
+            status = str(json.loads(result).get("status") or "")
+        except json.JSONDecodeError:
+            status = ""
+        if status in {"pending", "accepted", "connected"}:
+            outcome = BookingOutcome(
+                status="needs_handoff",
+                message="Đã tạo yêu cầu chuyển tổng đài viên.",
+                reason=reason,
+            )
+            if not self.done():
+                self.complete(outcome)
+            raise StopResponse()
+        return result
 
     async def _interrupt_stale_speech(self, context: RunContext[AloSMSessionData]) -> None:
         """Cancel pre-tool speech so stale quote/location text is never played."""
@@ -353,7 +379,12 @@ class BookingTask(AgentTask[BookingOutcome]):
                 if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None
                 else None
             )
-            if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None and refreshed_quote is None:
+            if (
+                draft.pickup is not None
+                and draft.destination is not None
+                and draft.vehicle_type is not None
+                and refreshed_quote is None
+            ):
                 return "Đã cập nhật địa điểm nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
             context.userdata.clear_failure()
             if refreshed_quote is None:
@@ -425,7 +456,12 @@ class BookingTask(AgentTask[BookingOutcome]):
             if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None
             else None
         )
-        if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None and refreshed_quote is None:
+        if (
+            draft.pickup is not None
+            and draft.destination is not None
+            and draft.vehicle_type is not None
+            and refreshed_quote is None
+        ):
             return "Đã xác nhận địa điểm nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
         context.userdata.clear_failure()
         if refreshed_quote is None:
@@ -469,7 +505,12 @@ class BookingTask(AgentTask[BookingOutcome]):
             if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None
             else None
         )
-        if draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None and refreshed_quote is None:
+        if (
+            draft.pickup is not None
+            and draft.destination is not None
+            and draft.vehicle_type is not None
+            and refreshed_quote is None
+        ):
             return "Đã cập nhật loại xe nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
         context.userdata.clear_failure()
         if refreshed_quote is None:
@@ -564,10 +605,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         draft = self._draft(context)
         existing_booking = draft.booking
         if existing_booking is not None and existing_booking.status != "CANCELLED":
-            return (
-                f"Chuyến xe đã được đặt thành công với mã {existing_booking.booking_id}. "
-                "Không tạo thêm chuyến mới."
-            )
+            return f"Chuyến xe đã được đặt thành công với mã {existing_booking.booking_id}. Không tạo thêm chuyến mới."
         if draft.confirmation_status == "confirmed":
             if draft.quote is None or draft.confirmation_fingerprint != draft.quote.fingerprint:
                 raise ToolError("BOOKING_CONTEXT_CHANGED")

@@ -22,23 +22,6 @@ class HandoffToolsService:
         self._service = service or HandoffService()
         self._safety_classifier = safety_classifier or SafetyClassifier()
 
-    @staticmethod
-    def is_handoff_request(text: str) -> bool:
-        normalized = normalize_user_text(text)
-        return any(
-            phrase in normalized
-            for phrase in (
-                "gap nguoi that",
-                "gap tong dai vien",
-                "tong dai vien that",
-                "nhan vien that",
-                "chuyen may",
-                "chuyen cho toi gap",
-                "operator",
-                "human agent",
-            )
-        )
-
     def _classify(self, reason: str) -> tuple[str, int, str, str, bool]:
         safety = self._safety_classifier.assess(reason)
         if safety.is_emergency:

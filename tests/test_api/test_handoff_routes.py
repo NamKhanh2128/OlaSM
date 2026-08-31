@@ -1,5 +1,6 @@
 import pytest
 
+from src.backend.repositories.handoff_repository import get_handoff_repository
 from src.backend.services.auth_service import AuthService
 
 
@@ -62,3 +63,58 @@ async def test_customer_cannot_create_handoff_for_another_session(client):
     )
 
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_operator_api_masks_sensitive_legacy_handoff_context(client):
+    login = await _login(client)
+    access_token = login["access_token"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+    AuthService.users["0901234567"]["role"] = "OPERATOR"
+    handoff_id = "handoff_api_legacy_privacy"
+    repository = get_handoff_repository()
+    repository.create(
+        {
+            "handoff_id": handoff_id,
+            "session_id": login["session_id"],
+            "reason": "PRIVATE_REASON_MARKER",
+            "reason_code": "USER_REQUEST",
+            "summary": "PRIVATE_SUMMARY_MARKER",
+            "priority": 50,
+            "severity": "NORMAL",
+            "queue": "GENERAL_OPERATOR",
+            "requires_immediate_transfer": False,
+            "status": "pending",
+            "created_at": "2026-08-31T00:00:00+00:00",
+            "context_snapshot": {
+                "summary": "PRIVATE_QUERY_MARKER",
+                "booking_state": {
+                    "pickup": {
+                        "place_id": "pickup",
+                        "display_name": "Public pickup",
+                        "address": "PRIVATE_ADDRESS_MARKER",
+                        "provider": "test",
+                    }
+                },
+            },
+        }
+    )
+
+    try:
+        response = await client.get("/api/v1/handoffs", headers=headers)
+
+        assert response.status_code == 200
+        item = next(item for item in response.json() if item["handoff_id"] == handoff_id)
+        serialized = str(item)
+        assert "PRIVATE_REASON_MARKER" not in serialized
+        assert "PRIVATE_SUMMARY_MARKER" not in serialized
+        assert "PRIVATE_QUERY_MARKER" not in serialized
+        assert "PRIVATE_ADDRESS_MARKER" not in serialized
+        assert item["reason"] == "Khách yêu cầu gặp tổng đài viên"
+        assert item["context_snapshot"]["booking_state"]["pickup"] == {
+            "place_id": "pickup",
+            "display_name": "Public pickup",
+            "provider": "test",
+        }
+    finally:
+        AuthService.users["0901234567"]["role"] = "CUSTOMER"

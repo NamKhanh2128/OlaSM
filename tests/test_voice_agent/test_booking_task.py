@@ -135,6 +135,7 @@ async def test_handoff_wait_rejects_later_customer_turns_without_llm_reply() -> 
             llm.ChatMessage(role="user", content=["Tôi muốn nói thêm"]),
         )
 
+
 class _RequoteService:
     async def estimate(self, *, draft: object, **_: object) -> QuoteSnapshot:
         assert getattr(draft, "pickup") is not None
@@ -152,6 +153,7 @@ class _RequoteService:
             expires_at="2099-01-01T00:00:00+00:00",
             estimated=True,
         )
+
 
 @pytest.mark.asyncio
 async def test_agent_rag_tool_returns_versioned_policy_citation() -> None:
@@ -299,7 +301,7 @@ async def test_cancel_booking_uses_llm_decision_before_backend_call(
     second = await agent.cancel_booking("Khách xác nhận hủy chuyến", confirmation_decision="confirm")
 
     assert backend.calls == [("book-1", "session:cancel_booking:book-1", "user")]
-    assert "\"cancelled\": true" in second
+    assert '"cancelled": true' in second
 
 
 async def _noop_publish(*_: object) -> None:
@@ -341,6 +343,7 @@ async def test_booking_task_uses_native_function_tools() -> None:
         "confirm_booking",
         "create_booking",
         "estimate_fare",
+        "request_handoff",
         "search_place",
         "select_place",
         "set_vehicle_type",
@@ -627,3 +630,30 @@ def test_only_unique_exact_or_alias_place_can_skip_clarification() -> None:
     assert can_auto_select_place(service.search("Đại học Ếch Khoa Hà Nội")) is False
     assert can_auto_select_place(service.search("VinUni")) is False
     assert can_auto_select_place(service.search("Hồ Gươm")) is False
+
+
+@pytest.mark.asyncio
+async def test_booking_task_handoff_tool_delegates_llm_reason_to_call_level_handler() -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    reasons: list[str] = []
+
+    async def _handle_handoff(reason: str) -> str:
+        reasons.append(reason)
+        return '{"status":"pending","handoff_id":"handoff-test"}'
+
+    task = BookingTask(handoff_handler=_handle_handoff)
+    context = SimpleNamespace(
+        userdata=userdata,
+        session=object(),
+        disallow_interruptions=lambda: None,
+    )
+
+    with pytest.raises(StopResponse):
+        await BookingTask.request_handoff._func(task, context, "Kết nối tôi với người hỗ trợ về chuyến này")
+
+    assert reasons == ["Kết nối tôi với người hỗ trợ về chuyến này"]
