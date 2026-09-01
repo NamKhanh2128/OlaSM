@@ -9,7 +9,7 @@ import logging
 import re
 import time
 import unicodedata
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, cast
 
 from livekit.agents import llm
 from openai import AsyncOpenAI, OpenAIError
@@ -254,20 +254,18 @@ def build_transcript_rewriter(settings: LiveKitVoiceSettings) -> OpenAITranscrip
     )
 
 
-async def rewrite_livekit_user_turn(
+async def _rewrite_finalized_text(
     *,
     rewriter: TranscriptRewriter | None,
     userdata: AloSMSessionData,
     turn_ctx: llm.ChatContext,
-    new_message: llm.ChatMessage,
-) -> TranscriptRewriteResult | None:
-    """Rewrite one finalized item once, before the conversational LLM runs."""
+    item_id: str,
+    text: str,
+) -> TranscriptRewriteResult:
+    """Compute one rewrite result without mutating the LiveKit message."""
 
-    text = (new_message.text_content or "").strip()
-    if not text or not userdata.claim_transcript_rewrite(new_message.id):
-        return None
     if is_short_ordinal_selection(text):
-        logger.info("Voice transcript rewrite skipped item_id=%s reason=short_ordinal", new_message.id)
+        logger.info("Voice transcript rewrite skipped item_id=%s reason=short_ordinal", item_id)
         return TranscriptRewriteResult(raw_text=text, normalized_text=text, reason="short_ordinal")
     if rewriter is None:
         return TranscriptRewriteResult(raw_text=text, normalized_text=text, reason="disabled_or_unconfigured")
@@ -282,7 +280,7 @@ async def rewrite_livekit_user_turn(
     started = time.monotonic()
     logger.info(
         "Voice transcript rewrite started item_id=%s timeout_seconds=%.2f context_pairs=%d",
-        new_message.id,
+        item_id,
         timeout_seconds,
         len(context["recent_dialogue_pairs"]),
     )
@@ -297,7 +295,7 @@ async def rewrite_livekit_user_turn(
         duration_ms = int((time.monotonic() - started) * 1000)
         logger.warning(
             "Voice transcript rewrite timed out item_id=%s duration_ms=%d limit_seconds=%.2f",
-            new_message.id,
+            item_id,
             duration_ms,
             timeout_seconds,
         )
@@ -308,15 +306,58 @@ async def rewrite_livekit_user_turn(
             duration_ms=duration_ms,
         )
 
-    if result.applied:
-        non_text = [part for part in new_message.content if not isinstance(part, str)]
-        new_message.content = [result.normalized_text, *non_text]
     logger.info(
         "Voice transcript rewrite completed item_id=%s applied=%s intent=%s reason=%s duration_ms=%d",
-        new_message.id,
+        item_id,
         result.applied,
         result.inferred_intent,
         result.reason,
         result.duration_ms,
     )
+    return result
+
+
+async def rewrite_livekit_user_turn(
+    *,
+    rewriter: TranscriptRewriter | None,
+    userdata: AloSMSessionData,
+    turn_ctx: llm.ChatContext,
+    new_message: llm.ChatMessage,
+) -> TranscriptRewriteResult | None:
+    """Join one per-item rewrite barrier before exposing the message to the LLM."""
+
+    text = (new_message.text_content or "").strip()
+    item_id = new_message.id.strip()
+    if not text or not item_id:
+        return None
+
+    async with userdata.transcript_rewrite_lock:
+        existing = userdata.transcript_rewrite_tasks.get(item_id)
+        if existing is None:
+            task = asyncio.create_task(
+                _rewrite_finalized_text(
+                    rewriter=rewriter,
+                    userdata=userdata,
+                    turn_ctx=turn_ctx,
+                    item_id=item_id,
+                    text=text,
+                ),
+                name=f"transcript-rewrite:{item_id}",
+            )
+            userdata.remember_transcript_rewrite_task(item_id, task)
+        else:
+            task = existing
+
+    result = cast(TranscriptRewriteResult, await asyncio.shield(task))
+    if result.applied:
+        async with userdata.transcript_rewrite_lock:
+            current_text = (new_message.text_content or "").strip()
+            if current_text in {result.raw_text, result.normalized_text}:
+                non_text = [part for part in new_message.content if not isinstance(part, str)]
+                new_message.content = [result.normalized_text, *non_text]
+            else:
+                logger.warning(
+                    "Voice transcript rewrite result not applied item_id=%s reason=message_changed",
+                    item_id,
+                )
     return result

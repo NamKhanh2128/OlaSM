@@ -56,6 +56,32 @@ class _HangingRewriter:
         raise AssertionError("unreachable")
 
 
+class _BlockingRewriter(_Rewriter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def rewrite(
+        self,
+        text: str,
+        *,
+        session_context: dict[str, Any],
+        session_id: str,
+    ) -> TranscriptRewriteResult:
+        self.calls.append({"text": text, "context": session_context, "session_id": session_id})
+        self.started.set()
+        await self.release.wait()
+        return TranscriptRewriteResult(
+            raw_text=text,
+            normalized_text="Đổi điểm đón sang Hồ Gươm",
+            applied=True,
+            reason="applied",
+            inferred_intent="CHANGE_PICKUP",
+            confidence=0.99,
+        )
+
+
 @pytest.mark.parametrize("text", ["2", "số 2", "tôi chọn số 2", "chọn thứ hai"])
 def test_short_ordinal_selection_is_deterministic(text: str) -> None:
     assert is_short_ordinal_selection(text) is True
@@ -149,5 +175,53 @@ async def test_one_finalized_item_is_processed_once() -> None:
     )
 
     assert first is not None
-    assert second is None
+    assert second is first
     assert len(rewriter.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_hooks_join_one_rewrite_before_mutating_messages() -> None:
+    userdata = _userdata()
+    rewriter = _BlockingRewriter()
+    message_id = "item-shared"
+    parent_message = llm.ChatMessage(
+        id=message_id,
+        role="user",
+        content=["Đổi điểm đón sang Hồ Gương"],
+    )
+    task_message = llm.ChatMessage(
+        id=message_id,
+        role="user",
+        content=["Đổi điểm đón sang Hồ Gương"],
+    )
+
+    parent_hook = asyncio.create_task(
+        rewrite_livekit_user_turn(
+            rewriter=rewriter,
+            userdata=userdata,
+            turn_ctx=llm.ChatContext.empty(),
+            new_message=parent_message,
+        )
+    )
+    await rewriter.started.wait()
+    task_hook = asyncio.create_task(
+        rewrite_livekit_user_turn(
+            rewriter=rewriter,
+            userdata=userdata,
+            turn_ctx=llm.ChatContext.empty(),
+            new_message=task_message,
+        )
+    )
+    await asyncio.sleep(0)
+
+    assert task_hook.done() is False
+    assert parent_message.text_content == "Đổi điểm đón sang Hồ Gương"
+    assert task_message.text_content == "Đổi điểm đón sang Hồ Gương"
+
+    rewriter.release.set()
+    parent_result, task_result = await asyncio.gather(parent_hook, task_hook)
+
+    assert parent_result is task_result
+    assert len(rewriter.calls) == 1
+    assert parent_message.text_content == "Đổi điểm đón sang Hồ Gươm"
+    assert task_message.text_content == "Đổi điểm đón sang Hồ Gươm"

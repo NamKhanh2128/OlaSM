@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 BookingTarget = Literal["pickup", "destination"]
 BookingField = Literal["pickup", "destination", "vehicle_type"]
@@ -26,6 +27,13 @@ FailureCode = Literal[
 ]
 FallbackAction = Literal["repeat_or_text", "retry", "handoff", "none"]
 SessionLifecycle = Literal["active", "completed", "cancelled"]
+
+VEHICLE_TYPE_ORDER: tuple[VehicleType, ...] = (
+    "MOTORBIKE",
+    "CAR_4",
+    "CAR_7",
+    "LUXURY",
+)
 
 _VEHICLE_SPOKEN_LABELS: dict[VehicleType, str] = {
     "MOTORBIKE": "xe máy",
@@ -237,10 +245,10 @@ class BookingDraft(BaseModel):
                     {
                         "index": index,
                         "value": vehicle_type,
-                        "display_name": label.capitalize(),
+                        "display_name": _VEHICLE_SPOKEN_LABELS[vehicle_type].capitalize(),
                         "subtitle": _VEHICLE_OPTION_DETAILS[vehicle_type],
                     }
-                    for index, (vehicle_type, label) in enumerate(_VEHICLE_SPOKEN_LABELS.items(), start=1)
+                    for index, vehicle_type in enumerate(VEHICLE_TYPE_ORDER, start=1)
                 ],
             }
         return {
@@ -449,7 +457,6 @@ class AloSMSessionData(BaseModel):
     consent_granted: bool = True
     recording_enabled: bool = False
     booking_draft: BookingDraft = Field(default_factory=BookingDraft)
-    rewritten_item_ids: list[str] = Field(default_factory=list, exclude=True, repr=False)
     last_asr_confidence: float | None = None
     handoff_requested: bool = False
     critical_confidence_threshold: float = Field(default=0.65, ge=0, le=1)
@@ -460,15 +467,33 @@ class AloSMSessionData(BaseModel):
     handoff: HandoffState | None = None
     lifecycle_status: SessionLifecycle = "active"
 
-    def claim_transcript_rewrite(self, item_id: str, *, limit: int = 128) -> bool:
-        """Claim one finalized LiveKit item so parent/task hooks cannot rewrite twice."""
+    _transcript_rewrite_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
+    _transcript_rewrite_tasks: dict[str, asyncio.Task[object]] = PrivateAttr(default_factory=dict)
 
-        normalized = item_id.strip()
-        if not normalized or normalized in self.rewritten_item_ids:
-            return False
-        self.rewritten_item_ids.append(normalized)
-        self.rewritten_item_ids = self.rewritten_item_ids[-max(limit, 1) :]
-        return True
+    @property
+    def transcript_rewrite_lock(self) -> asyncio.Lock:
+        """Coordinate rewrite task creation and finalized-message updates."""
+
+        return self._transcript_rewrite_lock
+
+    @property
+    def transcript_rewrite_tasks(self) -> dict[str, asyncio.Task[object]]:
+        """Return the per-item rewrite barriers owned by this call session."""
+
+        return self._transcript_rewrite_tasks
+
+    def remember_transcript_rewrite_task(
+        self,
+        item_id: str,
+        task: asyncio.Task[object],
+        *,
+        limit: int = 128,
+    ) -> None:
+        """Retain a bounded barrier so duplicate hooks join one rewrite result."""
+
+        self._transcript_rewrite_tasks[item_id] = task
+        while len(self._transcript_rewrite_tasks) > max(limit, 1):
+            self._transcript_rewrite_tasks.pop(next(iter(self._transcript_rewrite_tasks)))
 
     def durable_state(self) -> dict[str, object]:
         """Return only resumable business state; never transcript or raw audio."""
