@@ -84,10 +84,12 @@ lý lại cùng turn.
 
 ### Contextual correction
 
-Với câu `không phải Hồ Gươm mà là Long Biên`, parser cần đọc booking state để suy
-ra field. Nó đọc một deep snapshot, nhưng trước lookup vẫn xác minh lại dưới
-transaction lock rằng `Hồ Gươm` còn thuộc đúng field đã suy ra. Nếu state đã đổi,
-request bị dừng; không áp correction lên một draft mới hơn.
+Với câu `không phải Hồ Gươm mà là Long Biên` hoặc `đổi Hồ Gươm thành Long Biên`,
+parser cần đọc booking state để suy ra field. Nó đọc một deep snapshot, nhưng
+trước lookup vẫn xác minh lại dưới transaction lock rằng `Hồ Gươm` còn thuộc đúng
+field đã suy ra. Nếu state đã đổi, request bị dừng; không áp correction lên một
+draft mới hơn. Filler/cutoff filtering chỉ tạo text sạch; nó không được phép bỏ
+qua bước ground và revalidation này.
 
 ## 2. Transcript rewrite concurrency
 
@@ -194,4 +196,4 @@ Persistence concurrency trong `tests/test_voice_agent/test_persistence.py`:
 | `d88abbb` | Đưa lookup vào booking-change transaction lock |
 | `456b57d` | Đồng bộ transcript-rewrite lock/barrier sau merge develop |
 | `7b1afe1` | Revalidate contextual correction trong transaction |
-
+| `521bc40` | Ground rule-based barge-in có filler vào state hiện tại |

@@ -111,7 +111,7 @@ Parser hiện dùng một token scan:
 Độ phức tạp là `O(n * k)` với `k` là tập prefix cố định, nhỏ; về thực tế là tuyến
 tính theo số token ASR.
 
-### 6. Correction không nói tên field
+### 6. Barge-in có filler, false start và không nói tên field
 
 Barge-in thực tế có thể là:
 
@@ -125,6 +125,25 @@ là NEW`, không dùng capture tham lam. `OLD` chỉ được ánh xạ khi kh�
 query hoặc giá trị hiện tại của một slot trong `BookingDraft`; parser không đoán
 từ toàn bộ candidate list. `NEW` tiếp tục đi qua cùng entity boundary và place
 search như explicit change.
+
+Một dạng ASR thực tế khác là:
+
+```text
+Ờ, khoan, khoan. Đổi Hồ Gươm thành H-- ờ, Long Biên.
+```
+
+`_clean_booking_change_transcript` xử lý trước khi extract:
+
+- bỏ prefix ngắt lời ở đầu câu như `ờ`, `ơ`, `ừm`, `khoan`, `khoan đã`, `đợi`,
+  `chờ chút`;
+- bỏ filler đứng độc lập, không xóa âm tiết nằm trong một từ có nghĩa;
+- bỏ token ASR bị cắt ngang và kết thúc bằng dấu gạch như `H--`;
+- giữ hard limit 1.000 ký tự và gom whitespace sau khi lọc.
+
+Sau đó parser token-based nhận các mẫu `đổi/sửa/chuyển/thay/cập nhật OLD
+thành/sang/qua NEW`. `OLD` vẫn phải khớp duy nhất với slot hiện tại; nếu không,
+parser trả `None`. Vì vậy các cue mới giúp nhận barge-in nhưng không cho phép đổi
+nhầm field bằng một tên không có trong state.
 
 ## Invariants
 
@@ -149,7 +168,9 @@ Các test chính nằm trong `tests/test_voice_agent/test_booking_task.py`:
 - `test_normal_route_or_proper_name_is_not_an_explicit_booking_change`;
 - `test_explicit_booking_change_keeps_only_the_booking_entity_span`;
 - `test_explicit_booking_change_rejects_oversized_unbounded_remark`;
-- `test_contextual_correction_grounds_old_value_to_destination_slot`.
+- `test_contextual_correction_grounds_old_value_to_destination_slot`;
+- `test_contextual_change_does_not_guess_unknown_previous_value`;
+- `test_contextual_destination_barge_in_replaces_only_destination`.
 
 ## Lịch sử thay đổi
 
@@ -163,4 +184,4 @@ Các test chính nằm trong `tests/test_voice_agent/test_booking_task.py`:
 | `0a9f68f` | Không cắt tên chứa `gọi là` hoặc dấu phẩy hợp lệ |
 | `c900ced` | Thay nhiều vòng tìm chuỗi bằng token scanner |
 | `7b1afe1` | Thêm contextual correction `không phải OLD mà là NEW` |
-
+| `521bc40` | Lọc interruption noise và nhận `CUE OLD LINK NEW` |
