@@ -60,19 +60,6 @@ export const ActivityList: React.FC<ActivityListProps> = memo(({ activeFilter = 
     openWithPrefill(`Tôi muốn đặt lại chuyến từ ${pickup} đến ${destination}.`);
   };
 
-  if (error) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-4 dark:text-rose-300 dark:bg-rose-500/10 dark:border-rose-500/30">
-        <AlertCircle className="w-4 h-4 shrink-0" />
-        <span>{error}</span>
-      </div>
-    );
-  }
-
-  if (bookings === null) {
-    return <div className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">Đang tải lịch sử chuyến đi...</div>;
-  }
-
   const filtered = useMemo(() => {
     if (!bookings) return [];
     return bookings.filter((booking) => {
@@ -87,6 +74,19 @@ export const ActivityList: React.FC<ActivityListProps> = memo(({ activeFilter = 
       return true;
     });
   }, [bookings, activeFilter]);
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-4 dark:text-rose-300 dark:bg-rose-500/10 dark:border-rose-500/30">
+        <AlertCircle className="w-4 h-4 shrink-0" />
+        <span>{error}</span>
+      </div>
+    );
+  }
+
+  if (bookings === null) {
+    return <div className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">Đang tải lịch sử chuyến đi...</div>;
+  }
 
   if (filtered.length === 0) {
     return (

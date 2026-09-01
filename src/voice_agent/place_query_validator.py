@@ -9,7 +9,9 @@ from functools import lru_cache
 
 def _normalize(value: str) -> str:
     """Normalize Vietnamese text: casefold + remove diacritics + compress whitespace."""
-    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    # NFKD does not decompose Vietnamese đ/Đ; map it before stripping marks so
+    # filler-word checks remain stable for words such as "đến" and "đây".
+    decomposed = unicodedata.normalize("NFKD", value.casefold().replace("đ", "d"))
     without_marks = "".join(char for char in decomposed if not unicodedata.combining(char))
     return " ".join(re.sub(r"[^a-z0-9]+", " ", without_marks).split())
 
@@ -150,14 +152,14 @@ def is_valid_place_query(query: str) -> bool:
     Blocks:
     - Empty/whitespace-only queries
     - Single-word queries that are blocked discourse words or don't match exact names/aliases
-    
+
     Allows:
     - Multi-word queries (validated by gazetteer substring matching)
     - Single-word queries that exactly match canonical names or aliases (e.g., "VinUni")
-    
+
     Args:
         query: The place query to validate
-        
+
     Returns:
         True if the query is valid; False if it should be rejected
     """
