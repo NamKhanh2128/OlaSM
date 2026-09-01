@@ -606,7 +606,7 @@ class PersistenceRepository:
                     await db.execute(
                         select(Handoff)
                         .where(Handoff.status == status)
-                        .order_by(Handoff.priority.desc(), Handoff.created_at)
+                        .order_by(Handoff.priority.desc(), Handoff.created_at.desc(), Handoff.id.desc())
                     )
                 )
                 .scalars()

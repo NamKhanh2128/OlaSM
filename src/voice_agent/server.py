@@ -24,7 +24,7 @@ from livekit.agents import (
 )
 from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.agents.voice.events import ErrorEvent
-from livekit.agents.voice.room_io import AudioInputOptions, RoomOptions
+from livekit.agents.voice.room_io import AudioInputOptions, RoomOptions, TextInputEvent, TextInputOptions
 
 from src.backend.services.handoff_service import HandoffService
 from src.backend.services.knowledge_service import KnowledgeService
@@ -36,9 +36,22 @@ from src.voice_agent.observability import LiveKitSessionObserver, SessionEventLo
 from src.voice_agent.persistence import DatabaseVoiceStateStore, VoiceStateStore
 from src.voice_agent.session_data import AloSMSessionData, FailureCode, FallbackAction, HandoffState
 from src.voice_agent.state_sync import publish_booking_state
+from src.voice_agent.transcript_rewrite import build_transcript_rewriter
 from src.voice_agent.tts_text import vietnamese_currency_tts_transform
 
 logger = logging.getLogger(__name__)
+
+
+async def _handle_text_input(session: AgentSession, event: TextInputEvent) -> None:
+    """Route chat text through a forced LiveKit interruption.
+
+    The default RoomIO callback uses a non-forced interruption and can reject
+    text sent while the current speech explicitly disallows interruptions.
+    """
+    async with session._claim_user_turn():
+        await session.interrupt(force=True)
+        session.generate_reply(user_input=event.text)
+
 
 _STATE_STORE_KEY = "alosm_voice_state_store"
 _PROCESS_STORE_READY_KEY = "alosm_process_store_ready"
@@ -290,6 +303,19 @@ def prepare_process(proc: JobProcess) -> None:
     # AgentServer 1.6.6 invokes setup_fnc synchronously before creating the job
     # event loop. Do not open asyncpg connections here: pooled asyncio connections
     # cannot be transferred to the different loop used by the RTC job.
+    from src.backend.observability.langfuse_client import LangfuseTracingConfig, configure_langfuse_tracing
+
+    configure_langfuse_tracing(
+        LangfuseTracingConfig(
+            enabled=_server_settings.langfuse_enabled,
+            public_key=_server_settings.langfuse_public_key.get_secret_value(),
+            secret_key=_server_settings.langfuse_secret_key.get_secret_value(),
+            host=_server_settings.langfuse_host,
+            environment=_server_settings.langfuse_environment,
+            service_name="alosm-livekit-worker",
+        )
+    )
+
     proc.userdata[_STATE_STORE_KEY] = DatabaseVoiceStateStore()
     # LiveKit keeps idle job processes warm specifically so model/plugin setup is
     # not paid after a participant is waiting. The ElevenLabs plugin validates
@@ -459,7 +485,51 @@ async def alosm_voice_session(ctx: JobContext) -> None:
     room_connect_duration_ms = await _connect_room_early(ctx)
 
     settings = get_livekit_voice_settings()
+    transcript_rewriter = build_transcript_rewriter(settings)
+    if transcript_rewriter is None:
+        rewrite_uses_openrouter = bool(
+            settings.voice_transcript_rewrite_base_url
+            and "openrouter.ai" in settings.voice_transcript_rewrite_base_url.casefold()
+        )
+        rewrite_key_configured = bool(
+            (
+                settings.openrouter_api_key.get_secret_value()
+                if rewrite_uses_openrouter
+                else settings.openai_api_key.get_secret_value()
+            ).strip()
+        )
+        logger.warning(
+            "Voice transcript rewrite unavailable enabled=%s key_configured=%s",
+            settings.voice_transcript_rewrite_enabled,
+            rewrite_key_configured,
+        )
+    else:
+        logger.info(
+            "Voice transcript rewrite ready model=%s reasoning=%s timeout_seconds=%.2f context_pairs=%d",
+            transcript_rewriter.model,
+            transcript_rewriter.reasoning_effort,
+            transcript_rewriter.timeout_seconds,
+            transcript_rewriter.context_window_turns,
+        )
+        ctx.add_shutdown_callback(transcript_rewriter.client.close)
     userdata = build_session_data(ctx, settings)
+    from src.backend.observability.langfuse_client import (
+        activate_langfuse_context,
+        flush_langfuse,
+        get_langfuse_provider,
+    )
+
+    activate_langfuse_context(
+        session_id=userdata.app_session_id,
+        user_id=userdata.user_id,
+        call_id=userdata.call_id,
+    )
+    if get_langfuse_provider() is not None:
+
+        async def flush_voice_traces() -> None:
+            await asyncio.to_thread(flush_langfuse, settings.langfuse_flush_timeout_seconds)
+
+        ctx.add_shutdown_callback(flush_voice_traces)
     event_log = SessionEventLog(
         enabled=settings.livekit_debug_event_log,
         include_transcripts=settings.livekit_debug_transcripts,
@@ -565,10 +635,11 @@ async def alosm_voice_session(ctx: JobContext) -> None:
             session_data=userdata,
             knowledge_service=knowledge_service,
             pricing_service=pricing_service,
+            transcript_rewriter=transcript_rewriter,
         ),
         record=settings.livekit_record_audio,
         room_options=RoomOptions(
-            text_input=True,
+            text_input=TextInputOptions(text_input_cb=_handle_text_input),
             audio_input=AudioInputOptions(
                 # Native LiveKit input processing. Enhanced cancellation remains
                 # opt-in because its plugin is separately metered and not installed.

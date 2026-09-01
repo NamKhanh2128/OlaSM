@@ -36,6 +36,26 @@ class LiveKitVoiceSettings(BaseSettings):
     livekit_llm_provider: Literal["livekit", "openai"] = "livekit"
     livekit_llm_model: str = ""
     openai_api_key: SecretStr = SecretStr("")
+    openrouter_api_key: SecretStr = SecretStr("")
+    # Langfuse receives OpenTelemetry spans only when explicitly enabled. The
+    # worker uses its own settings object, so these fields must not be inherited
+    # indirectly from the backend process.
+    langfuse_enabled: bool = False
+    langfuse_secret_key: SecretStr = SecretStr("")
+    langfuse_public_key: SecretStr = SecretStr("")
+    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_environment: str = "development"
+    langfuse_flush_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
+
+    # Finalized post-ASR correction is a bounded barrier before agent LLM/TTS.
+    # A short ordinal candidate choice is handled deterministically and skips it.
+    voice_transcript_rewrite_enabled: bool = True
+    voice_transcript_rewrite_model: str = "gpt-5-mini"
+    voice_transcript_rewrite_base_url: str | None = None
+    voice_transcript_rewrite_timeout_seconds: float = Field(default=2.0, gt=0, le=2.0)
+    voice_transcript_rewrite_reasoning_effort: Literal["none", "low", "medium"] = "low"
+    voice_transcript_rewrite_minimum_confidence: float = Field(default=0.85, ge=0, le=1)
+    voice_transcript_rewrite_context_window_turns: int = Field(default=3, ge=0, le=10)
     livekit_tts_provider: Literal["google", "livekit", "openai"] = "google"
     livekit_tts_model: str = ""
     livekit_tts_voice: str = ""

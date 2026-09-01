@@ -16,14 +16,31 @@ import {
   type RemoteTrack,
   type RemoteTrackPublication,
 } from "livekit-client";
-import { Mic, MicOff, PhoneOff, Send, Volume2, VolumeX } from "lucide-react";
+import {
+  CircleCheck,
+  CircleQuestionMark,
+  CircleX,
+  Mic,
+  MicOff,
+  PhoneOff,
+  Send,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { notifyBookingCreated } from "@/app/events";
 import { getCurrentUser } from "@/features/auth/api";
 import { CURRENT_POLICY_VERSION } from "@/features/policies/api";
 import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssistant";
+import { vehicleLabel } from "@/features/ai-assistant/bookingLabels";
 import { getRideSession } from "@/features/ride/api";
 import { createAloSMTokenSource, LIVEKIT_AGENT_NAME } from "./tokenSource";
-import { BOOKING_STATE_TOPIC, type BookingState } from "./contracts";
+import {
+  BOOKING_STATE_TOPIC,
+  type BookingState,
+  type BookingSlotKey,
+  type BookingSlotStatus,
+  type ClarificationTarget,
+} from "./contracts";
 
 function generateUUID(): string {
   if (
@@ -62,6 +79,87 @@ const stateLabels = {
 } as const;
 
 const LIVEKIT_TEXT_SEND_TIMEOUT_MS = 10_000;
+
+const bookingSlotVisuals = {
+  missing: {
+    Icon: CircleX,
+    value: "Chưa Chọn",
+    cardClass: "border-rose-200 bg-rose-50/80 dark:border-rose-900/60 dark:bg-rose-950/20",
+    valueClass: "text-rose-600 dark:text-rose-400",
+  },
+  needs_clarification: {
+    Icon: CircleQuestionMark,
+    value: "Cần làm rõ",
+    cardClass: "border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/20",
+    valueClass: "text-amber-600 dark:text-amber-400",
+  },
+  resolved: {
+    Icon: CircleCheck,
+    value: "Đã xác định",
+    cardClass: "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/60 dark:bg-emerald-950/20",
+    valueClass: "text-emerald-600 dark:text-emerald-400",
+  },
+} as const;
+
+function bookingSlotStatus(
+  state: BookingState | null,
+  key: BookingSlotKey,
+): BookingSlotStatus {
+  const explicit = state?.slot_statuses?.[key];
+  if (explicit) return explicit;
+  const hasLegacyValue = key === "pickup"
+    ? Boolean(state?.pickup)
+    : key === "destination"
+      ? Boolean(state?.destination)
+      : Boolean(state?.vehicle_type);
+  return hasLegacyValue ? "resolved" : "missing";
+}
+
+function BookingSlot({
+  title,
+  status,
+  resolvedValue,
+  clarificationValue,
+}: {
+  title: string;
+  status: BookingSlotStatus;
+  resolvedValue?: string;
+  clarificationValue?: string | null;
+}) {
+  const visual = bookingSlotVisuals[status];
+  const displayValue = status === "resolved" && resolvedValue
+    ? resolvedValue
+    : status === "needs_clarification" && clarificationValue
+      ? clarificationValue
+      : visual.value;
+
+  return (
+    <div className={`min-w-0 rounded-xl border px-3 py-2.5 ${visual.cardClass}`}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+        {title}
+      </p>
+      <div className={`mt-1.5 flex min-w-0 items-center gap-1.5 font-semibold ${visual.valueClass}`}>
+        <visual.Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="truncate text-xs" title={displayValue}>{displayValue}</span>
+      </div>
+    </div>
+  );
+}
+
+function clarificationTargetForMessage(message: string): ClarificationTarget | null {
+  const normalized = message.toLocaleLowerCase("vi");
+  if (!normalized.includes("số thứ tự")) return null;
+  const targetMentions: Array<[ClarificationTarget, number]> = [
+    ["pickup", normalized.lastIndexOf("điểm đón")],
+    ["destination", normalized.lastIndexOf("điểm đến")],
+    ["vehicle_type", normalized.lastIndexOf("loại xe")],
+  ];
+  const [target, position] = targetMentions.reduce(
+    (latest, current) => current[1] > latest[1] ? current : latest,
+    ["pickup", -1] as [ClarificationTarget, number],
+  );
+  return position >= 0 ? target : null;
+}
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   let timeoutId: number | undefined;
@@ -162,6 +260,18 @@ function LiveKitCallContent({
   const bookingCompleted = Boolean(bookingState?.booking);
   const handoffConnected = bookingState?.handoff?.status === "connected";
   const connectionLost = wasConnected && agent.state === "disconnected" && !handoffConnected;
+  const clarificationMessageIds = useMemo(() => {
+    const ids: Partial<Record<ClarificationTarget, string>> = {};
+    for (const item of [...messages].reverse()) {
+      const isUser = item.type === "userTranscript" || item.from?.identity === localParticipant.identity;
+      if (isUser) continue;
+      const target = clarificationTargetForMessage(item.message);
+      if (target && !ids[target] && bookingState?.clarifications?.[target]?.options.length) {
+        ids[target] = item.id;
+      }
+    }
+    return ids;
+  }, [bookingState?.clarifications, localParticipant.identity, messages]);
 
   useEffect(() => {
     if (["initializing", "idle", "listening", "thinking", "speaking"].includes(agent.state)) {
@@ -272,16 +382,35 @@ function LiveKitCallContent({
         ) : null}
       </div>
 
-      {bookingState ? (
-        <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-slate-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-slate-200">
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-700 dark:border-slate-800 dark:bg-white/5 dark:text-slate-200">
+        <p className="mb-2 font-bold text-slate-700 dark:text-slate-200">Thông tin chuyến xe</p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <BookingSlot
+            title="Điểm đón"
+            status={bookingSlotStatus(bookingState, "pickup")}
+            resolvedValue={bookingState?.pickup?.display_name}
+            clarificationValue={bookingState?.slot_labels?.pickup}
+          />
+          <BookingSlot
+            title="Điểm đến"
+            status={bookingSlotStatus(bookingState, "destination")}
+            resolvedValue={bookingState?.destination?.display_name}
+            clarificationValue={bookingState?.slot_labels?.destination}
+          />
+          <BookingSlot
+            title="Loại xe"
+            status={bookingSlotStatus(bookingState, "vehicle_type")}
+            resolvedValue={bookingState?.vehicle_type ? vehicleLabel(bookingState.vehicle_type) : undefined}
+            clarificationValue={bookingState?.slot_labels?.vehicle_type}
+          />
+        </div>
+        {bookingState ? (
+          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
           {bookingState.recovered ? (
             <p className="col-span-2 font-semibold text-emerald-700 dark:text-emerald-300">
               Đã khôi phục yêu cầu đặt xe trước đó.
             </p>
           ) : null}
-          <p><span className="font-semibold">Điểm đón:</span> {bookingState.pickup?.display_name ?? "Chưa chọn"}</p>
-          <p><span className="font-semibold">Điểm đến:</span> {bookingState.destination?.display_name ?? "Chưa chọn"}</p>
-          <p><span className="font-semibold">Loại xe:</span> {bookingState.vehicle_type ?? "Chưa chọn"}</p>
           <p>
             <span className="font-semibold">Giá dự kiến:</span>{" "}
             {bookingState.quote
@@ -326,8 +455,9 @@ function LiveKitCallContent({
               {handoffConnected ? "Đã kết nối tổng đài viên" : "Đang chuyển tổng đài viên"}: {bookingState.handoff.handoff_id}
             </p>
           ) : null}
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+      </div>
 
       <div className="mt-5 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
         {messages.length === 0 ? (
@@ -335,17 +465,45 @@ function LiveKitCallContent({
         ) : (
           messages.map((item) => {
             const isUser = item.type === "userTranscript" || item.from?.identity === localParticipant.identity;
+            const clarificationTarget = clarificationTargetForMessage(item.message);
+            const clarification = clarificationTarget
+              ? bookingState?.clarifications?.[clarificationTarget]
+              : null;
+            const showsClarification =
+              !isUser &&
+              Boolean(clarification?.options.length) &&
+              clarificationTarget !== null &&
+              item.id === clarificationMessageIds[clarificationTarget];
             return (
               <div key={item.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                <p
+                <div
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
                     isUser
                       ? "bg-[#00A99D] text-white"
                       : "bg-white text-slate-700 shadow-sm dark:bg-white/10 dark:text-slate-100"
                   }`}
                 >
-                  {item.message}
-                </p>
+                  <p>{item.message}</p>
+                  {showsClarification && clarification ? (
+                    <ol className="mt-3 space-y-2 border-t border-slate-200 pt-3 dark:border-white/10">
+                      {clarification.options.map((option) => (
+                        <li key={`${clarification.clarification_id}:${option.index}`} className="flex gap-2">
+                          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#00A99D] text-[11px] font-bold text-white">
+                            {option.index}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block font-semibold text-slate-800 dark:text-slate-100">
+                              {option.display_name}
+                            </span>
+                            <span className="block text-xs leading-5 text-slate-500 dark:text-slate-400">
+                              {option.subtitle}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </div>
               </div>
             );
           })

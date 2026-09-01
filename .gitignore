@@ -6,11 +6,15 @@ __pycache__/
 dist/
 build/
 .eggs/
+.ua/
 
 # Virtual environments
 venv/
 .venv/
 env/
+
+.ua/
+test_cases/
 
 # Python tool caches — trước đây chỉ ẩn nhờ .gitignore tự sinh bên trong từng thư
 # mục cache (pytest/ruff tự tạo lúc chạy); khai báo tường minh ở đây để không phụ
@@ -113,3 +117,6 @@ infra/maps/nominatim/data/
 
 # Deployment bundles may contain environment/database artifacts
 *.tar.gz
+
+# Local manual-review screenshots and notes are evidence artifacts, not source.
+test_cases/

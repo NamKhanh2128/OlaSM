@@ -17,6 +17,22 @@ from src.backend.config import get_settings  # noqa: E402
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    from src.backend.observability.langfuse_client import (
+        LangfuseTracingConfig,
+        configure_langfuse_tracing,
+        shutdown_langfuse,
+    )
+
+    configure_langfuse_tracing(
+        LangfuseTracingConfig(
+            enabled=settings.langfuse_enabled,
+            public_key=settings.langfuse_public_key,
+            secret_key=settings.langfuse_secret_key,
+            host=settings.langfuse_host,
+            environment=settings.langfuse_environment,
+            service_name="alosm-backend",
+        )
+    )
     print(f"Starting {settings.app_name} in {settings.app_env} mode")
     try:
         from src.backend.db.base import get_engine
@@ -28,8 +44,12 @@ async def lifespan(app: FastAPI):
         print("Database schema verified/initialized.")
     except Exception as exc:
         print(f"Database schema initialization notice: {exc}")
-    yield
-    print("Shutting down...")
+    try:
+        yield
+    finally:
+        shutdown_langfuse(settings.langfuse_flush_timeout_seconds)
+        print("Shutting down...")
+
 
 
 app = FastAPI(

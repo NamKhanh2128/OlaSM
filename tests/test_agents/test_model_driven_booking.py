@@ -18,7 +18,7 @@ class ScriptedConversationModel:
         self.contexts = []
         self.tool_sets = []
 
-    async def decide(self, *, instructions, context, tools, exchanges=()):
+    async def decide(self, *, instructions, context, tools, exchanges=(), session_id=None, turn_id=None):
         self.contexts.append(context)
         self.tool_sets.append({item["function"]["name"] for item in tools})
         return self.decisions.popleft()

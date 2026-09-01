@@ -59,8 +59,10 @@ class ScriptedConversationModel:
         context: dict[str, Any],
         tools: Sequence[dict[str, Any]],
         exchanges: Sequence[ToolExchange] = (),
+        session_id: str | None = None,
+        turn_id: str | None = None,
     ) -> ModelDecision:
-        del instructions, context, tools, exchanges
+        del instructions, context, tools, exchanges, session_id, turn_id
         if not self.decisions:
             raise AssertionError("Scripted model ran out of semantic decisions")
         decision = self.decisions.popleft()

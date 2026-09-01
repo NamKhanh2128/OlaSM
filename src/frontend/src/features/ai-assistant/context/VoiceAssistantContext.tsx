@@ -146,8 +146,8 @@ export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = (
   );
 
   // Khởi tạo phiên hội thoại 1 LẦN khi Provider mount (ở AppLayout — ngay sau đăng
-  // nhập), không phải mỗi lần mở popup — để đóng/mở popup qua lại giữa các trang
-  // không làm mất hội thoại đang dở (Scenario 6, mục 26).
+  // nhập). Khi có cachedSessionId, chạy song song getCurrentUser + getRideSession
+  // để giảm waterfall `connecting` 600-1500ms mà vẫn giữ đúng UX connecting→idle.
   useEffect(() => {
     let cancelled = false;
 
@@ -155,19 +155,66 @@ export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = (
       setStatus("connecting");
       const cachedSessionId = getSessionId();
       if (cachedSessionId) {
-        try {
-          await getRideSession(cachedSessionId);
-          if (cancelled) return;
+        const [userResult, cachedResult] = await Promise.allSettled([
+          getCurrentUser(),
+          getRideSession(cachedSessionId),
+        ]);
+        if (cancelled) return;
+        if (cachedResult.status === "fulfilled") {
           setSessionId(cachedSessionId);
           setStatus("idle");
+          if (userResult.status === "fulfilled" && userResult.value.session_id !== cachedSessionId) {
+            saveAuthSession({
+              access_token: getAccessToken() || "",
+              user_id: userResult.value.user_id,
+              full_name: userResult.value.full_name,
+              session_id: userResult.value.session_id,
+            });
+          }
           return;
-        } catch {
-          if (cancelled) return;
-          // A session request can fail because another tab/call already rebound
-          // this still-valid token. Do not log the user out yet: /auth/me below is
-          // the source of truth for authentication and the currently bound session.
-          clearSessionId();
         }
+        clearSessionId();
+        if (userResult.status === "fulfilled") {
+          const user = userResult.value;
+          if (user.session_id) {
+            saveAuthSession({
+              access_token: getAccessToken() || "",
+              user_id: user.user_id,
+              full_name: user.full_name,
+              session_id: user.session_id,
+            });
+            setSessionId(user.session_id);
+            setStatus("idle");
+            return;
+          }
+          try {
+            const session = await createRideSession();
+            if (cancelled) return;
+            saveAuthSession({
+              access_token: getAccessToken() || "",
+              user_id: user.user_id,
+              full_name: user.full_name,
+              session_id: session.session_id,
+            });
+            setSessionId(session.session_id);
+            setStatus("idle");
+            return;
+          } catch (error) {
+            if (cancelled) return;
+            if (redirectToLoginIfUnauthorized(error, navigate)) return;
+            setStatus("error");
+            setNotice(error instanceof Error ? error.message : "Không thể khởi tạo phiên hội thoại.");
+            return;
+          }
+        }
+        if (redirectToLoginIfUnauthorized((userResult as PromiseRejectedResult).reason, navigate)) return;
+        setStatus("error");
+        setNotice(
+          userResult.status === "rejected" && (userResult.reason as Error)?.message
+            ? (userResult.reason as Error).message
+            : "Không thể khởi tạo phiên hội thoại.",
+        );
+        return;
       }
 
       try {
@@ -206,9 +253,6 @@ export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = (
     return () => {
       cancelled = true;
     };
-    // `navigate` từ useNavigate() ổn định giữa các lần render (không đổi tham chiếu)
-    // nên liệt kê đủ vào dependency array vẫn chỉ chạy đúng 1 lần lúc Provider mount —
-    // không cần eslint-disable, giống hệt effect bootstrap gốc ở AssistantPage cũ.
   }, [navigate]);
 
   const open = useCallback(() => setIsOpen(true), []);

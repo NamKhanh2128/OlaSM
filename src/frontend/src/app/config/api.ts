@@ -50,15 +50,18 @@ export async function fetchApi<T>(endpoint: string, options?: FetchApiOptions): 
     controller.abort();
   }, timeoutMs);
 
+  const hasBody = requestOptions.body != null;
+  const headers: Record<string, string> = {
+    ...(hasBody ? { "Content-Type": "application/json" } : {}),
+    ...((requestOptions.headers as Record<string, string> | undefined) ?? {}),
+  };
   try {
     const response = await fetch(url, {
       ...requestOptions,
+      keepalive: true,
       signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...requestOptions.headers,
-      },
-    });
+      headers,
+    } as RequestInit);
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => null);
