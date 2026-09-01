@@ -1,119 +1,151 @@
-"""Langfuse client singleton — no-op when disabled or misconfigured."""
+"""Privacy-safe OpenTelemetry export to Langfuse.
+
+The module owns one tracer provider per process. It deliberately avoids the
+legacy Langfuse SDK so backend and LiveKit spans share the same OpenTelemetry
+context and dependency contract.
+"""
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import logging
-import time
-from contextlib import contextmanager
+from dataclasses import dataclass
+from threading import Lock
 from typing import Any
+
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 logger = logging.getLogger(__name__)
 
-_client: Any | None = None
+_provider: TracerProvider | None = None
 _initialized = False
+_initialization_lock = Lock()
 
 
-def _redact(text: str, limit: int = 200) -> str:
-    if not text:
-        return ""
-    truncated = text[:limit]
-    digest = hashlib.sha256(text.encode()).hexdigest()[:12]
-    return f"{truncated} [hash:{digest} redacted:{len(text) > limit}]"
+@dataclass(frozen=True)
+class LangfuseTracingConfig:
+    """Credential-safe values required to create one OTLP exporter."""
+
+    enabled: bool
+    public_key: str
+    secret_key: str
+    host: str
+    environment: str
+    service_name: str
 
 
-def get_langfuse() -> Any | None:
-    global _client, _initialized
-    if _initialized:
-        return _client
-    _initialized = True
-    try:
-        from src.backend.config import get_settings
+def privacy_hash(value: str | None, *, length: int = 16) -> str | None:
+    """Return a stable correlation key without exposing the source value."""
 
-        settings = get_settings()
-        if not settings.langfuse_enabled:
-            return None
-        if not settings.langfuse_secret_key or not settings.langfuse_public_key:
-            logger.info("langfuse disabled: missing keys")
-            return None
-        from langfuse import Langfuse
-
-        _client = Langfuse(
-            secret_key=settings.langfuse_secret_key,
-            public_key=settings.langfuse_public_key,
-            host=settings.langfuse_host,
-        )
-        try:
-            _client.auth_check()
-        except Exception as exc:
-            logger.warning("langfuse auth_check failed: %s", exc)
-        return _client
-    except Exception as exc:
-        logger.warning("langfuse init failed: %s", exc)
+    if not value:
         return None
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:length]
 
 
-def flush_langfuse() -> None:
-    client = _client
-    if client is None:
-        return
+def privacy_fingerprint(value: str | None) -> str:
+    """Represent potentially sensitive content using only length and digest."""
+
+    text = value or ""
+    return f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]};length:{len(text)}"
+
+
+def _otlp_endpoint(host: str) -> str:
+    return f"{host.rstrip('/')}/api/public/otel/v1/traces"
+
+
+def _otlp_headers(public_key: str, secret_key: str) -> dict[str, str]:
+    auth = base64.b64encode(f"{public_key}:{secret_key}".encode()).decode("ascii")
+    return {
+        "Authorization": f"Basic {auth}",
+        "x-langfuse-ingestion-version": "4",
+    }
+
+
+def configure_langfuse_tracing(config: LangfuseTracingConfig) -> TracerProvider | None:
+    """Initialize one non-blocking OTLP exporter, or remain a safe no-op."""
+
+    global _initialized, _provider
+    with _initialization_lock:
+        if _initialized:
+            return _provider
+        _initialized = True
+        if not config.enabled:
+            return None
+        if not config.public_key.strip() or not config.secret_key.strip():
+            logger.warning("Langfuse tracing disabled: missing credentials")
+            return None
+        if not config.host.startswith(("https://", "http://")):
+            logger.warning("Langfuse tracing disabled: invalid host")
+            return None
+
+        try:
+            exporter = OTLPSpanExporter(
+                endpoint=_otlp_endpoint(config.host),
+                headers=_otlp_headers(config.public_key, config.secret_key),
+            )
+            provider = TracerProvider(
+                resource=Resource.create(
+                    {
+                        "service.name": config.service_name,
+                        "deployment.environment.name": config.environment,
+                    }
+                )
+            )
+            provider.add_span_processor(BatchSpanProcessor(exporter))
+            _provider = provider
+            logger.info(
+                "Langfuse OTLP tracing ready service=%s environment=%s",
+                config.service_name,
+                config.environment,
+            )
+        except Exception as exc:
+            logger.warning("Langfuse tracing initialization failed error_type=%s", type(exc).__name__)
+            _provider = None
+        return _provider
+
+
+def get_langfuse_tracer(name: str = "alosm") -> Any | None:
+    provider = _provider
+    return provider.get_tracer(name) if provider is not None else None
+
+
+def get_langfuse_provider() -> TracerProvider | None:
+    return _provider
+
+
+def get_langfuse() -> None:
+    """Temporary compatibility shim for the pre-OTLP Core Agent wrapper."""
+
+    return None
+
+
+def flush_langfuse(timeout_seconds: float = 5.0) -> bool:
+    provider = _provider
+    if provider is None:
+        return True
     try:
-        client.flush()
+        return bool(provider.force_flush(timeout_millis=max(1, int(timeout_seconds * 1000))))
     except Exception as exc:
-        logger.warning("langfuse flush failed: %s", exc)
+        logger.warning("Langfuse trace flush failed error_type=%s", type(exc).__name__)
+        return False
+
+
+def shutdown_langfuse(timeout_seconds: float = 5.0) -> None:
+    provider = _provider
+    if provider is None:
+        return
+    flush_langfuse(timeout_seconds)
+    try:
+        provider.shutdown()
+    except Exception as exc:
+        logger.warning("Langfuse tracer shutdown failed error_type=%s", type(exc).__name__)
 
 
 def reset_langfuse_for_tests() -> None:
-    global _client, _initialized
-    _client = None
+    global _initialized, _provider
+    _provider = None
     _initialized = False
-
-
-@contextmanager
-def langfuse_generation(
-    *,
-    name: str,
-    model: str,
-    session_id: str | None = None,
-    user_id: str | None = None,
-    turn_id: str | None = None,
-    prompt_preview: str = "",
-):
-    client = get_langfuse()
-    if client is None:
-        yield None
-        return
-    trace = None
-    generation = None
-    start = time.perf_counter()
-    try:
-        trace_kwargs: dict[str, Any] = {"name": name}
-        if session_id:
-            trace_kwargs["session_id"] = hashlib.sha256(session_id.encode()).hexdigest()[:16]
-        if user_id:
-            trace_kwargs["user_id"] = hashlib.sha256(user_id.encode()).hexdigest()[:16]
-        if turn_id:
-            trace_kwargs["id"] = hashlib.sha256(turn_id.encode()).hexdigest()[:16]
-        trace = client.trace(**trace_kwargs)
-        generation = trace.generation(
-            name=name,
-            model=model,
-            input=_redact(prompt_preview),
-            metadata={"turn_id": turn_id} if turn_id else {},
-        )
-        yield generation
-        latency_ms = (time.perf_counter() - start) * 1000
-        if generation is not None:
-            try:
-                generation.update(metadata={"latency_ms": round(latency_ms, 2)})
-            except Exception:
-                pass
-    except Exception as exc:
-        logger.warning("langfuse_generation failed: %s", exc)
-        yield None
-    finally:
-        try:
-            if generation is not None:
-                generation.end()
-        except Exception:
-            pass

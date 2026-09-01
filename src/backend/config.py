@@ -123,6 +123,8 @@ class Settings(BaseSettings):
     langfuse_secret_key: str = ""
     langfuse_public_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_environment: str = "development"
+    langfuse_flush_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
 
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
