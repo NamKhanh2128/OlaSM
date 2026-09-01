@@ -181,6 +181,7 @@ async def test_parent_agent_seeds_complete_first_booking_turn_before_task_handof
     assert userdata.booking_draft.slot_statuses() == expected
     assert published[-1]["slot_statuses"] == expected
 
+
 class _RequoteService:
     async def estimate(self, *, draft: object, **_: object) -> QuoteSnapshot:
         assert getattr(draft, "pickup") is not None
@@ -821,14 +822,17 @@ def test_contextual_change_does_not_guess_unknown_previous_value() -> None:
         "Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm.",
     )
 
-    assert extract_contextual_booking_change(
-        draft,
-        "Khoan, đổi địa điểm không tồn tại thành Long Biên",
-    ) is None
+    assert (
+        extract_contextual_booking_change(
+            draft,
+            "Khoan, đổi địa điểm không tồn tại thành Long Biên",
+        )
+        is None
+    )
 
 
 @pytest.mark.asyncio
-async def test_destination_barge_in_interrupts_pickup_prompt_and_focuses_new_list(
+async def test_destination_barge_in_updates_destination_but_keeps_pickup_clarification_first(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     userdata = AloSMSessionData(
@@ -882,13 +886,13 @@ async def test_destination_barge_in_interrupts_pickup_prompt_and_focuses_new_lis
     assert draft.destination is None
     assert draft.destination_query == "Long Biên"
     assert draft.destination_candidates
-    assert draft.pending_candidate_target == "destination"
+    assert draft.pending_candidate_target == "pickup"
     response, allow_interruptions = session.events[-1][1]  # type: ignore[misc]
     assert allow_interruptions is True
     assert response.startswith("Đã cập nhật điểm đến thành Long Biên.")
-    assert "cho điểm đến" in response
+    assert "liên quan đến VinUni cho điểm đón" in response
     assert "số thứ tự" in response
-    assert "liên quan đến VinUni cho điểm đón" not in response
+    assert "liên quan đến Long Biên cho điểm đến" not in response
 
 
 @pytest.mark.asyncio
@@ -945,15 +949,11 @@ async def test_newer_barge_in_wins_while_async_place_search_is_pending(
     )
     task._activity = SimpleNamespace(session=_Session())  # type: ignore[assignment]
 
-    older = asyncio.create_task(
-        task._handle_explicit_booking_change(userdata, "Đổi điểm đến thành Long Biên")
-    )
+    older = asyncio.create_task(task._handle_explicit_booking_change(userdata, "Đổi điểm đến thành Long Biên"))
     await asyncio.sleep(0.02)
     assert older.done() is False
 
-    newer = asyncio.create_task(
-        task._handle_explicit_booking_change(userdata, "Đổi điểm đến thành Hồ Gươm")
-    )
+    newer = asyncio.create_task(task._handle_explicit_booking_change(userdata, "Đổi điểm đến thành Hồ Gươm"))
     with pytest.raises(StopResponse):
         await asyncio.wait_for(newer, timeout=2)
     with pytest.raises(StopResponse):
@@ -1038,9 +1038,7 @@ async def test_different_field_changes_serialize_lookup_and_commit(
     )
     task._activity = SimpleNamespace(session=_Session())  # type: ignore[assignment]
 
-    pickup_change = asyncio.create_task(
-        task._handle_explicit_booking_change(userdata, "Đổi điểm đón thành VinUni")
-    )
+    pickup_change = asyncio.create_task(task._handle_explicit_booking_change(userdata, "Đổi điểm đón thành VinUni"))
     await asyncio.wait_for(first_search_started.wait(), timeout=1)
     destination_change = asyncio.create_task(
         task._handle_explicit_booking_change(userdata, "Đổi điểm đến thành Hồ Gươm")
@@ -1099,13 +1097,9 @@ async def test_stale_vehicle_change_cannot_mutate_or_speak_after_newer_change(
     task = BookingTask(session_data=userdata, state_store=EphemeralVoiceStateStore())
     task._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
 
-    older = asyncio.create_task(
-        task._handle_explicit_booking_change(userdata, "Đổi loại xe thành xe bảy chỗ")
-    )
+    older = asyncio.create_task(task._handle_explicit_booking_change(userdata, "Đổi loại xe thành xe bảy chỗ"))
     await asyncio.sleep(0.02)
-    newer = asyncio.create_task(
-        task._handle_explicit_booking_change(userdata, "Đổi loại xe thành xe máy")
-    )
+    newer = asyncio.create_task(task._handle_explicit_booking_change(userdata, "Đổi loại xe thành xe máy"))
 
     with pytest.raises(StopResponse):
         await asyncio.wait_for(newer, timeout=2)
@@ -1114,13 +1108,12 @@ async def test_stale_vehicle_change_cannot_mutate_or_speak_after_newer_change(
 
     assert userdata.booking_draft.vehicle_type == "MOTORBIKE"
     assert session.replies == [
-        "Đã đổi loại xe thành xe máy. Vui lòng cho biết điểm đón. "
-        "Nếu muốn đổi, bạn có thể nói lại."
+        "Đã đổi loại xe thành xe máy. Vui lòng cho biết điểm đón. Nếu muốn đổi, bạn có thể nói lại."
     ]
 
 
 @pytest.mark.asyncio
-async def test_unknown_destination_barge_in_does_not_resume_old_pickup_list(
+async def test_unknown_destination_barge_in_still_clarifies_pickup_first(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     userdata = AloSMSessionData(
@@ -1166,14 +1159,11 @@ async def test_unknown_destination_barge_in_does_not_resume_old_pickup_list(
     assert draft.slot_status("destination") == "needs_clarification"
     assert draft.slot_labels()["destination"] == "Hồ Khương"
     assert draft.destination_candidates == []
-    assert draft.pending_candidate_target == "destination"
+    assert draft.pending_candidate_target == "pickup"
     assert userdata.last_failure is not None
     assert userdata.last_failure.code == "PLACE_NOT_FOUND"
-    assert session.replies == [
-        "Đã cập nhật điểm đến thành Hồ Khương. Chưa tìm thấy địa điểm phù hợp. "
-        "Bạn vui lòng nói lại điểm đến hoặc nhập tên khác."
-    ]
-    assert "VinUni" not in session.replies[0]
+    assert session.replies[0].startswith("Đã cập nhật điểm đến thành Hồ Khương. Chưa tìm thấy địa điểm phù hợp.")
+    assert "liên quan đến VinUni cho điểm đón" in session.replies[0]
 
 
 @pytest.mark.asyncio
@@ -1221,10 +1211,7 @@ async def test_contextual_destination_barge_in_replaces_only_destination(
             llm.ChatContext.empty(),
             llm.ChatMessage(
                 role="user",
-                content=[
-                    "Ờ, khoan, khoan, khoan, khoan. "
-                    "Đổi Hồ Gươm thành H-- ờ, Long Biên."
-                ],
+                content=["Ờ, khoan, khoan, khoan, khoan. Đổi Hồ Gươm thành H-- ờ, Long Biên."],
             ),
         )
 
@@ -1233,9 +1220,10 @@ async def test_contextual_destination_barge_in_replaces_only_destination(
     assert draft.pickup_candidates == original_pickup_candidates
     assert draft.destination_query == "Long Biên"
     assert draft.destination_candidates
-    assert draft.pending_candidate_target == "destination"
+    assert draft.pending_candidate_target == "pickup"
     assert session.replies[0].startswith("Đã cập nhật điểm đến thành Long Biên.")
-    assert "liên quan đến Long Biên cho điểm đến" in session.replies[0]
+    assert "liên quan đến VinUni cho điểm đón" in session.replies[0]
+    assert "liên quan đến Long Biên cho điểm đến" not in session.replies[0]
 
 
 @pytest.mark.asyncio
@@ -1491,6 +1479,31 @@ def test_vehicle_selection_supports_catalog_number_and_explicit_change(
         participant_identity="participant",
     ).booking_draft
 
+    assert grounded_vehicle_selection(draft, "Tôi chọn số 2") is None
+    draft.set_candidates(
+        "pickup",
+        "VinUni",
+        [
+            PlaceCandidate(
+                place_id="pickup", display_name="Cổng chính VinUni", address="VinUni", provider="local_landmark_mock"
+            )
+        ],
+    )
+    draft.select_place("pickup", "pickup")
+    draft.set_candidates(
+        "destination",
+        "Hồ Gươm",
+        [
+            PlaceCandidate(
+                place_id="destination",
+                display_name="Bưu điện Hà Nội",
+                address="Hồ Gươm",
+                provider="local_landmark_mock",
+            )
+        ],
+    )
+    draft.select_place("destination", "destination")
+
     assert grounded_vehicle_selection(draft, "Tôi chọn số 2") == "CAR_4"
     monkeypatch.setattr(
         booking_module,
@@ -1599,8 +1612,7 @@ async def test_named_location_correction_acknowledges_change_before_next_questio
 
     assert userdata.booking_draft.pickup == candidates[1]
     assert session.replies == [
-        "Đã chọn điểm đón là Cổng phụ VinUni. "
-        "Vui lòng cho biết điểm đến. Nếu muốn đổi, bạn có thể nói lại."
+        "Đã chọn điểm đón là Cổng phụ VinUni. Vui lòng cho biết điểm đến. Nếu muốn đổi, bạn có thể nói lại."
     ]
 
 

@@ -390,8 +390,7 @@ def _trim_trailing_non_entity_clause(value: str) -> str:
             (
                 len(suffix)
                 for suffix in _TRAILING_POLITE_SUFFIX_TOKEN_SEQUENCES
-                if len(folded_tokens) >= len(suffix)
-                and folded_tokens[-len(suffix) :] == suffix
+                if len(folded_tokens) >= len(suffix) and folded_tokens[-len(suffix) :] == suffix
             ),
             None,
         )
@@ -428,9 +427,7 @@ def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | No
         field = _CHANGE_FIELD_TARGETS.get(_normalize_change_field(match.group("field")))
         if field is None:
             continue
-        replacement = _trim_trailing_non_entity_clause(
-            _consume_change_link(compact[match.end() :])
-        )
+        replacement = _trim_trailing_non_entity_clause(_consume_change_link(compact[match.end() :]))
         if replacement:
             return field, replacement
     return None
@@ -509,11 +506,7 @@ def extract_contextual_booking_change(
     """Ground contrastive or ``CUE OLD LINK NEW`` speech to one current slot."""
 
     compact = _clean_booking_change_transcript(value)
-    raw_tokens = tuple(
-        cleaned
-        for token in compact.split()
-        if (cleaned := token.strip(" ,.!?;:"))
-    )
+    raw_tokens = tuple(cleaned for token in compact.split() if (cleaned := token.strip(" ,.!?;:")))
     folded_tokens = tuple(_normalize_confirmation(token) for token in raw_tokens)
     previous_value = ""
     replacement = ""
@@ -555,12 +548,8 @@ def extract_contextual_booking_change(
         if not cue_markers:
             return None
         cue_marker, cue_sequence = cue_markers[-1]
-        previous_value = " ".join(
-            raw_tokens[cue_marker + len(cue_sequence) : linker_marker]
-        ).strip()
-        replacement = _trim_trailing_non_entity_clause(
-            " ".join(raw_tokens[linker_marker + len(linker_sequence) :])
-        )
+        previous_value = " ".join(raw_tokens[cue_marker + len(cue_sequence) : linker_marker]).strip()
+        replacement = _trim_trailing_non_entity_clause(" ".join(raw_tokens[linker_marker + len(linker_sequence) :]))
 
     if not previous_value or not replacement:
         return None
@@ -623,7 +612,10 @@ def grounded_ordinal_selection(
 
     normalized = _normalize_confirmation(user_text)
     match = _SHORT_CANDIDATE_SELECTION.fullmatch(normalized)
-    target = draft.pending_candidate_target
+    # Recompute from slot state so persisted/stale pointers can never make a
+    # destination ordinal skip an unresolved pickup.
+    next_field = draft.next_required_field()
+    target: BookingTarget | None = next_field if next_field in {"pickup", "destination"} else None
     if match is None or target is None:
         return None
     candidates = draft.pickup_candidates if target == "pickup" else draft.destination_candidates
@@ -688,7 +680,7 @@ def grounded_vehicle_selection(draft: BookingDraft, user_text: str) -> VehicleTy
 
     normalized = _normalize_confirmation(user_text)
     ordinal = _SHORT_CANDIDATE_SELECTION.fullmatch(normalized)
-    if ordinal is not None and draft.pending_candidate_target is None and draft.vehicle_type is None:
+    if ordinal is not None and draft.next_required_field() == "vehicle_type":
         index = _CANDIDATE_NUMBER_TOKENS.get(ordinal.group(1))
         if index is None or not 0 <= index < len(VEHICLE_TYPE_ORDER):
             return None
@@ -724,17 +716,16 @@ def _candidate_clarification_prompt(draft: BookingDraft, target: BookingTarget) 
 
 
 def _next_required_prompt(draft: BookingDraft) -> str | None:
-    target = draft.pending_candidate_target or draft.next_required_field()
+    # This is the single workflow router. Never prioritize the field that was
+    # merely changed most recently over pickup -> destination -> vehicle.
+    target = draft.next_required_field()
     if target in {"pickup", "destination"}:
         clarification = _candidate_clarification_prompt(draft, target)
         if clarification is not None:
             return clarification
         return f"Vui lòng cho biết {_target_label(target)}. Nếu muốn đổi, bạn có thể nói lại."
     if target == "vehicle_type":
-        return (
-            "Vui lòng chọn loại xe theo số thứ tự được liệt kê bên dưới. "
-            "Nếu muốn đổi, bạn có thể nói lại."
-        )
+        return "Vui lòng chọn loại xe theo số thứ tự được liệt kê bên dưới. Nếu muốn đổi, bạn có thể nói lại."
     return None
 
 
@@ -877,7 +868,12 @@ class BookingTask(AgentTask[BookingOutcome]):
         self._raise_if_stale_booking_change(change_token)
         draft = userdata.booking_draft
         response = followup
-        if response is None and draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None:
+        if (
+            response is None
+            and draft.pickup is not None
+            and draft.destination is not None
+            and draft.vehicle_type is not None
+        ):
             try:
                 quote = await self._quotes.estimate(
                     user_id=userdata.user_id,
@@ -975,21 +971,16 @@ class BookingTask(AgentTask[BookingOutcome]):
             async with self._booking_change_transaction_lock:
                 self._raise_if_stale_booking_change(change_token)
                 draft = userdata.booking_draft
-                if (
-                    previous_value is not None
-                    and _current_booking_surface_field(draft, previous_value) != field
-                ):
+                if previous_value is not None and _current_booking_surface_field(draft, previous_value) != field:
                     raise StopResponse()
                 vehicle_type = extract_vehicle_type(replacement)
                 if vehicle_type is None:
                     draft.mark_vehicle_needs_clarification(replacement)
+                    acknowledgement = f"Đã ghi nhận yêu cầu đổi loại xe thành {replacement}."
                     await self._respond_after_grounded_change(
                         userdata,
-                        acknowledgement=f"Đã ghi nhận yêu cầu đổi loại xe thành {replacement}.",
-                        followup=(
-                            f"Đã ghi nhận yêu cầu đổi loại xe thành {replacement}. "
-                            "Vui lòng chọn loại xe theo số thứ tự được liệt kê bên dưới."
-                        ),
+                        acknowledgement=acknowledgement,
+                        followup=_acknowledgement_followup(draft, acknowledgement),
                         change_token=change_token,
                     )
                     return
@@ -1014,7 +1005,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             candidates = tuple(await self._places.search_async(replacement))
             self._raise_if_stale_booking_change(change_token)
             draft = userdata.booking_draft
-            draft.set_candidates(target, replacement, list(candidates), prioritize=True)
+            draft.set_candidates(target, replacement, list(candidates))
             acknowledgement = f"Đã cập nhật {_target_label(target)} thành {replacement}."
             if not candidates:
                 userdata.record_failure(
@@ -1025,9 +1016,9 @@ class BookingTask(AgentTask[BookingOutcome]):
                 await self._respond_after_grounded_change(
                     userdata,
                     acknowledgement=acknowledgement,
-                    followup=(
-                        f"{acknowledgement} Chưa tìm thấy địa điểm phù hợp. "
-                        f"Bạn vui lòng nói lại {_target_label(target)} hoặc nhập tên khác."
+                    followup=_acknowledgement_followup(
+                        draft,
+                        f"{acknowledgement} Chưa tìm thấy địa điểm phù hợp.",
                     ),
                     change_token=change_token,
                 )
@@ -1045,11 +1036,10 @@ class BookingTask(AgentTask[BookingOutcome]):
                 return
 
             userdata.clear_failure()
-            clarification = _candidate_clarification_prompt(draft, target)
             await self._respond_after_grounded_change(
                 userdata,
                 acknowledgement=acknowledgement,
-                followup=f"{acknowledgement} {clarification}",
+                followup=_acknowledgement_followup(draft, acknowledgement),
                 change_token=change_token,
             )
 
@@ -1287,7 +1277,10 @@ class BookingTask(AgentTask[BookingOutcome]):
                 fallback_action="repeat_or_text",
             )
             await self._commit(context)
-            return "Không tìm thấy địa điểm trong dữ liệu demo. Hãy hỏi khách tên địa điểm khác hoặc rõ hơn."
+            prompt = _next_required_prompt(draft)
+            return "Không tìm thấy địa điểm trong dữ liệu demo. " + (
+                prompt or "Hãy hỏi khách tên địa điểm khác hoặc rõ hơn."
+            )
         if can_auto_select_place(candidates):
             selected = draft.select_place(target, candidates[0].place_id)
             refreshed_quote = (
@@ -1332,7 +1325,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             {
                 "target": target,
                 "candidates": [candidate.model_dump() for candidate in candidates],
-                "spoken_prompt": _candidate_clarification_prompt(draft, target),
+                "spoken_prompt": _next_required_prompt(draft),
                 "instruction": (
                     "Đọc nguyên văn spoken_prompt; không đọc tên hay địa chỉ candidates. "
                     "Danh sách đã được gửi riêng tới giao diện."
@@ -1466,12 +1459,14 @@ class BookingTask(AgentTask[BookingOutcome]):
             raise ToolError(str(exc)) from exc
         context.userdata.clear_failure()
         await self._commit(context)
+        draft = self._draft(context)
         return json.dumps(
             {
                 "message": "Loại xe cần được làm rõ.",
                 "supported_vehicle_types": ["MOTORBIKE", "CAR_4", "CAR_7", "LUXURY"],
-                "next_required_field": self._draft(context).next_required_field(),
-                "instruction": "Hỏi khách chọn xe máy, ô tô bốn chỗ, ô tô bảy chỗ hoặc xe cao cấp.",
+                "next_required_field": draft.next_required_field(),
+                "spoken_prompt": _next_required_prompt(draft),
+                "instruction": "Đọc nguyên văn spoken_prompt và tuân thủ thứ tự slot.",
             },
             ensure_ascii=False,
         )

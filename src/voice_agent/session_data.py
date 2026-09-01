@@ -151,10 +151,14 @@ class BookingDraft(BaseModel):
         self.booking = None
 
     def _next_pending_candidate_target(self) -> BookingTarget | None:
-        if self.pickup is None and self.pickup_candidates:
-            return "pickup"
-        if self.destination is None and self.destination_candidates:
-            return "destination"
+        # A later candidate list must never skip an earlier unresolved slot.
+        # Returning None when the first unresolved place has no candidates
+        # makes the workflow ask for that value before accepting ordinals for a
+        # destination list that may already have been prepared by a barge-in.
+        if self.pickup is None:
+            return "pickup" if self.pickup_candidates else None
+        if self.destination is None:
+            return "destination" if self.destination_candidates else None
         return None
 
     def set_candidates(
@@ -162,8 +166,6 @@ class BookingDraft(BaseModel):
         target: BookingTarget,
         query: str,
         candidates: list[PlaceCandidate],
-        *,
-        prioritize: bool = False,
     ) -> None:
         if target == "pickup":
             self.pickup_query = query
@@ -173,7 +175,7 @@ class BookingDraft(BaseModel):
             self.destination_query = query
             self.destination = None
             self.destination_candidates = candidates
-        self.pending_candidate_target = target if prioritize else self._next_pending_candidate_target()
+        self.pending_candidate_target = self._next_pending_candidate_target()
         self._invalidate_quote_and_confirmation()
         self.revision += 1
 
@@ -209,9 +211,7 @@ class BookingDraft(BaseModel):
             ),
             None,
         )
-        fingerprint = hashlib.sha256(
-            "|".join(candidate.place_id for candidate in candidates).encode()
-        ).hexdigest()[:10]
+        fingerprint = hashlib.sha256("|".join(candidate.place_id for candidate in candidates).encode()).hexdigest()[:10]
         return {
             "clarification_id": f"{target}:{fingerprint}",
             "target": target,
@@ -230,7 +230,10 @@ class BookingDraft(BaseModel):
     def pending_place_clarification(self) -> dict[str, object] | None:
         """Compatibility projection for clients that only understand one active list."""
 
-        target = self.pending_candidate_target
+        # Derive this projection instead of trusting persisted pointers from an
+        # older worker version that allowed the most recently changed field to
+        # jump the booking order.
+        target = self._next_pending_candidate_target()
         return self.place_clarification(target) if target is not None else None
 
     def booking_clarifications(self) -> dict[str, object | None]:
@@ -275,9 +278,9 @@ class BookingDraft(BaseModel):
             raise ValueError("VEHICLE_QUERY_REQUIRED")
         self.vehicle_query = normalized_query
         self.vehicle_type = None
-        # An explicit unclear vehicle request temporarily owns ordinal choices;
-        # once resolved, set_vehicle_type restores the pending place list.
-        self.pending_candidate_target = None
+        # A vehicle change cannot take ordinal ownership while pickup or
+        # destination still needs clarification.
+        self.pending_candidate_target = self._next_pending_candidate_target()
         self._invalidate_quote_and_confirmation()
         self.revision += 1
 
@@ -303,29 +306,20 @@ class BookingDraft(BaseModel):
         return "missing"
 
     def slot_statuses(self) -> dict[BookingField, BookingSlotStatus]:
-        return {
-            field: self.slot_status(field)
-            for field in ("pickup", "destination", "vehicle_type")
-        }
+        return {field: self.slot_status(field) for field in ("pickup", "destination", "vehicle_type")}
 
     def slot_labels(self) -> dict[BookingField, str | None]:
         """Expose the verified value or the user's unresolved phrase for each slot."""
 
         return {
             "pickup": self.pickup.display_name if self.pickup is not None else self.pickup_query,
-            "destination": (
-                self.destination.display_name if self.destination is not None else self.destination_query
-            ),
+            "destination": (self.destination.display_name if self.destination is not None else self.destination_query),
             "vehicle_type": vehicle_spoken_label(self.vehicle_type) or self.vehicle_query,
         }
 
     def next_required_field(self) -> BookingField | None:
         return next(
-            (
-                field
-                for field in ("pickup", "destination", "vehicle_type")
-                if self.slot_status(field) != "resolved"
-            ),
+            (field for field in ("pickup", "destination", "vehicle_type") if self.slot_status(field) != "resolved"),
             None,
         )
 

@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -7,7 +8,10 @@ from livekit.agents import llm
 import src.voice_agent.transcript_rewrite as rewrite_module
 from src.voice_agent.session_data import AloSMSessionData
 from src.voice_agent.transcript_rewrite import (
+    OpenAITranscriptRewriter,
+    RewriteOutput,
     TranscriptRewriteResult,
+    _numeric_semantics_preserved,
     is_short_ordinal_selection,
     rewrite_livekit_user_turn,
 )
@@ -82,6 +86,35 @@ class _BlockingRewriter(_Rewriter):
         )
 
 
+class _ParsedResponseClient:
+    def __init__(self, normalized_text: str) -> None:
+        self.normalized_text = normalized_text
+        self.responses = self
+
+    async def parse(self, **_: object) -> object:
+        return SimpleNamespace(
+            output_parsed=RewriteOutput(
+                inferred_intent="BOOK_RIDE",
+                normalized_text=self.normalized_text,
+                meaning_preserved=True,
+                confidence=0.99,
+            )
+        )
+
+
+def _openai_rewriter(normalized_text: str) -> OpenAITranscriptRewriter:
+    return OpenAITranscriptRewriter(
+        api_key="test-key",
+        model="gpt-5-mini",
+        base_url=None,
+        timeout_seconds=2.0,
+        reasoning_effort="low",
+        minimum_confidence=0.85,
+        context_window_turns=3,
+        client=_ParsedResponseClient(normalized_text),  # type: ignore[arg-type]
+    )
+
+
 @pytest.mark.parametrize("text", ["2", "số 2", "tôi chọn số 2", "chọn thứ hai"])
 def test_short_ordinal_selection_is_deterministic(text: str) -> None:
     assert is_short_ordinal_selection(text) is True
@@ -121,7 +154,11 @@ async def test_short_ordinal_skips_provider_but_change_uses_three_context_pairs(
         context.add_message(role="assistant", content=assistant)
         context.add_message(role="user", content=user)
     context.add_message(role="assistant", content="Bạn muốn đổi điểm đón thành đâu?")
-    current = llm.ChatMessage(role="user", content=["Đổi điểm đón sang Hồ Gương"])
+    current = llm.ChatMessage(
+        role="user",
+        content=["Đổi điểm đón sang Hồ Gương"],
+        transcript_confidence=0.37,
+    )
 
     result = await rewrite_livekit_user_turn(
         rewriter=rewriter,
@@ -137,6 +174,61 @@ async def test_short_ordinal_skips_provider_but_change_uses_three_context_pairs(
         {"assistant": "Bạn muốn đổi gì?", "user": "Điểm đón"},
         {"assistant": "Bạn muốn đổi điểm đón thành đâu?", "user": "Đổi điểm đón sang Hồ Gương"},
     ]
+    assert rewriter.calls[0]["context"]["asr_confidence"] == 0.37
+
+
+@pytest.mark.parametrize("normalized", ["1C muốn đặt xe", "1515 muốn đặt xe"])
+@pytest.mark.asyncio
+async def test_rewrite_rejects_numeric_tokens_not_present_in_raw_transcript(
+    normalized: str,
+) -> None:
+    raw = "Cho tôi muốn đặt xe"
+
+    result = await _openai_rewriter(normalized).rewrite(
+        raw,
+        session_context={"asr_confidence": 0.0},
+        session_id="session",
+    )
+
+    assert result.applied is False
+    assert result.normalized_text == raw
+    assert result.reason == "numeric_semantics_rejected"
+
+
+@pytest.mark.parametrize(
+    ("raw", "normalized"),
+    [
+        ("1C muốn đặt xe", "Cho tôi muốn đặt xe"),
+        ("1515 muốn đặt xe", "Cho tôi muốn đặt xe"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_rewrite_can_remove_bounded_low_confidence_numeric_asr_artifacts(
+    raw: str,
+    normalized: str,
+) -> None:
+    result = await _openai_rewriter(normalized).rewrite(
+        raw,
+        session_context={"asr_confidence": 0.0},
+        session_id="session",
+    )
+
+    assert result.applied is True
+    assert result.normalized_text == normalized
+    assert result.reason == "applied"
+
+
+def test_numeric_guard_never_removes_a_valid_vehicle_or_ordinal_number() -> None:
+    assert _numeric_semantics_preserved(
+        "Cho tôi xe 4 chỗ",
+        "Cho tôi xe bốn chỗ",
+        asr_confidence=0.0,
+    ) == (False, "removed_numeric_fact")
+    assert _numeric_semantics_preserved(
+        "Tôi chọn số 1",
+        "Tôi chọn số một",
+        asr_confidence=0.0,
+    ) == (False, "removed_numeric_fact")
 
 
 @pytest.mark.asyncio

@@ -9,6 +9,7 @@ import logging
 import re
 import time
 import unicodedata
+from collections import Counter
 from typing import Any, Literal, Protocol, cast
 
 from livekit.agents import llm
@@ -38,6 +39,9 @@ Quy tắc bắt buộc:
 - recent_dialogue_pairs và booking_state chỉ là ngữ cảnh, không được chép thông tin từ đó vào câu hiện tại.
 - Nếu khách đổi điểm đón, điểm đến hoặc loại xe, phải giữ chính xác intent đổi thông tin.
 - Không tự chọn candidate và không biến câu mơ hồ thành một địa điểm cụ thể.
+- Không đổi từ/cụm từ thành chữ số hoặc mã chữ-số không có trong transcript gốc.
+- Có thể bỏ một mã chữ-số hoặc chuỗi số lặp rõ ràng do ASR sinh nhầm khi độ tin cậy ASR thấp
+  và ngữ cảnh hội thoại chứng minh được cách sửa; không được bỏ số thứ tự, địa chỉ hoặc loại xe hợp lệ.
 - Không trả lời khách, không giải thích và không xuất chain-of-thought.
 - inferred_intent chỉ là nhãn kết quả của bước suy luận.
 """
@@ -129,6 +133,7 @@ def build_rewrite_context(
     current_text: str,
     *,
     context_window_turns: int,
+    asr_confidence: float | None = None,
 ) -> dict[str, Any]:
     draft = userdata.booking_draft
     return {
@@ -144,7 +149,55 @@ def build_rewrite_context(
             "confirmation_status": draft.confirmation_status,
             "clarifications": draft.booking_clarifications(),
         },
+        "asr_confidence": asr_confidence,
     }
+
+
+def _numeric_sequences(text: str) -> Counter[str]:
+    return Counter(re.findall(r"\d+", text))
+
+
+def _suspicious_asr_numeric_sequences(text: str) -> Counter[str]:
+    """Identify bounded numeric artifacts that a low-confidence STT may emit."""
+
+    suspicious: Counter[str] = Counter()
+    tokens = re.findall(r"\w+", unicodedata.normalize("NFC", text), flags=re.UNICODE)
+    for token in tokens:
+        digit_sequences = re.findall(r"\d+", token)
+        if digit_sequences and any(char.isalpha() for char in token):
+            suspicious.update(digit_sequences)
+            continue
+        if token.isdigit() and len(token) >= 2 and len(token) % 2 == 0:
+            midpoint = len(token) // 2
+            if token[:midpoint] == token[midpoint:]:
+                suspicious[token] += 1
+    for previous, current in zip(tokens, tokens[1:], strict=False):
+        if previous.isdigit() and previous == current:
+            suspicious[previous] += 2
+    return suspicious
+
+
+def _numeric_semantics_preserved(
+    raw_text: str,
+    normalized_text: str,
+    *,
+    asr_confidence: float | None,
+) -> tuple[bool, str]:
+    """Reject invented numbers while permitting narrowly bounded STT repairs."""
+
+    raw = _numeric_sequences(raw_text)
+    normalized = _numeric_sequences(normalized_text)
+    if raw == normalized:
+        return True, "unchanged"
+    if normalized - raw:
+        return False, "introduced_numeric_token"
+
+    removed = raw - normalized
+    low_confidence = asr_confidence is not None and asr_confidence <= 0.5
+    suspicious = _suspicious_asr_numeric_sequences(raw_text)
+    if low_confidence and not (removed - suspicious):
+        return True, "removed_low_confidence_asr_artifact"
+    return False, "removed_numeric_fact"
 
 
 class OpenAITranscriptRewriter:
@@ -215,15 +268,40 @@ class OpenAITranscriptRewriter:
 
         duration_ms = int((time.monotonic() - started) * 1000)
         normalized = parsed.normalized_text.strip()
-        # Digits often encode candidate numbers, addresses or vehicle size. The
-        # rewriter may fix spelling, but it must not invent/remove numeric facts.
-        semantic_ok = sorted(re.findall(r"\d+", text)) == sorted(re.findall(r"\d+", normalized))
+        asr_confidence_value = session_context.get("asr_confidence")
+        asr_confidence = float(asr_confidence_value) if isinstance(asr_confidence_value, (int, float)) else None
+        semantic_ok, numeric_reason = _numeric_semantics_preserved(
+            text,
+            normalized,
+            asr_confidence=asr_confidence,
+        )
+        if not semantic_ok:
+            logger.warning(
+                "Voice transcript rewrite numeric guard rejected model=%s reason=%s "
+                "raw_numeric_count=%d normalized_numeric_count=%d asr_confidence=%s",
+                self.model,
+                numeric_reason,
+                sum(_numeric_sequences(text).values()),
+                sum(_numeric_sequences(normalized).values()),
+                asr_confidence,
+            )
+        elif numeric_reason == "removed_low_confidence_asr_artifact":
+            logger.info(
+                "Voice transcript rewrite removed low-confidence numeric ASR artifact model=%s",
+                self.model,
+            )
         accepted = parsed.meaning_preserved and parsed.confidence >= self.minimum_confidence and semantic_ok
+        if accepted:
+            reason = "applied" if normalized != text else "unchanged"
+        elif not semantic_ok:
+            reason = "numeric_semantics_rejected"
+        else:
+            reason = "rejected"
         return TranscriptRewriteResult(
             raw_text=text,
             normalized_text=normalized if accepted else text,
             applied=accepted and normalized != text,
-            reason="applied" if accepted and normalized != text else ("unchanged" if accepted else "rejected"),
+            reason=reason,
             inferred_intent=parsed.inferred_intent,
             confidence=parsed.confidence,
             model=self.model,
@@ -261,6 +339,7 @@ async def _rewrite_finalized_text(
     turn_ctx: llm.ChatContext,
     item_id: str,
     text: str,
+    asr_confidence: float | None,
 ) -> TranscriptRewriteResult:
     """Compute one rewrite result without mutating the LiveKit message."""
 
@@ -275,6 +354,7 @@ async def _rewrite_finalized_text(
         turn_ctx,
         text,
         context_window_turns=rewriter.context_window_turns,
+        asr_confidence=asr_confidence,
     )
     timeout_seconds = min(max(rewriter.timeout_seconds, 0.1), MAX_REWRITE_BARRIER_SECONDS)
     started = time.monotonic()
@@ -341,6 +421,7 @@ async def rewrite_livekit_user_turn(
                     turn_ctx=turn_ctx,
                     item_id=item_id,
                     text=text,
+                    asr_confidence=new_message.transcript_confidence,
                 ),
                 name=f"transcript-rewrite:{item_id}",
             )
