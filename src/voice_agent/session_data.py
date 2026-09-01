@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -134,6 +135,10 @@ class BookingDraft(BaseModel):
     destination: PlaceCandidate | None = None
     destination_candidates: list[PlaceCandidate] = Field(default_factory=list)
     pending_candidate_target: BookingTarget | None = None
+    last_selected_candidate_target: BookingTarget | None = None
+    last_selected_candidate_at: float | None = None
+    pending_reselection_target: BookingTarget | None = None
+    pending_reselection_place_id: str | None = None
     vehicle_query: str | None = None
     vehicle_type: VehicleType | None = None
     quote: QuoteSnapshot | None = None
@@ -151,11 +156,19 @@ class BookingDraft(BaseModel):
         self.booking = None
 
     def _next_pending_candidate_target(self) -> BookingTarget | None:
-        if self.pickup is None and self.pickup_candidates:
-            return "pickup"
-        if self.destination is None and self.destination_candidates:
-            return "destination"
+        # A later candidate list must never skip an earlier unresolved slot.
+        # Returning None when the first unresolved place has no candidates
+        # makes the workflow ask for that value before accepting ordinals for a
+        # destination list that may already have been prepared by a barge-in.
+        if self.pickup is None:
+            return "pickup" if self.pickup_candidates else None
+        if self.destination is None:
+            return "destination" if self.destination_candidates else None
         return None
+
+    def _clear_pending_reselection(self) -> None:
+        self.pending_reselection_target = None
+        self.pending_reselection_place_id = None
 
     def set_candidates(
         self,
@@ -173,6 +186,7 @@ class BookingDraft(BaseModel):
             self.destination_candidates = candidates
         self.pending_candidate_target = self._next_pending_candidate_target()
         self._invalidate_quote_and_confirmation()
+        self._clear_pending_reselection()
         self.revision += 1
 
     def select_place(self, target: BookingTarget, place_id: str) -> PlaceCandidate:
@@ -188,8 +202,50 @@ class BookingDraft(BaseModel):
                 self.destination = selected
             self._invalidate_quote_and_confirmation()
             self.revision += 1
+            self.last_selected_candidate_target = target
+            self.last_selected_candidate_at = time.time()
+            self._clear_pending_reselection()
         self.pending_candidate_target = self._next_pending_candidate_target()
         return selected
+
+    def stage_candidate_reselection(self, target: BookingTarget, place_id: str) -> PlaceCandidate:
+        """Hold one uncertain ordinal correction until the user confirms it."""
+
+        candidates = self.pickup_candidates if target == "pickup" else self.destination_candidates
+        selected = next((candidate for candidate in candidates if candidate.place_id == place_id), None)
+        if selected is None:
+            raise ValueError("PLACE_CANDIDATE_NOT_IN_CURRENT_SEARCH")
+        self.pending_reselection_target = target
+        self.pending_reselection_place_id = place_id
+        self._invalidate_quote_and_confirmation()
+        self.revision += 1
+        return selected
+
+    def confirm_candidate_reselection(self) -> tuple[BookingTarget, PlaceCandidate]:
+        """Commit the candidate previously staged by an uncertain ordinal."""
+
+        target = self.pending_reselection_target
+        place_id = self.pending_reselection_place_id
+        if target is None or place_id is None:
+            raise ValueError("PLACE_RESELECTION_NOT_PENDING")
+        return target, self.select_place(target, place_id)
+
+    def reopen_candidate_selection(self, target: BookingTarget) -> None:
+        """Return one selected place to clarification after an explicit mistake cue."""
+
+        candidates = self.pickup_candidates if target == "pickup" else self.destination_candidates
+        if not candidates:
+            raise ValueError("PLACE_CANDIDATES_REQUIRED")
+        if target == "pickup":
+            self.pickup = None
+        else:
+            self.destination = None
+        self.last_selected_candidate_target = target
+        self.last_selected_candidate_at = time.time()
+        self._clear_pending_reselection()
+        self.pending_candidate_target = self._next_pending_candidate_target()
+        self._invalidate_quote_and_confirmation()
+        self.revision += 1
 
     def place_clarification(self, target: BookingTarget) -> dict[str, object] | None:
         """Return one target-owned candidate list without coupling it to the other slot."""
@@ -207,9 +263,7 @@ class BookingDraft(BaseModel):
             ),
             None,
         )
-        fingerprint = hashlib.sha256(
-            "|".join(candidate.place_id for candidate in candidates).encode()
-        ).hexdigest()[:10]
+        fingerprint = hashlib.sha256("|".join(candidate.place_id for candidate in candidates).encode()).hexdigest()[:10]
         return {
             "clarification_id": f"{target}:{fingerprint}",
             "target": target,
@@ -228,7 +282,10 @@ class BookingDraft(BaseModel):
     def pending_place_clarification(self) -> dict[str, object] | None:
         """Compatibility projection for clients that only understand one active list."""
 
-        target = self.pending_candidate_target
+        # Derive this projection instead of trusting persisted pointers from an
+        # older worker version that allowed the most recently changed field to
+        # jump the booking order.
+        target = self._next_pending_candidate_target()
         return self.place_clarification(target) if target is not None else None
 
     def booking_clarifications(self) -> dict[str, object | None]:
@@ -261,6 +318,7 @@ class BookingDraft(BaseModel):
         if self.vehicle_type != vehicle_type or self.vehicle_query is not None:
             self.vehicle_type = vehicle_type
             self.vehicle_query = None
+            self.pending_candidate_target = self._next_pending_candidate_target()
             self._invalidate_quote_and_confirmation()
             self.revision += 1
 
@@ -272,6 +330,9 @@ class BookingDraft(BaseModel):
             raise ValueError("VEHICLE_QUERY_REQUIRED")
         self.vehicle_query = normalized_query
         self.vehicle_type = None
+        # A vehicle change cannot take ordinal ownership while pickup or
+        # destination still needs clarification.
+        self.pending_candidate_target = self._next_pending_candidate_target()
         self._invalidate_quote_and_confirmation()
         self.revision += 1
 
@@ -297,29 +358,20 @@ class BookingDraft(BaseModel):
         return "missing"
 
     def slot_statuses(self) -> dict[BookingField, BookingSlotStatus]:
-        return {
-            field: self.slot_status(field)
-            for field in ("pickup", "destination", "vehicle_type")
-        }
+        return {field: self.slot_status(field) for field in ("pickup", "destination", "vehicle_type")}
 
     def slot_labels(self) -> dict[BookingField, str | None]:
         """Expose the verified value or the user's unresolved phrase for each slot."""
 
         return {
             "pickup": self.pickup.display_name if self.pickup is not None else self.pickup_query,
-            "destination": (
-                self.destination.display_name if self.destination is not None else self.destination_query
-            ),
+            "destination": (self.destination.display_name if self.destination is not None else self.destination_query),
             "vehicle_type": vehicle_spoken_label(self.vehicle_type) or self.vehicle_query,
         }
 
     def next_required_field(self) -> BookingField | None:
         return next(
-            (
-                field
-                for field in ("pickup", "destination", "vehicle_type")
-                if self.slot_status(field) != "resolved"
-            ),
+            (field for field in ("pickup", "destination", "vehicle_type") if self.slot_status(field) != "resolved"),
             None,
         )
 

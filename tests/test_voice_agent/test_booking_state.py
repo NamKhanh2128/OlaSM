@@ -201,6 +201,7 @@ def test_cancelled_booking_is_reflected_in_compact_conversation_summary() -> Non
 
     assert "chuyến mã book_durable đã hủy" in draft.conversation_summary()
 
+
 @pytest.mark.asyncio
 async def test_quote_tool_uses_existing_durable_quote_service() -> None:
     draft = _quoted_draft()
@@ -301,6 +302,17 @@ def test_candidate_pointer_follows_booking_order_without_overwriting_lists() -> 
     assert draft.pending_candidate_target == "destination"
     assert draft.place_clarification("pickup") is not None
     assert draft.place_clarification("destination") is not None
+
+
+def test_destination_candidates_cannot_skip_a_missing_pickup() -> None:
+    draft = BookingDraft()
+    destination = [_place("aeon", "AEON Mall Long Biên"), _place("bridge", "Cầu Long Biên")]
+
+    draft.set_candidates("destination", "Long Biên", destination)
+
+    assert draft.next_required_field() == "pickup"
+    assert draft.pending_candidate_target is None
+    assert draft.pending_place_clarification() is None
 
 
 def test_booking_slots_distinguish_missing_unclear_and_resolved() -> None:

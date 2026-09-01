@@ -149,10 +149,16 @@ function BookingSlot({
 function clarificationTargetForMessage(message: string): ClarificationTarget | null {
   const normalized = message.toLocaleLowerCase("vi");
   if (!normalized.includes("số thứ tự")) return null;
-  if (normalized.includes("điểm đón")) return "pickup";
-  if (normalized.includes("điểm đến")) return "destination";
-  if (normalized.includes("loại xe")) return "vehicle_type";
-  return null;
+  const targetMentions: Array<[ClarificationTarget, number]> = [
+    ["pickup", normalized.lastIndexOf("điểm đón")],
+    ["destination", normalized.lastIndexOf("điểm đến")],
+    ["vehicle_type", normalized.lastIndexOf("loại xe")],
+  ];
+  const [target, position] = targetMentions.reduce(
+    (latest, current) => current[1] > latest[1] ? current : latest,
+    ["pickup", -1] as [ClarificationTarget, number],
+  );
+  return position >= 0 ? target : null;
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
