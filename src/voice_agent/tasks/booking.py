@@ -20,6 +20,7 @@ from src.voice_agent.persistence import (
     VoiceStateStore,
 )
 from src.voice_agent.session_data import (
+    VEHICLE_TYPE_ORDER,
     AloSMSessionData,
     BookingDraft,
     BookingField,
@@ -134,22 +135,58 @@ def can_auto_select_place(candidates: list[object]) -> bool:
 
 
 _SPOKEN_FILLER_PATTERN = re.compile(r"\b(?:ờ+|ơ+|ừm+|ừ+|à+)\b[,\s]*", re.IGNORECASE)
-_COMPLETE_ROUTE_PATTERN = re.compile(
-    r"(?:^|\s)(?:đi\s+)?từ\s*,?\s*(?P<pickup>.+?)\s+(?:tới|đến)\s+"
-    r"(?P<destination>.+?)(?=\s+(?:bằng|với)\s+(?:xe|ô\s*tô)|[.!?;]|$)",
-    re.IGNORECASE,
+_MAX_ROUTE_TRANSCRIPT_CHARS = 2_000
+_ROUTE_START_MARKERS = (" đi từ ", " đi từ, ", " từ ", " từ, ")
+_ROUTE_DESTINATION_MARKERS = (" tới ", " đến ")
+_ROUTE_END_MARKERS = (
+    " bằng xe ",
+    " bằng ô tô ",
+    " với xe ",
+    " với ô tô ",
+    ".",
+    "!",
+    "?",
+    ";",
 )
 
 
-def extract_complete_route(value: str) -> tuple[str, str] | None:
-    """Extract a complete Vietnamese ``từ … tới/đến …`` route."""
+def _first_marker(
+    value: str,
+    markers: tuple[str, ...],
+    *,
+    start: int = 0,
+) -> tuple[int, str] | None:
+    """Find the earliest fixed marker in linear bounded text."""
 
-    compact = " ".join(_SPOKEN_FILLER_PATTERN.sub(" ", value).split())
-    match = _COMPLETE_ROUTE_PATTERN.search(compact)
-    if match is None:
+    found = ((position, marker) for marker in markers if (position := value.find(marker, start)) >= 0)
+    return min(found, key=lambda match: (match[0], -len(match[1])), default=None)
+
+
+def extract_complete_route(value: str) -> tuple[str, str] | None:
+    """Extract a bounded Vietnamese route without backtracking regex captures."""
+
+    bounded = value[:_MAX_ROUTE_TRANSCRIPT_CHARS]
+    compact = " ".join(_SPOKEN_FILLER_PATTERN.sub(" ", bounded).split())
+    padded = f" {compact} "
+    folded = padded.casefold()
+
+    route_start = _first_marker(folded, _ROUTE_START_MARKERS)
+    if route_start is None:
         return None
-    pickup = match.group("pickup").strip(" ,")[:200]
-    destination = match.group("destination").strip(" ,")[:200]
+    pickup_start = route_start[0] + len(route_start[1])
+    destination_marker = _first_marker(
+        folded,
+        _ROUTE_DESTINATION_MARKERS,
+        start=pickup_start,
+    )
+    if destination_marker is None:
+        return None
+
+    destination_start = destination_marker[0] + len(destination_marker[1])
+    route_end = _first_marker(folded, _ROUTE_END_MARKERS, start=destination_start)
+    destination_end = route_end[0] if route_end is not None else len(padded) - 1
+    pickup = padded[pickup_start : destination_marker[0]].strip(" ,")[:200]
+    destination = padded[destination_start:destination_end].strip(" ,")[:200]
     if not pickup or not destination:
         return None
     return pickup, destination
@@ -498,9 +535,10 @@ def grounded_vehicle_selection(draft: BookingDraft, user_text: str) -> VehicleTy
     normalized = _normalize_confirmation(user_text)
     ordinal = _SHORT_CANDIDATE_SELECTION.fullmatch(normalized)
     if ordinal is not None and draft.pending_candidate_target is None and draft.vehicle_type is None:
-        index = _CANDIDATE_NUMBER_TOKENS[ordinal.group(1)]
-        vehicle_types = list(_VEHICLE_SURFACES)
-        return vehicle_types[index] if index < len(vehicle_types) else None
+        index = _CANDIDATE_NUMBER_TOKENS.get(ordinal.group(1))
+        if index is None or not 0 <= index < len(VEHICLE_TYPE_ORDER):
+            return None
+        return VEHICLE_TYPE_ORDER[index]
 
     matches = {
         vehicle_type

@@ -659,6 +659,25 @@ def test_complete_route_parser_ignores_short_spoken_fillers() -> None:
         ),
     ],
 )
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("Đi từ VinUni đến Hồ Gươm bằng xe bốn chỗ", ("VinUni", "Hồ Gươm")),
+        ("Từ, VinUni tới Hồ Gươm; đặt giúp tôi", ("VinUni", "Hồ Gươm")),
+        ("Từ VinUni đến Hồ Gươm với ô tô bốn chỗ", ("VinUni", "Hồ Gươm")),
+    ],
+)
+def test_complete_route_parser_stops_at_fixed_route_boundaries(
+    message: str,
+    expected: tuple[str, str],
+) -> None:
+    assert extract_complete_route(message) == expected
+
+
+def test_complete_route_parser_bounds_long_malformed_asr() -> None:
+    malformed = "Từ " + ("VinUni " * 10_000)
+    assert extract_complete_route(malformed) is None
+
 def test_explicit_booking_change_parser_prioritizes_replacement_intent(
     message: str,
     expected: tuple[str, str],
@@ -1349,7 +1368,9 @@ def test_named_correction_selects_new_candidate_and_respects_negation() -> None:
     assert grounded == ("pickup", candidates[1])
 
 
-def test_vehicle_selection_supports_catalog_number_and_explicit_change() -> None:
+def test_vehicle_selection_supports_catalog_number_and_explicit_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     draft = AloSMSessionData(
         app_session_id="session",
         call_id="call",
@@ -1358,6 +1379,19 @@ def test_vehicle_selection_supports_catalog_number_and_explicit_change() -> None
     ).booking_draft
 
     assert grounded_vehicle_selection(draft, "Tôi chọn số 2") == "CAR_4"
+    monkeypatch.setattr(
+        booking_module,
+        "_VEHICLE_SURFACES",
+        {
+            "LUXURY": ("xe sang",),
+            "CAR_7": ("xe bay cho",),
+            "CAR_4": ("xe bon cho",),
+            "MOTORBIKE": ("xe may",),
+        },
+    )
+    assert grounded_vehicle_selection(draft, "Tôi chọn số 1") == "MOTORBIKE"
+    assert grounded_vehicle_selection(draft, "Tôi chọn số 4") == "LUXURY"
+    assert grounded_vehicle_selection(draft, "Tôi chọn số 5") is None
     draft.set_vehicle_type("CAR_4")
     assert grounded_vehicle_selection(draft, "Đổi sang xe bảy chỗ") == "CAR_7"
 
