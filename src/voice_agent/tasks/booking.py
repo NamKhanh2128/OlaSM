@@ -19,6 +19,7 @@ from src.voice_agent.persistence import (
     VoiceStateConflictError,
     VoiceStateStore,
 )
+from src.voice_agent.place_query_validator import is_valid_place_query
 from src.voice_agent.session_data import (
     VEHICLE_TYPE_ORDER,
     AloSMSessionData,
@@ -201,6 +202,11 @@ def extract_complete_route(value: str) -> tuple[str, str] | None:
     destination = padded[destination_start:destination_end].strip(" ,")[:200]
     if not pickup or not destination:
         return None
+    
+    # Validate extracted queries to prevent invalid single-word or filler words
+    if not is_valid_place_query(pickup) or not is_valid_place_query(destination):
+        return None
+    
     return pickup, destination
 
 
@@ -248,6 +254,11 @@ def _clean_labeled_place_value(value: str) -> str:
     normalized = _normalize_confirmation(place)
     if not normalized or normalized in _INVALID_LABELED_PLACE_VALUES:
         return ""
+    
+    # Use shared validator to reject filler words and invalid single-word queries
+    if not is_valid_place_query(place):
+        return ""
+    
     return place[:200]
 
 
@@ -489,8 +500,15 @@ def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | No
         if field is None:
             continue
         replacement = _trim_trailing_non_entity_clause(_consume_change_link(compact[match.end() :]))
-        if replacement:
-            return field, replacement
+        if not replacement:
+            return None
+        
+        # Validate place queries to prevent invalid single-word or filler words
+        if field in ("pickup", "destination"):
+            if not is_valid_place_query(replacement):
+                return None
+        
+        return field, replacement
     return None
 
 
@@ -1532,6 +1550,17 @@ class BookingTask(AgentTask[BookingOutcome]):
             đã tạo chuyến.
         """
         context.disallow_interruptions()
+        
+        # Validate query to prevent filler words and invalid single-word queries
+        if not is_valid_place_query(query):
+            context.userdata.record_failure(
+                "PLACE_NOT_FOUND",
+                f"Địa điểm '{query}' không hợp lệ.",
+                fallback_action="repeat_or_text",
+            )
+            await self._commit(context)
+            return f"Thông tin về {_target_label(target)} '{query}' không hợp lệ. Vui lòng nói rõ hơn hoặc nhập tay."
+        
         latest = self._latest_user_message()
         confidence = latest.transcript_confidence if latest is not None else None
         context.userdata.last_asr_confidence = confidence
