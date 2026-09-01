@@ -697,6 +697,7 @@ def test_explicit_booking_change_unknown_field_mapping_fails_safe(
         ("Đổi điểm đón thành VinUni và gọi cho tôi", ("pickup", "VinUni")),
         ("Đổi điểm đến sang Hồ Gươm rồi nhắn biển số nhé", ("destination", "Hồ Gươm")),
         ("Đổi điểm đón thành Times City. Gọi cho tôi sau", ("pickup", "Times City")),
+        ("Đổi điểm đón thành VinUni tôi đang rất vội", ("pickup", "VinUni")),
         ("Đổi loại xe sang xe bảy chỗ giúp tôi nhé", ("vehicle_type", "xe bảy chỗ")),
         (
             "Đổi điểm đến thành Viện Khoa học và Công nghệ Việt Nam",
@@ -709,6 +710,12 @@ def test_explicit_booking_change_keeps_only_the_booking_entity_span(
     expected: tuple[str, str],
 ) -> None:
     assert extract_explicit_booking_change(message) == expected
+
+
+def test_explicit_booking_change_rejects_oversized_unbounded_remark() -> None:
+    unrelated_tail = " ".join(["nội dung không liên quan"] * 30)
+
+    assert extract_explicit_booking_change(f"Đổi điểm đón thành VinUni {unrelated_tail}") is None
 
 
 @pytest.mark.asyncio

@@ -173,18 +173,15 @@ _CHANGE_FIELD = (
     r"(?P<field>điểm\s+đón|điểm\s+đi|nơi\s+đón|"
     r"điểm\s+đến|nơi\s+đến|đích\s+đến|loại\s+xe)"
 )
-_CHANGE_VALUE = (
-    r"(?:là|thành|sang|qua)?\s*"
-    r"(?P<value>[^.!?;]{1,400})"
-    r"(?:[.!?;][^\n]{0,400})?$"
-)
+_CHANGE_LINK = r"(?:là|thành|sang|qua)?"
 _CHANGE_PATTERNS = (
     re.compile(
-        rf"\b{_CHANGE_CUE}\s+(?:(?:cho|giúp)\s+(?:tôi|mình)\s+)?{_CHANGE_FIELD}\s*{_CHANGE_VALUE}",
+        rf"\b{_CHANGE_CUE}\s+(?:(?:cho|giúp)\s+(?:tôi|mình)\s+)?"
+        rf"{_CHANGE_FIELD}\s*{_CHANGE_LINK}\s*",
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b{_CHANGE_FIELD}\s+{_CHANGE_CUE}\s*{_CHANGE_VALUE}",
+        rf"\b{_CHANGE_FIELD}\s+{_CHANGE_CUE}\s*{_CHANGE_LINK}\s*",
         re.IGNORECASE,
     ),
 )
@@ -229,6 +226,23 @@ _TRAILING_POLITE_SUFFIXES = (
     "nha",
     "ạ",
 )
+_TRAILING_REMARK_PREFIXES = (
+    "nhưng",
+    "tuy nhiên",
+    "tiện thể",
+    "ngoài ra",
+    "tôi muốn",
+    "tôi cần",
+    "tôi đang",
+    "mình muốn",
+    "mình cần",
+    "bạn hãy",
+    "bạn gọi",
+    "trời đang",
+    "trời mưa",
+)
+_MAX_CHANGE_ENTITY_CHARS = 200
+_MAX_CHANGE_ENTITY_TOKENS = 24
 
 
 def _starts_with_phrase(value: str, phrase: str) -> bool:
@@ -239,6 +253,9 @@ def _trim_trailing_non_entity_clause(value: str) -> str:
     """Keep the entity span while dropping explicit follow-up action clauses."""
 
     entity = " ".join(unicodedata.normalize("NFC", value).split()).strip(" ,.!?;:")
+    punctuation_positions = [entity.find(mark) for mark in ".!?;" if entity.find(mark) >= 0]
+    if punctuation_positions:
+        entity = entity[: min(punctuation_positions)].rstrip(" ,")
     folded = entity.casefold()
     cut_at = len(entity)
     for separator in _TRAILING_CLAUSE_SEPARATORS:
@@ -249,6 +266,11 @@ def _trim_trailing_non_entity_clause(value: str) -> str:
                 cut_at = min(cut_at, position)
                 break
             search_from = position + len(separator)
+    for prefix in _TRAILING_REMARK_PREFIXES:
+        marker = f" {prefix} "
+        position = folded.find(marker)
+        if position >= 0:
+            cut_at = min(cut_at, position)
     entity = entity[:cut_at].rstrip(" ,")
 
     while entity:
@@ -264,6 +286,8 @@ def _trim_trailing_non_entity_clause(value: str) -> str:
         if suffix is None:
             break
         entity = entity[: -len(suffix)].rstrip(" ,")
+    if len(entity) > _MAX_CHANGE_ENTITY_CHARS or len(entity.split()) > _MAX_CHANGE_ENTITY_TOKENS:
+        return ""
     return entity
 
 
@@ -289,7 +313,7 @@ def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | No
         field = _CHANGE_FIELD_TARGETS.get(_normalize_change_field(match.group("field")))
         if field is None:
             continue
-        replacement = _trim_trailing_non_entity_clause(match.group("value"))[:200]
+        replacement = _trim_trailing_non_entity_clause(compact[match.end() :])
         if replacement:
             return field, replacement
     return None
