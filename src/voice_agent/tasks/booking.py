@@ -184,6 +184,15 @@ _CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
 )
+
+
+def _normalize_change_field(value: str) -> str:
+    """Canonicalize a captured field across Unicode case and whitespace variants."""
+
+    normalized = unicodedata.normalize("NFC", value).casefold()
+    return " ".join(normalized.split())
+
+
 _CHANGE_FIELD_TARGETS: dict[str, BookingField] = {
     "điểm đón": "pickup",
     "điểm đi": "pickup",
@@ -198,12 +207,14 @@ _CHANGE_FIELD_TARGETS: dict[str, BookingField] = {
 def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | None:
     """Extract one explicit slot replacement without correcting the ASR text."""
 
-    compact = " ".join(value.split())
+    compact = " ".join(unicodedata.normalize("NFC", value).split())
     for pattern in _CHANGE_PATTERNS:
         match = pattern.search(compact)
         if match is None:
             continue
-        field = _CHANGE_FIELD_TARGETS[match.group("field").casefold()]
+        field = _CHANGE_FIELD_TARGETS.get(_normalize_change_field(match.group("field")))
+        if field is None:
+            continue
         replacement = match.group("value").strip(" ,.!?;:")[:200]
         if replacement:
             return field, replacement

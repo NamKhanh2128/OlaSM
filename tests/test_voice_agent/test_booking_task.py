@@ -1,4 +1,5 @@
 import json
+import unicodedata
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
@@ -662,6 +663,32 @@ def test_explicit_booking_change_parser_prioritizes_replacement_intent(
     expected: tuple[str, str],
 ) -> None:
     assert extract_explicit_booking_change(message) == expected
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("ĐỔI ĐIỂM ĐÓN SANG TIMES CITY", ("pickup", "TIMES CITY")),
+        ("Đổi\tđiểm\u00a0đến   thành Hồ Tây", ("destination", "Hồ Tây")),
+        (
+            unicodedata.normalize("NFD", "Đổi nơi đón sang VinUni"),
+            ("pickup", "VinUni"),
+        ),
+    ],
+)
+def test_explicit_booking_change_normalizes_unicode_case_and_whitespace(
+    message: str,
+    expected: tuple[str, str],
+) -> None:
+    assert extract_explicit_booking_change(message) == expected
+
+
+def test_explicit_booking_change_unknown_field_mapping_fails_safe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(booking_module, "_CHANGE_FIELD_TARGETS", {})
+
+    assert extract_explicit_booking_change("Đổi điểm đón sang Times City") is None
 
 
 @pytest.mark.asyncio
