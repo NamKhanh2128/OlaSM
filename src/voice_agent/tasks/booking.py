@@ -21,6 +21,7 @@ from src.voice_agent.persistence import (
 from src.voice_agent.session_data import (
     AloSMSessionData,
     BookingDraft,
+    BookingField,
     BookingResult,
     BookingTarget,
     PlaceCandidate,
@@ -164,6 +165,48 @@ def extract_vehicle_type(value: str) -> VehicleType | None:
         return "CAR_7"
     if re.search(r"\b(?:xe )?(?:cao cap|luxury)\b", normalized):
         return "LUXURY"
+    return None
+
+
+_CHANGE_CUE = r"(?:đổi|sửa|thay\s+đổi|thay|chuyển|cập\s+nhật)"
+_CHANGE_FIELD = (
+    r"(?P<field>điểm\s+đón|điểm\s+đi|nơi\s+đón|"
+    r"điểm\s+đến|nơi\s+đến|đích\s+đến|loại\s+xe)"
+)
+_CHANGE_VALUE = r"(?:là|thành|sang|qua)?\s*(?P<value>.+?)\s*[.!?;]*$"
+_CHANGE_PATTERNS = (
+    re.compile(
+        rf"\b{_CHANGE_CUE}\s+(?:(?:cho|giúp)\s+(?:tôi|mình)\s+)?{_CHANGE_FIELD}\s*{_CHANGE_VALUE}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b{_CHANGE_FIELD}\s+{_CHANGE_CUE}\s*{_CHANGE_VALUE}",
+        re.IGNORECASE,
+    ),
+)
+_CHANGE_FIELD_TARGETS: dict[str, BookingField] = {
+    "điểm đón": "pickup",
+    "điểm đi": "pickup",
+    "nơi đón": "pickup",
+    "điểm đến": "destination",
+    "nơi đến": "destination",
+    "đích đến": "destination",
+    "loại xe": "vehicle_type",
+}
+
+
+def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | None:
+    """Extract one explicit slot replacement without correcting the ASR text."""
+
+    compact = " ".join(value.split())
+    for pattern in _CHANGE_PATTERNS:
+        match = pattern.search(compact)
+        if match is None:
+            continue
+        field = _CHANGE_FIELD_TARGETS[match.group("field").casefold()]
+        replacement = match.group("value").strip(" ,.!?;:")[:200]
+        if replacement:
+            return field, replacement
     return None
 
 
@@ -322,7 +365,7 @@ def _candidate_clarification_prompt(draft: BookingDraft, target: BookingTarget) 
 
 
 def _next_required_prompt(draft: BookingDraft) -> str | None:
-    target = draft.next_required_field()
+    target = draft.pending_candidate_target or draft.next_required_field()
     if target in {"pickup", "destination"}:
         clarification = _candidate_clarification_prompt(draft, target)
         if clarification is not None:
@@ -338,14 +381,17 @@ def _next_required_prompt(draft: BookingDraft) -> str | None:
 
 def _selection_followup(draft: BookingDraft, target: BookingTarget, selected: PlaceCandidate) -> str | None:
     prefix = f"Đã chọn {_target_label(target)} là {selected.display_name}."
+    return _acknowledgement_followup(draft, prefix)
+
+
+def _acknowledgement_followup(draft: BookingDraft, acknowledgement: str) -> str | None:
     prompt = _next_required_prompt(draft)
-    return f"{prefix} {prompt}" if prompt is not None else None
+    return f"{acknowledgement} {prompt}" if prompt is not None else None
 
 
 def _vehicle_followup(draft: BookingDraft, vehicle_type: VehicleType) -> str | None:
     prefix = f"Đã chọn loại xe là {vehicle_spoken_label(vehicle_type)}."
-    prompt = _next_required_prompt(draft)
-    return f"{prefix} {prompt}" if prompt is not None else None
+    return _acknowledgement_followup(draft, prefix)
 
 
 def _quote_confirmation_prompt(draft: BookingDraft, acknowledgement: str, quote: QuoteSnapshot) -> str:
@@ -492,6 +538,93 @@ class BookingTask(AgentTask[BookingOutcome]):
         self.session.say(response or acknowledgement, allow_interruptions=True)
         raise StopResponse()
 
+    async def _force_barge_in_interrupt(self) -> None:
+        """Cancel speech that may resume after a false-interruption window."""
+
+        try:
+            await self.session.interrupt(force=True)
+        except RuntimeError:
+            # Speech may already be fully interrupted by LiveKit VAD.
+            return
+
+    async def _handle_explicit_booking_change(
+        self,
+        userdata: AloSMSessionData,
+        user_text: str,
+    ) -> None:
+        change = extract_explicit_booking_change(user_text)
+        if change is None:
+            return
+        field, replacement = change
+        await self._force_barge_in_interrupt()
+        draft = userdata.booking_draft
+        logger.info(
+            "Booking barge-in change detected session=%s field=%s replacement=%r",
+            userdata.app_session_id,
+            field,
+            replacement,
+        )
+
+        if field == "vehicle_type":
+            vehicle_type = extract_vehicle_type(replacement)
+            if vehicle_type is None:
+                draft.mark_vehicle_needs_clarification(replacement)
+                await self._respond_after_grounded_change(
+                    userdata,
+                    acknowledgement=f"Đã ghi nhận yêu cầu đổi loại xe thành {replacement}.",
+                    followup=(
+                        f"Đã ghi nhận yêu cầu đổi loại xe thành {replacement}. "
+                        "Vui lòng chọn loại xe theo số thứ tự được liệt kê bên dưới."
+                    ),
+                )
+                return
+            draft.set_vehicle_type(vehicle_type)
+            acknowledgement = f"Đã đổi loại xe thành {vehicle_spoken_label(vehicle_type)}."
+            await self._respond_after_grounded_change(
+                userdata,
+                acknowledgement=acknowledgement,
+                followup=_acknowledgement_followup(draft, acknowledgement),
+            )
+            return
+
+        target: BookingTarget = "pickup" if field == "pickup" else "destination"
+        candidates = self._places.search(replacement)
+        draft.set_candidates(target, replacement, candidates, prioritize=True)
+        acknowledgement = f"Đã cập nhật {_target_label(target)} thành {replacement}."
+        if not candidates:
+            userdata.record_failure(
+                "PLACE_NOT_FOUND",
+                f"Không tìm thấy {_target_label(target)} phù hợp với {replacement}.",
+                fallback_action="repeat_or_text",
+            )
+            await self._respond_after_grounded_change(
+                userdata,
+                acknowledgement=acknowledgement,
+                followup=(
+                    f"{acknowledgement} Chưa tìm thấy địa điểm phù hợp. "
+                    f"Bạn vui lòng nói lại {_target_label(target)} hoặc nhập tên khác."
+                ),
+            )
+            return
+        if can_auto_select_place(candidates):
+            selected = draft.select_place(target, candidates[0].place_id)
+            userdata.clear_failure()
+            acknowledgement = f"Đã đổi {_target_label(target)} thành {selected.display_name}."
+            await self._respond_after_grounded_change(
+                userdata,
+                acknowledgement=acknowledgement,
+                followup=_acknowledgement_followup(draft, acknowledgement),
+            )
+            return
+
+        userdata.clear_failure()
+        clarification = _candidate_clarification_prompt(draft, target)
+        await self._respond_after_grounded_change(
+            userdata,
+            acknowledgement=acknowledgement,
+            followup=f"{acknowledgement} {clarification}",
+        )
+
     async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
         userdata = self._session_data or self.session.userdata
         await rewrite_livekit_user_turn(
@@ -499,6 +632,13 @@ class BookingTask(AgentTask[BookingOutcome]):
             userdata=userdata,
             turn_ctx=turn_ctx,
             new_message=new_message,
+        )
+
+        # An explicit correction during barge-in always outranks the candidate
+        # list that happened to be active when the agent started speaking.
+        await self._handle_explicit_booking_change(
+            userdata,
+            new_message.text_content or "",
         )
 
         grounded = grounded_ordinal_selection(

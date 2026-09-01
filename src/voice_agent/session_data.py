@@ -154,6 +154,8 @@ class BookingDraft(BaseModel):
         target: BookingTarget,
         query: str,
         candidates: list[PlaceCandidate],
+        *,
+        prioritize: bool = False,
     ) -> None:
         if target == "pickup":
             self.pickup_query = query
@@ -163,7 +165,7 @@ class BookingDraft(BaseModel):
             self.destination_query = query
             self.destination = None
             self.destination_candidates = candidates
-        self.pending_candidate_target = self._next_pending_candidate_target()
+        self.pending_candidate_target = target if prioritize else self._next_pending_candidate_target()
         self._invalidate_quote_and_confirmation()
         self.revision += 1
 
@@ -253,6 +255,7 @@ class BookingDraft(BaseModel):
         if self.vehicle_type != vehicle_type or self.vehicle_query is not None:
             self.vehicle_type = vehicle_type
             self.vehicle_query = None
+            self.pending_candidate_target = self._next_pending_candidate_target()
             self._invalidate_quote_and_confirmation()
             self.revision += 1
 
@@ -264,6 +267,9 @@ class BookingDraft(BaseModel):
             raise ValueError("VEHICLE_QUERY_REQUIRED")
         self.vehicle_query = normalized_query
         self.vehicle_type = None
+        # An explicit unclear vehicle request temporarily owns ordinal choices;
+        # once resolved, set_vehicle_type restores the pending place list.
+        self.pending_candidate_target = None
         self._invalidate_quote_and_confirmation()
         self.revision += 1
 
