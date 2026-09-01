@@ -134,7 +134,19 @@ def can_auto_select_place(candidates: list[object]) -> bool:
     }
 
 
-_SPOKEN_FILLER_PATTERN = re.compile(r"\b(?:ờ+|ơ+|ừm+|ừ+|à+)\b[,\s]*", re.IGNORECASE)
+_SPOKEN_FILLER_PATTERN = re.compile(
+    r"\b(?:ờ+|ơ+|ừm+|ừ+|ậm+|ưm+|hừm+|mmm+|à+)\b[,\s]*",
+    re.IGNORECASE,
+)
+_BARGE_IN_PREFIX_PATTERN = re.compile(
+    r"^(?:(?:ờ+|ơ+|ừm+|ừ+|ậm+|ưm+|hừm+|mmm+|à+|"
+    r"khoan(?:\s+đã)?|đợi(?:\s+đã)?|chờ(?:\s+(?:đã|chút))?)[\s,.!?;:-]*)+",
+    re.IGNORECASE,
+)
+_ASR_CUTOFF_FRAGMENT_PATTERN = re.compile(
+    r"(?<!\S)[^\s,.!?;:]{1,8}-+(?=[\s,.!?;:]|$)",
+    re.IGNORECASE,
+)
 _MAX_ROUTE_TRANSCRIPT_CHARS = 2_000
 _ROUTE_START_MARKERS = (" đi từ ", " đi từ, ", " từ ", " từ, ")
 _ROUTE_DESTINATION_MARKERS = (" tới ", " đến ")
@@ -231,6 +243,16 @@ def _normalize_change_field(value: str) -> str:
 
     normalized = unicodedata.normalize("NFC", value).casefold()
     return " ".join(normalized.split())
+
+
+def _clean_booking_change_transcript(value: str) -> str:
+    """Remove bounded interruption noise without changing meaningful words."""
+
+    compact = " ".join(unicodedata.normalize("NFC", value).split())[:1_000]
+    compact = _BARGE_IN_PREFIX_PATTERN.sub("", compact, count=1)
+    compact = _ASR_CUTOFF_FRAGMENT_PATTERN.sub(" ", compact)
+    compact = _SPOKEN_FILLER_PATTERN.sub(" ", compact)
+    return " ".join(compact.split())
 
 
 _TRAILING_CONNECTOR_TOKEN_SEQUENCES = (
@@ -398,7 +420,7 @@ _CHANGE_FIELD_TARGETS: dict[str, BookingField] = {
 def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | None:
     """Extract one explicit slot replacement without correcting the ASR text."""
 
-    compact = " ".join(unicodedata.normalize("NFC", value).split())[:1_000]
+    compact = _clean_booking_change_transcript(value)
     for pattern in _CHANGE_PATTERNS:
         match = pattern.search(compact)
         if match is None:
@@ -416,6 +438,35 @@ def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | No
 
 _CONTRAST_NEGATION_TOKENS = ("khong", "phai")
 _CONTRAST_REPLACEMENT_TOKENS = ("ma", "la")
+_CONTEXT_CHANGE_CUE_TOKEN_SEQUENCES = (
+    ("doi",),
+    ("sua",),
+    ("chuyen",),
+    ("thay",),
+    ("cap", "nhat"),
+)
+_CONTEXT_CHANGE_LINK_TOKEN_SEQUENCES = (
+    ("thanh",),
+    ("sang",),
+    ("qua",),
+)
+
+
+def _find_token_sequence(
+    tokens: tuple[str, ...],
+    sequences: tuple[tuple[str, ...], ...],
+    *,
+    start: int = 0,
+) -> tuple[int, tuple[str, ...]] | None:
+    return next(
+        (
+            (index, sequence)
+            for index in range(start, len(tokens))
+            for sequence in sequences
+            if _tokens_start_with(tokens, index, sequence)
+        ),
+        None,
+    )
 
 
 def _current_booking_surface_field(
@@ -455,33 +506,62 @@ def extract_contextual_booking_change(
     draft: BookingDraft,
     value: str,
 ) -> tuple[BookingField, str, str] | None:
-    """Ground ``không phải OLD mà là NEW`` against one current booking slot."""
+    """Ground contrastive or ``CUE OLD LINK NEW`` speech to one current slot."""
 
-    compact = " ".join(unicodedata.normalize("NFC", value).split())[:1_000]
-    raw_tokens = tuple(token.strip(" ,.!?;:") for token in compact.split())
+    compact = _clean_booking_change_transcript(value)
+    raw_tokens = tuple(
+        cleaned
+        for token in compact.split()
+        if (cleaned := token.strip(" ,.!?;:"))
+    )
     folded_tokens = tuple(_normalize_confirmation(token) for token in raw_tokens)
-    replacement_marker = next(
-        (
+    previous_value = ""
+    replacement = ""
+
+    contrast_link = _find_token_sequence(
+        folded_tokens,
+        (_CONTRAST_REPLACEMENT_TOKENS,),
+    )
+    if contrast_link is not None:
+        replacement_marker, replacement_sequence = contrast_link
+        negation_markers = [
             index
-            for index in range(len(folded_tokens) - 1)
-            if folded_tokens[index : index + 2] == _CONTRAST_REPLACEMENT_TOKENS
-        ),
-        None,
-    )
-    if replacement_marker is None:
-        return None
-    negation_markers = [
-        index
-        for index in range(replacement_marker - 1)
-        if folded_tokens[index : index + 2] == _CONTRAST_NEGATION_TOKENS
-    ]
-    if not negation_markers:
-        return None
-    negation_marker = negation_markers[-1]
-    previous_value = " ".join(raw_tokens[negation_marker + 2 : replacement_marker]).strip()
-    replacement = _trim_trailing_non_entity_clause(
-        " ".join(raw_tokens[replacement_marker + 2 :])
-    )
+            for index in range(replacement_marker)
+            if _tokens_start_with(folded_tokens, index, _CONTRAST_NEGATION_TOKENS)
+        ]
+        if negation_markers:
+            negation_marker = negation_markers[-1]
+            previous_value = " ".join(
+                raw_tokens[negation_marker + len(_CONTRAST_NEGATION_TOKENS) : replacement_marker]
+            ).strip()
+            replacement = _trim_trailing_non_entity_clause(
+                " ".join(raw_tokens[replacement_marker + len(replacement_sequence) :])
+            )
+
+    if not previous_value or not replacement:
+        change_link = _find_token_sequence(
+            folded_tokens,
+            _CONTEXT_CHANGE_LINK_TOKEN_SEQUENCES,
+        )
+        if change_link is None:
+            return None
+        linker_marker, linker_sequence = change_link
+        cue_markers = [
+            (index, sequence)
+            for index in range(linker_marker)
+            for sequence in _CONTEXT_CHANGE_CUE_TOKEN_SEQUENCES
+            if _tokens_start_with(folded_tokens, index, sequence)
+        ]
+        if not cue_markers:
+            return None
+        cue_marker, cue_sequence = cue_markers[-1]
+        previous_value = " ".join(
+            raw_tokens[cue_marker + len(cue_sequence) : linker_marker]
+        ).strip()
+        replacement = _trim_trailing_non_entity_clause(
+            " ".join(raw_tokens[linker_marker + len(linker_sequence) :])
+        )
+
     if not previous_value or not replacement:
         return None
     field = _current_booking_surface_field(draft, previous_value)

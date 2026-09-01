@@ -678,6 +678,10 @@ def test_complete_route_parser_bounds_long_malformed_asr() -> None:
             "Tôi chọn số 2 nhưng đổi điểm đến thành Hồ Gươm",
             ("destination", "Hồ Gươm"),
         ),
+        (
+            "Ờ, khoan, khoan. Đổi điểm đến thành H-- ờ, Long Biên.",
+            ("destination", "Long Biên"),
+        ),
     ],
 )
 def test_explicit_booking_change_parser_prioritizes_replacement_intent(
@@ -778,7 +782,15 @@ def test_explicit_booking_change_rejects_oversized_unbounded_remark() -> None:
     assert extract_explicit_booking_change(f"Đổi điểm đón thành VinUni {unrelated_tail}") is None
 
 
-def test_contextual_correction_grounds_old_value_to_destination_slot() -> None:
+@pytest.mark.parametrize(
+    "message",
+    [
+        "À, nó không phải, không phải Hồ Gươm mà là Long Biên.",
+        "Ờ, khoan, khoan, khoan. Đổi Hồ Gươm thành H-- ờ, Long Biên.",
+        "Ơ, khoan đã. Chuyển Hồ Gươm sang ừm, Long Biên.",
+    ],
+)
+def test_contextual_correction_grounds_old_value_to_destination_slot(message: str) -> None:
     draft = AloSMSessionData(
         app_session_id="session",
         call_id="call",
@@ -791,12 +803,28 @@ def test_contextual_correction_grounds_old_value_to_destination_slot() -> None:
         "Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm.",
     )
 
-    change = extract_contextual_booking_change(
-        draft,
-        "À, nó không phải, không phải Hồ Gươm mà là Long Biên.",
-    )
+    change = extract_contextual_booking_change(draft, message)
 
     assert change == ("destination", "Long Biên", "Hồ Gươm")
+
+
+def test_contextual_change_does_not_guess_unknown_previous_value() -> None:
+    draft = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    ).booking_draft
+    seed_complete_booking_turn(
+        draft,
+        PlaceToolsService(),
+        "Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm.",
+    )
+
+    assert extract_contextual_booking_change(
+        draft,
+        "Khoan, đổi địa điểm không tồn tại thành Long Biên",
+    ) is None
 
 
 @pytest.mark.asyncio
@@ -1193,7 +1221,10 @@ async def test_contextual_destination_barge_in_replaces_only_destination(
             llm.ChatContext.empty(),
             llm.ChatMessage(
                 role="user",
-                content=["À, nó không phải, không phải Hồ Gươm mà là Long Biên."],
+                content=[
+                    "Ờ, khoan, khoan, khoan, khoan. "
+                    "Đổi Hồ Gươm thành H-- ờ, Long Biên."
+                ],
             ),
         )
 
