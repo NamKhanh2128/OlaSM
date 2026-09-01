@@ -21,7 +21,7 @@ from src.backend.repositories.persistence_repository import PersistenceRepositor
 from src.backend.services.booking_service import BookingService
 from src.backend.services.quote_service import QuoteService
 
-EXPECTED_REVISION = "0004_maps_places_routes"
+EXPECTED_REVISION = "0006_livekit_handoff_context"
 RLS_TABLES = (
     "users",
     "auth_tokens",
