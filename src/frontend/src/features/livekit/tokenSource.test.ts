@@ -6,7 +6,7 @@ vi.mock("livekit-client", () => ({
   TokenSource: {
     endpoint: mockEndpoint,
   },
-}));
+}), { esmock: true });
 
 import { createAloSMTokenSource } from "./tokenSource";
 
