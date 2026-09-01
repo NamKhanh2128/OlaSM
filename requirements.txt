@@ -41,3 +41,5 @@ livekit-agents==1.6.8
 livekit-plugins-elevenlabs==1.6.8
 livekit-plugins-google==1.6.6
 livekit-plugins-openai==1.5.0
+opentelemetry-exporter-otlp-proto-http>=1.30.0,<2
+opentelemetry-sdk>=1.30.0,<2

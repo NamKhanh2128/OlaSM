@@ -303,6 +303,19 @@ def prepare_process(proc: JobProcess) -> None:
     # AgentServer 1.6.6 invokes setup_fnc synchronously before creating the job
     # event loop. Do not open asyncpg connections here: pooled asyncio connections
     # cannot be transferred to the different loop used by the RTC job.
+    from src.backend.observability.langfuse_client import LangfuseTracingConfig, configure_langfuse_tracing
+
+    configure_langfuse_tracing(
+        LangfuseTracingConfig(
+            enabled=_server_settings.langfuse_enabled,
+            public_key=_server_settings.langfuse_public_key.get_secret_value(),
+            secret_key=_server_settings.langfuse_secret_key.get_secret_value(),
+            host=_server_settings.langfuse_host,
+            environment=_server_settings.langfuse_environment,
+            service_name="alosm-livekit-worker",
+        )
+    )
+
     proc.userdata[_STATE_STORE_KEY] = DatabaseVoiceStateStore()
     # LiveKit keeps idle job processes warm specifically so model/plugin setup is
     # not paid after a participant is waiting. The ElevenLabs plugin validates
@@ -500,6 +513,23 @@ async def alosm_voice_session(ctx: JobContext) -> None:
         )
         ctx.add_shutdown_callback(transcript_rewriter.client.close)
     userdata = build_session_data(ctx, settings)
+    from src.backend.observability.langfuse_client import (
+        activate_langfuse_context,
+        flush_langfuse,
+        get_langfuse_provider,
+    )
+
+    activate_langfuse_context(
+        session_id=userdata.app_session_id,
+        user_id=userdata.user_id,
+        call_id=userdata.call_id,
+    )
+    if get_langfuse_provider() is not None:
+
+        async def flush_voice_traces() -> None:
+            await asyncio.to_thread(flush_langfuse, settings.langfuse_flush_timeout_seconds)
+
+        ctx.add_shutdown_callback(flush_voice_traces)
     event_log = SessionEventLog(
         enabled=settings.livekit_debug_event_log,
         include_transcripts=settings.livekit_debug_transcripts,

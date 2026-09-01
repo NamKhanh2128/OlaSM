@@ -118,6 +118,14 @@ class Settings(BaseSettings):
             errors.append("CORS_ORIGINS_MUST_BE_EXPLICIT")
         return errors
 
+    # Langfuse observability (LLM cost/latency tracing) — opt-in, no-op when disabled.
+    langfuse_enabled: bool = False
+    langfuse_secret_key: str = ""
+    langfuse_public_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_environment: str = "development"
+    langfuse_flush_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
+
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
 

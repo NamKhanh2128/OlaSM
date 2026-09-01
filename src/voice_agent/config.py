@@ -37,6 +37,16 @@ class LiveKitVoiceSettings(BaseSettings):
     livekit_llm_model: str = ""
     openai_api_key: SecretStr = SecretStr("")
     openrouter_api_key: SecretStr = SecretStr("")
+    # Langfuse receives OpenTelemetry spans only when explicitly enabled. The
+    # worker uses its own settings object, so these fields must not be inherited
+    # indirectly from the backend process.
+    langfuse_enabled: bool = False
+    langfuse_secret_key: SecretStr = SecretStr("")
+    langfuse_public_key: SecretStr = SecretStr("")
+    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_environment: str = "development"
+    langfuse_flush_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
+
     # Finalized post-ASR correction is a bounded barrier before agent LLM/TTS.
     # A short ordinal candidate choice is handled deterministically and skips it.
     voice_transcript_rewrite_enabled: bool = True
