@@ -204,21 +204,27 @@ _TRAILING_CLAUSE_SEPARATORS = (
     " và ",
     ", ",
 )
-_TRAILING_ACTION_PREFIXES = (
-    "gọi",
-    "nhắn",
-    "báo",
-    "liên hệ",
+_TRAILING_ACTION_CLAUSE_PREFIXES = (
+    "gọi cho tôi",
+    "gọi giúp tôi",
+    "gọi lại cho tôi",
+    "nhắn cho tôi",
+    "nhắn giúp tôi",
+    "nhắn biển số",
+    "báo cho tôi",
+    "báo lại cho tôi",
+    "liên hệ với tôi",
     "đặt xe",
     "đặt chuyến",
-    "xác nhận",
+    "xác nhận chuyến",
+    "xác nhận giúp tôi",
     "tính giá",
-    "ước tính",
+    "ước tính giá",
     "cho tôi biết",
     "giúp tôi",
     "giúp mình",
-    "nói",
-    "đọc",
+    "nói lại",
+    "đọc lại",
 )
 _TRAILING_POLITE_SUFFIXES = (
     "được không",
@@ -277,7 +283,10 @@ def _trim_trailing_non_entity_clause(value: str) -> str:
         search_from = 0
         while (position := folded.find(separator, search_from)) >= 0:
             tail = folded[position + len(separator) :].lstrip(" ,")
-            if any(_starts_with_phrase(tail, action) for action in _TRAILING_ACTION_PREFIXES):
+            if any(
+                _starts_with_phrase(tail, action)
+                for action in _TRAILING_ACTION_CLAUSE_PREFIXES
+            ):
                 cut_at = min(cut_at, position)
                 break
             search_from = position + len(separator)
@@ -555,6 +564,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             "destination": 0,
             "vehicle_type": 0,
         }
+        self._booking_change_generation_lock = asyncio.Lock()
         self._booking_change_commit_lock = asyncio.Lock()
         super().__init__(
             chat_ctx=chat_ctx,
@@ -678,10 +688,13 @@ class BookingTask(AgentTask[BookingOutcome]):
         self.session.say(response or acknowledgement, allow_interruptions=True)
         raise StopResponse()
 
-    def _next_booking_change_token(self, field: BookingField) -> BookingChangeToken:
-        generation = self._booking_change_generations[field] + 1
-        self._booking_change_generations[field] = generation
-        return field, generation
+    async def _next_booking_change_token(self, field: BookingField) -> BookingChangeToken:
+        """Issue one ordered token while allowing newer work to stale pending I/O."""
+
+        async with self._booking_change_generation_lock:
+            generation = self._booking_change_generations[field] + 1
+            self._booking_change_generations[field] = generation
+            return field, generation
 
     def _raise_if_stale_booking_change(self, token: BookingChangeToken | None) -> None:
         if token is None:
@@ -715,7 +728,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         if change is None:
             return
         field, replacement = change
-        change_token = self._next_booking_change_token(field)
+        change_token = await self._next_booking_change_token(field)
         await self._force_barge_in_interrupt()
         draft = userdata.booking_draft
         logger.info(

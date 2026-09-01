@@ -733,6 +733,15 @@ def test_explicit_booking_change_unknown_field_mapping_fails_safe(
             "Đổi điểm đến thành Viện Khoa học và Công nghệ Việt Nam",
             ("destination", "Viện Khoa học và Công nghệ Việt Nam"),
         ),
+        (
+            "Đổi điểm đón thành số 5, đường gọi là Hoa Sữa",
+            ("pickup", "số 5, đường gọi là Hoa Sữa"),
+        ),
+        (
+            "Đổi điểm đến thành Khu ăn uống và gọi là Phố Ẩm Thực",
+            ("destination", "Khu ăn uống và gọi là Phố Ẩm Thực"),
+        ),
+        ("Đổi điểm đón thành VinUni, gọi cho tôi", ("pickup", "VinUni")),
     ],
 )
 def test_explicit_booking_change_keeps_only_the_booking_entity_span(
@@ -881,6 +890,23 @@ async def test_newer_barge_in_wins_while_async_place_search_is_pending(
         await asyncio.wait_for(older, timeout=2)
 
     assert userdata.booking_draft.destination_query == "Hồ Gươm"
+
+
+@pytest.mark.asyncio
+async def test_same_field_generation_tokens_are_unique_under_concurrency() -> None:
+    task = BookingTask()
+
+    first, second = await asyncio.gather(
+        task._next_booking_change_token("pickup"),
+        task._next_booking_change_token("pickup"),
+    )
+
+    assert {first, second} == {("pickup", 1), ("pickup", 2)}
+    latest = max((first, second), key=lambda token: token[1])
+    stale = min((first, second), key=lambda token: token[1])
+    task._raise_if_stale_booking_change(latest)
+    with pytest.raises(StopResponse):
+        task._raise_if_stale_booking_change(stale)
 
 
 @pytest.mark.asyncio
