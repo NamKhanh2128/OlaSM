@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from livekit.agents import AgentSession, llm
-from livekit.agents.metrics import TTSMetrics
+from livekit.agents.metrics import LLMMetrics, RealtimeModelMetrics, STTMetrics, TTSMetrics, VADMetrics
 from pydantic import BaseModel
 
 from src.voice_agent.session_data import AloSMSessionData
@@ -328,14 +328,100 @@ class LiveKitSessionObserver:
     def register(self, session: AgentSession[AloSMSessionData]) -> None:
         for event_name in _EVENT_NAMES:
             session.on(event_name, self.record)
-        if session.tts is not None:
-            session.tts.on("metrics_collected", self.record_tts_metrics)
+        for model in (session.stt, session.llm, session.tts, session.vad):
+            if model is not None:
+                model.on("metrics_collected", self.record_model_metrics)
 
     def record(self, event: Any) -> None:
         event_name = str(getattr(event, "type", type(event).__name__))
         created_at = getattr(event, "created_at", None)
         fields = self._event_fields(event_name, event)
         self.event_log.emit(event_name, event_created_at=created_at, **fields)
+        self._record_safe_event(event_name, fields, created_at=created_at)
+
+    def record_model_metrics(self, metrics: object) -> None:
+        """Export only numeric/provider metadata from LiveKit model metrics."""
+
+        if isinstance(metrics, TTSMetrics):
+            self.record_tts_metrics(metrics)
+            return
+
+        from src.backend.observability.langfuse_client import record_langfuse_observation
+
+        metadata = getattr(metrics, "metadata", None)
+        model = metadata.model_name if metadata is not None else None
+        provider = metadata.model_provider if metadata is not None else None
+        if isinstance(metrics, LLMMetrics):
+            usage = {
+                "input": max(metrics.prompt_tokens - metrics.prompt_cached_tokens, 0),
+                "cache_read_input_tokens": metrics.prompt_cached_tokens,
+                "output": metrics.completion_tokens,
+                "total": metrics.total_tokens,
+            }
+            attributes = {
+                "duration_ms": round(metrics.duration * 1000, 3),
+                "ttft_ms": round(metrics.ttft * 1000, 3),
+                "cancelled": metrics.cancelled,
+                "tokens_per_second": metrics.tokens_per_second,
+                "label": metrics.label,
+            }
+            event_name = "livekit_llm"
+        elif isinstance(metrics, RealtimeModelMetrics):
+            usage = {
+                "input": metrics.input_tokens,
+                "output": metrics.output_tokens,
+                "total": metrics.total_tokens,
+            }
+            attributes = {
+                "duration_ms": round(metrics.duration * 1000, 3),
+                "session_duration_ms": round(metrics.session_duration * 1000, 3),
+                "ttft_ms": round(metrics.ttft * 1000, 3),
+                "cancelled": metrics.cancelled,
+                "tokens_per_second": metrics.tokens_per_second,
+                "label": metrics.label,
+            }
+            event_name = "livekit_realtime_model"
+        elif isinstance(metrics, STTMetrics):
+            usage = {
+                "audio_seconds": metrics.audio_duration,
+                "input": metrics.input_tokens,
+                "output": metrics.output_tokens,
+            }
+            attributes = {
+                "duration_ms": round(metrics.duration * 1000, 3),
+                "audio_duration_ms": round(metrics.audio_duration * 1000, 3),
+                "streamed": metrics.streamed,
+                "connection_reused": metrics.connection_reused,
+                "label": metrics.label,
+            }
+            event_name = "livekit_stt"
+        elif isinstance(metrics, VADMetrics):
+            record_langfuse_observation(
+                name="livekit_vad",
+                observation_type="span",
+                attributes={
+                    "idle_time_ms": round(metrics.idle_time * 1000, 3),
+                    "inference_duration_ms": round(metrics.inference_duration_total * 1000, 3),
+                    "inference_count": metrics.inference_count,
+                    "label": metrics.label,
+                },
+                end_timestamp=metrics.timestamp,
+                duration_seconds=metrics.inference_duration_total,
+            )
+            return
+        else:
+            return
+
+        record_langfuse_observation(
+            name=event_name,
+            observation_type="generation",
+            model=model,
+            provider=provider,
+            usage_details=usage,
+            attributes=attributes,
+            end_timestamp=metrics.timestamp,
+            duration_seconds=metrics.duration,
+        )
 
     def record_tts_metrics(self, metrics: TTSMetrics) -> None:
         metadata = metrics.metadata
@@ -352,6 +438,82 @@ class LiveKitSessionObserver:
             characters_count=metrics.characters_count,
             cancelled=metrics.cancelled,
         )
+        from src.backend.observability.langfuse_client import record_langfuse_observation
+
+        metadata = metrics.metadata
+        record_langfuse_observation(
+            name="livekit_tts",
+            observation_type="generation",
+            model=metadata.model_name if metadata is not None else None,
+            provider=metadata.model_provider if metadata is not None else None,
+            usage_details={
+                "characters": metrics.characters_count,
+                "audio_seconds": metrics.audio_duration,
+                "input": metrics.input_tokens,
+                "output": metrics.output_tokens,
+            },
+            attributes={
+                "duration_ms": round(metrics.duration * 1000, 3),
+                "ttfb_ms": round(metrics.ttfb * 1000, 3),
+                "audio_duration_ms": round(metrics.audio_duration * 1000, 3),
+                "cancelled": metrics.cancelled,
+                "streamed": metrics.streamed,
+                "label": metrics.label,
+            },
+            end_timestamp=metrics.timestamp,
+            duration_seconds=metrics.duration,
+        )
+
+    @staticmethod
+    def _record_safe_event(event_name: str, fields: dict[str, object], *, created_at: float | None) -> None:
+        from src.backend.observability.langfuse_client import record_langfuse_observation
+
+        if event_name == "conversation_item_added":
+            raw_metrics = fields.get("metrics")
+            if not isinstance(raw_metrics, dict) or not raw_metrics:
+                return
+            metrics = {
+                key: round(float(value) * 1000, 3)
+                for key, value in raw_metrics.items()
+                if key in _SAFE_METRIC_FIELDS and isinstance(value, int | float)
+            }
+            if metrics:
+                record_langfuse_observation(
+                    name="livekit_turn_latency",
+                    observation_type="span",
+                    attributes=metrics,
+                    end_timestamp=created_at,
+                    duration_seconds=max(metrics.values()) / 1000,
+                )
+            return
+
+        if event_name == "tool_execution_updated" and fields.get("duration_ms") is not None:
+            duration_ms = float(fields["duration_ms"])
+            record_langfuse_observation(
+                name="livekit_tool",
+                observation_type="tool",
+                attributes={
+                    "duration_ms": duration_ms,
+                    "tool_name": str(fields.get("tool_name") or "unknown"),
+                    "status": str(fields.get("status") or "unknown"),
+                },
+                end_timestamp=created_at,
+                duration_seconds=duration_ms / 1000,
+            )
+            return
+
+        if event_name in {"error", "user_transcription_timeout"}:
+            record_langfuse_observation(
+                name=f"livekit_{event_name}",
+                observation_type="event",
+                attributes={
+                    key: value
+                    for key, value in fields.items()
+                    if key in {"provider", "model", "error_type", "speech_duration"}
+                    and isinstance(value, str | int | float | bool)
+                },
+                end_timestamp=created_at,
+            )
 
     def _event_fields(self, event_name: str, event: Any) -> dict[str, object]:
         if event_name in {"agent_state_changed", "user_state_changed"}:

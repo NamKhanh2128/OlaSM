@@ -13,13 +13,14 @@ import json
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any
 
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import Span, Status, StatusCode
 
@@ -28,6 +29,29 @@ logger = logging.getLogger(__name__)
 _provider: TracerProvider | None = None
 _initialized = False
 _initialization_lock = Lock()
+_correlation_attributes: ContextVar[dict[str, str]] = ContextVar(
+    "langfuse_correlation_attributes",
+    default={},
+)
+
+
+class _CorrelationSpanProcessor(SpanProcessor):
+    """Copy per-job privacy-safe correlation fields onto every new span."""
+
+    def on_start(self, span: Any, parent_context: Any | None = None) -> None:
+        del parent_context
+        for key, value in _correlation_attributes.get().items():
+            span.set_attribute(key, value)
+
+    def on_end(self, span: Any) -> None:
+        del span
+
+    def shutdown(self) -> None:
+        return None
+
+    def force_flush(self, timeout_millis: int = 30_000) -> bool:
+        del timeout_millis
+        return True
 
 
 @dataclass(frozen=True)
@@ -99,6 +123,7 @@ def configure_langfuse_tracing(config: LangfuseTracingConfig) -> TracerProvider 
                     }
                 )
             )
+            provider.add_span_processor(_CorrelationSpanProcessor())
             provider.add_span_processor(BatchSpanProcessor(exporter))
             _provider = provider
             logger.info(
@@ -119,6 +144,87 @@ def get_langfuse_tracer(name: str = "alosm") -> Any | None:
 
 def get_langfuse_provider() -> TracerProvider | None:
     return _provider
+
+
+def activate_langfuse_context(
+    *,
+    session_id: str | None,
+    user_id: str | None,
+    call_id: str | None,
+) -> None:
+    """Bind one LiveKit job's hashed identifiers to its async task context."""
+
+    attributes: dict[str, str] = {}
+    if session_hash := privacy_hash(session_id):
+        attributes["langfuse.session.id"] = session_hash
+    if user_hash := privacy_hash(user_id):
+        attributes["langfuse.user.id"] = user_hash
+    if call_hash := privacy_hash(call_id):
+        attributes["langfuse.trace.metadata.call_id"] = call_hash
+    _correlation_attributes.set(attributes)
+
+
+def record_langfuse_observation(
+    *,
+    name: str,
+    observation_type: str,
+    model: str | None = None,
+    provider: str | None = None,
+    usage_details: dict[str, int | float] | None = None,
+    attributes: dict[str, str | bool | int | float] | None = None,
+    end_timestamp: float | None = None,
+    duration_seconds: float | None = None,
+) -> None:
+    """Export one allowlisted metric observation without any content payload."""
+
+    tracer = get_langfuse_tracer("alosm.livekit.metrics")
+    if tracer is None:
+        return
+    span_attributes: dict[str, str | bool | int | float] = {
+        "langfuse.trace.name": name,
+        "langfuse.observation.type": observation_type,
+    }
+    if model:
+        span_attributes["langfuse.observation.model.name"] = model
+        span_attributes["gen_ai.request.model"] = model
+    if provider:
+        span_attributes["gen_ai.provider.name"] = provider
+        span_attributes["langfuse.observation.metadata.provider"] = provider
+    if usage_details:
+        safe_usage = {
+            key: value
+            for key, value in usage_details.items()
+            if isinstance(value, int | float) and value >= 0
+        }
+        if safe_usage:
+            span_attributes["langfuse.observation.usage_details"] = json.dumps(
+                safe_usage,
+                separators=(",", ":"),
+            )
+            if input_tokens := safe_usage.get("input"):
+                span_attributes["gen_ai.usage.input_tokens"] = input_tokens
+            if output_tokens := safe_usage.get("output"):
+                span_attributes["gen_ai.usage.output_tokens"] = output_tokens
+    if attributes:
+        span_attributes.update(
+            {
+                f"langfuse.observation.metadata.{key}": value
+                for key, value in attributes.items()
+                if isinstance(value, str | bool | int | float)
+            }
+        )
+
+    end_time_ns = int(end_timestamp * 1_000_000_000) if end_timestamp is not None else None
+    start_time_ns = (
+        int(max(0.0, end_timestamp - max(duration_seconds or 0.0, 0.0)) * 1_000_000_000)
+        if end_timestamp is not None
+        else None
+    )
+    try:
+        span = tracer.start_span(name, attributes=span_attributes, start_time=start_time_ns)
+        span.end(end_time=end_time_ns)
+    except Exception as exc:
+        logger.warning("Langfuse metric observation skipped error_type=%s", type(exc).__name__)
 
 
 @dataclass
