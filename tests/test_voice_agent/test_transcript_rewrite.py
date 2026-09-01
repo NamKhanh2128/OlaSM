@@ -39,8 +39,16 @@ class _Rewriter:
         *,
         session_context: dict[str, Any],
         session_id: str,
+        turn_id: str | None = None,
     ) -> TranscriptRewriteResult:
-        self.calls.append({"text": text, "context": session_context, "session_id": session_id})
+        self.calls.append(
+            {
+                "text": text,
+                "context": session_context,
+                "session_id": session_id,
+                "turn_id": turn_id,
+            }
+        )
         return TranscriptRewriteResult(
             raw_text=text,
             normalized_text="Đổi điểm đón sang Hồ Gươm",
@@ -72,8 +80,16 @@ class _BlockingRewriter(_Rewriter):
         *,
         session_context: dict[str, Any],
         session_id: str,
+        turn_id: str | None = None,
     ) -> TranscriptRewriteResult:
-        self.calls.append({"text": text, "context": session_context, "session_id": session_id})
+        self.calls.append(
+            {
+                "text": text,
+                "context": session_context,
+                "session_id": session_id,
+                "turn_id": turn_id,
+            }
+        )
         self.started.set()
         await self.release.wait()
         return TranscriptRewriteResult(

@@ -89,6 +89,7 @@ class TranscriptRewriter(Protocol):
         *,
         session_context: dict[str, Any],
         session_id: str,
+        turn_id: str | None = None,
     ) -> TranscriptRewriteResult: ...
 
 
@@ -231,87 +232,115 @@ class OpenAITranscriptRewriter:
         *,
         session_context: dict[str, Any],
         session_id: str,
+        turn_id: str | None = None,
     ) -> TranscriptRewriteResult:
+        from src.backend.observability.langfuse_client import langfuse_generation
+
         started = time.monotonic()
         kwargs: dict[str, Any] = {}
         if self.model.rsplit("/", 1)[-1].startswith("gpt-5") and self.reasoning_effort != "none":
             kwargs["reasoning"] = {"effort": self.reasoning_effort}
-        try:
-            response = await self.client.responses.parse(
-                model=self.model,
-                instructions=REWRITE_INSTRUCTIONS,
-                input=json.dumps(
-                    {"transcript": text, **session_context},
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ),
-                text_format=RewriteOutput,
-                max_output_tokens=180,
-                timeout=self.timeout_seconds,
-                store=False,
-                safety_identifier=hashlib.sha256(session_id.encode()).hexdigest()[:32],
-                **kwargs,
-            )
-            parsed = response.output_parsed
-            if parsed is None:
-                raise ValueError("empty parsed rewrite")
-        except (OpenAIError, TimeoutError, ValueError) as exc:
+        with langfuse_generation(
+            name="transcript_rewrite",
+            model=self.model,
+            session_id=session_id,
+            turn_id=turn_id,
+            prompt_preview=text,
+        ) as generation:
+            try:
+                response = await self.client.responses.parse(
+                    model=self.model,
+                    instructions=REWRITE_INSTRUCTIONS,
+                    input=json.dumps(
+                        {"transcript": text, **session_context},
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                    text_format=RewriteOutput,
+                    max_output_tokens=180,
+                    timeout=self.timeout_seconds,
+                    store=False,
+                    safety_identifier=hashlib.sha256(session_id.encode()).hexdigest()[:32],
+                    **kwargs,
+                )
+                if generation is not None:
+                    generation.set_usage(getattr(response, "usage", None))
+                parsed = response.output_parsed
+                if parsed is None:
+                    raise ValueError("empty parsed rewrite")
+            except (OpenAIError, TimeoutError, ValueError) as exc:
+                duration_ms = int((time.monotonic() - started) * 1000)
+                if generation is not None:
+                    generation.set_error(exc)
+                    generation.set_output(text, outcome="provider_error")
+                logger.warning(
+                    "Voice transcript rewrite provider failed model=%s error_type=%s duration_ms=%d",
+                    self.model,
+                    type(exc).__name__,
+                    duration_ms,
+                )
+                return TranscriptRewriteResult(
+                    raw_text=text,
+                    normalized_text=text,
+                    reason="provider_error",
+                    model=self.model,
+                    duration_ms=duration_ms,
+                )
+
             duration_ms = int((time.monotonic() - started) * 1000)
-            logger.warning(
-                "Voice transcript rewrite provider failed model=%s error_type=%s duration_ms=%d",
-                self.model,
-                type(exc).__name__,
-                duration_ms,
+            normalized = parsed.normalized_text.strip()
+            asr_confidence_value = session_context.get("asr_confidence")
+            asr_confidence = (
+                float(asr_confidence_value) if isinstance(asr_confidence_value, (int, float)) else None
             )
+            semantic_ok, numeric_reason = _numeric_semantics_preserved(
+                text,
+                normalized,
+                asr_confidence=asr_confidence,
+            )
+            if not semantic_ok:
+                logger.warning(
+                    "Voice transcript rewrite numeric guard rejected model=%s reason=%s "
+                    "raw_numeric_count=%d normalized_numeric_count=%d asr_confidence=%s",
+                    self.model,
+                    numeric_reason,
+                    sum(_numeric_sequences(text).values()),
+                    sum(_numeric_sequences(normalized).values()),
+                    asr_confidence,
+                )
+            elif numeric_reason == "removed_low_confidence_asr_artifact":
+                logger.info(
+                    "Voice transcript rewrite removed low-confidence numeric ASR artifact model=%s",
+                    self.model,
+                )
+            accepted = parsed.meaning_preserved and parsed.confidence >= self.minimum_confidence and semantic_ok
+            if accepted:
+                reason = "applied" if normalized != text else "unchanged"
+            elif not semantic_ok:
+                reason = "numeric_semantics_rejected"
+            else:
+                reason = "rejected"
+            normalized_result = normalized if accepted else text
+            if generation is not None:
+                generation.set_output(normalized_result, outcome=reason)
+                generation.span.set_attribute(
+                    "langfuse.observation.metadata.rewrite_confidence",
+                    parsed.confidence,
+                )
+                generation.span.set_attribute(
+                    "langfuse.observation.metadata.meaning_preserved",
+                    parsed.meaning_preserved,
+                )
             return TranscriptRewriteResult(
                 raw_text=text,
-                normalized_text=text,
-                reason="provider_error",
+                normalized_text=normalized_result,
+                applied=accepted and normalized != text,
+                reason=reason,
+                inferred_intent=parsed.inferred_intent,
+                confidence=parsed.confidence,
                 model=self.model,
                 duration_ms=duration_ms,
             )
-
-        duration_ms = int((time.monotonic() - started) * 1000)
-        normalized = parsed.normalized_text.strip()
-        asr_confidence_value = session_context.get("asr_confidence")
-        asr_confidence = float(asr_confidence_value) if isinstance(asr_confidence_value, (int, float)) else None
-        semantic_ok, numeric_reason = _numeric_semantics_preserved(
-            text,
-            normalized,
-            asr_confidence=asr_confidence,
-        )
-        if not semantic_ok:
-            logger.warning(
-                "Voice transcript rewrite numeric guard rejected model=%s reason=%s "
-                "raw_numeric_count=%d normalized_numeric_count=%d asr_confidence=%s",
-                self.model,
-                numeric_reason,
-                sum(_numeric_sequences(text).values()),
-                sum(_numeric_sequences(normalized).values()),
-                asr_confidence,
-            )
-        elif numeric_reason == "removed_low_confidence_asr_artifact":
-            logger.info(
-                "Voice transcript rewrite removed low-confidence numeric ASR artifact model=%s",
-                self.model,
-            )
-        accepted = parsed.meaning_preserved and parsed.confidence >= self.minimum_confidence and semantic_ok
-        if accepted:
-            reason = "applied" if normalized != text else "unchanged"
-        elif not semantic_ok:
-            reason = "numeric_semantics_rejected"
-        else:
-            reason = "rejected"
-        return TranscriptRewriteResult(
-            raw_text=text,
-            normalized_text=normalized if accepted else text,
-            applied=accepted and normalized != text,
-            reason=reason,
-            inferred_intent=parsed.inferred_intent,
-            confidence=parsed.confidence,
-            model=self.model,
-            duration_ms=duration_ms,
-        )
 
 
 def build_transcript_rewriter(settings: LiveKitVoiceSettings) -> OpenAITranscriptRewriter | None:
@@ -375,6 +404,7 @@ async def _rewrite_finalized_text(
                 text,
                 session_context=context,
                 session_id=userdata.app_session_id,
+                turn_id=item_id,
             )
     except TimeoutError:
         duration_ms = int((time.monotonic() - started) * 1000)
