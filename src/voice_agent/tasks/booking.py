@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -54,6 +55,7 @@ class BookingOutcome(BaseModel):
 
 
 HandoffHandler = Callable[[str], Awaitable[str]]
+BookingChangeToken = tuple[BookingField, int]
 
 
 def _normalize_confirmation(value: str) -> str:
@@ -548,7 +550,12 @@ class BookingTask(AgentTask[BookingOutcome]):
         self._handoff_handler = handoff_handler
         self._session_data = session_data
         self._transcript_rewriter = transcript_rewriter
-        self._booking_change_generation = 0
+        self._booking_change_generations: dict[BookingField, int] = {
+            "pickup": 0,
+            "destination": 0,
+            "vehicle_type": 0,
+        }
+        self._booking_change_commit_lock = asyncio.Lock()
         super().__init__(
             chat_ctx=chat_ctx,
             instructions=(
@@ -625,9 +632,11 @@ class BookingTask(AgentTask[BookingOutcome]):
         *,
         acknowledgement: str,
         followup: str | None,
+        change_token: BookingChangeToken | None = None,
     ) -> None:
         """Persist one deterministic slot change and speak acknowledgement first."""
 
+        self._raise_if_stale_booking_change(change_token)
         draft = userdata.booking_draft
         response = followup
         if response is None and draft.pickup is not None and draft.destination is not None and draft.vehicle_type is not None:
@@ -637,20 +646,24 @@ class BookingTask(AgentTask[BookingOutcome]):
                     app_session_id=userdata.app_session_id,
                     draft=draft,
                 )
+                self._raise_if_stale_booking_change(change_token)
                 draft.set_quote(quote)
                 draft.request_confirmation()
                 response = _quote_confirmation_prompt(draft, acknowledgement, quote)
                 userdata.clear_failure()
             except ValueError:
+                self._raise_if_stale_booking_change(change_token)
                 userdata.record_failure(
                     "QUOTE_UNAVAILABLE",
                     "Chưa thể tính báo giá từ thông tin mới.",
                     fallback_action="retry",
                 )
                 response = f"{acknowledgement} Hiện chưa thể tính báo giá, bạn vui lòng thử lại."
+        self._raise_if_stale_booking_change(change_token)
         try:
             await self._state_store.save(userdata)
         except VoiceStateConflictError:
+            self._raise_if_stale_booking_change(change_token)
             userdata.record_failure(
                 "STATE_CONFLICT",
                 "Phiên này vừa được cập nhật ở kết nối khác.",
@@ -659,9 +672,30 @@ class BookingTask(AgentTask[BookingOutcome]):
             )
             await publish_booking_state(self.session)
             raise StopResponse() from None
+        self._raise_if_stale_booking_change(change_token)
         await publish_booking_state(self.session)
+        self._raise_if_stale_booking_change(change_token)
         self.session.say(response or acknowledgement, allow_interruptions=True)
         raise StopResponse()
+
+    def _next_booking_change_token(self, field: BookingField) -> BookingChangeToken:
+        generation = self._booking_change_generations[field] + 1
+        self._booking_change_generations[field] = generation
+        return field, generation
+
+    def _raise_if_stale_booking_change(self, token: BookingChangeToken | None) -> None:
+        if token is None:
+            return
+        field, generation = token
+        current = self._booking_change_generations[field]
+        if generation != current:
+            logger.info(
+                "Ignoring stale booking change field=%s generation=%d current=%d",
+                field,
+                generation,
+                current,
+            )
+            raise StopResponse()
 
     async def _force_barge_in_interrupt(self) -> None:
         """Cancel speech that may resume after a false-interruption window."""
@@ -681,8 +715,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         if change is None:
             return
         field, replacement = change
-        self._booking_change_generation += 1
-        change_generation = self._booking_change_generation
+        change_token = self._next_booking_change_token(field)
         await self._force_barge_in_interrupt()
         draft = userdata.booking_draft
         logger.info(
@@ -693,74 +726,73 @@ class BookingTask(AgentTask[BookingOutcome]):
         )
 
         if field == "vehicle_type":
-            vehicle_type = extract_vehicle_type(replacement)
-            if vehicle_type is None:
-                draft.mark_vehicle_needs_clarification(replacement)
+            async with self._booking_change_commit_lock:
+                self._raise_if_stale_booking_change(change_token)
+                vehicle_type = extract_vehicle_type(replacement)
+                if vehicle_type is None:
+                    draft.mark_vehicle_needs_clarification(replacement)
+                    await self._respond_after_grounded_change(
+                        userdata,
+                        acknowledgement=f"Đã ghi nhận yêu cầu đổi loại xe thành {replacement}.",
+                        followup=(
+                            f"Đã ghi nhận yêu cầu đổi loại xe thành {replacement}. "
+                            "Vui lòng chọn loại xe theo số thứ tự được liệt kê bên dưới."
+                        ),
+                        change_token=change_token,
+                    )
+                    return
+                draft.set_vehicle_type(vehicle_type)
+                acknowledgement = f"Đã đổi loại xe thành {vehicle_spoken_label(vehicle_type)}."
                 await self._respond_after_grounded_change(
                     userdata,
-                    acknowledgement=f"Đã ghi nhận yêu cầu đổi loại xe thành {replacement}.",
-                    followup=(
-                        f"Đã ghi nhận yêu cầu đổi loại xe thành {replacement}. "
-                        "Vui lòng chọn loại xe theo số thứ tự được liệt kê bên dưới."
-                    ),
+                    acknowledgement=acknowledgement,
+                    followup=_acknowledgement_followup(draft, acknowledgement),
+                    change_token=change_token,
                 )
-                return
-            draft.set_vehicle_type(vehicle_type)
-            acknowledgement = f"Đã đổi loại xe thành {vehicle_spoken_label(vehicle_type)}."
-            await self._respond_after_grounded_change(
-                userdata,
-                acknowledgement=acknowledgement,
-                followup=_acknowledgement_followup(draft, acknowledgement),
-            )
             return
 
         target: BookingTarget = "pickup" if field == "pickup" else "destination"
         candidates = await self._places.search_async(replacement)
-        if change_generation != self._booking_change_generation:
-            logger.info(
-                "Ignoring stale booking place search session=%s field=%s replacement=%r generation=%d current=%d",
-                userdata.app_session_id,
-                field,
-                replacement,
-                change_generation,
-                self._booking_change_generation,
-            )
-            raise StopResponse()
-        draft.set_candidates(target, replacement, candidates, prioritize=True)
-        acknowledgement = f"Đã cập nhật {_target_label(target)} thành {replacement}."
-        if not candidates:
-            userdata.record_failure(
-                "PLACE_NOT_FOUND",
-                f"Không tìm thấy {_target_label(target)} phù hợp với {replacement}.",
-                fallback_action="repeat_or_text",
-            )
-            await self._respond_after_grounded_change(
-                userdata,
-                acknowledgement=acknowledgement,
-                followup=(
-                    f"{acknowledgement} Chưa tìm thấy địa điểm phù hợp. "
-                    f"Bạn vui lòng nói lại {_target_label(target)} hoặc nhập tên khác."
-                ),
-            )
-            return
-        if can_auto_select_place(candidates):
-            selected = draft.select_place(target, candidates[0].place_id)
-            userdata.clear_failure()
-            acknowledgement = f"Đã đổi {_target_label(target)} thành {selected.display_name}."
-            await self._respond_after_grounded_change(
-                userdata,
-                acknowledgement=acknowledgement,
-                followup=_acknowledgement_followup(draft, acknowledgement),
-            )
-            return
+        async with self._booking_change_commit_lock:
+            self._raise_if_stale_booking_change(change_token)
+            draft.set_candidates(target, replacement, candidates, prioritize=True)
+            acknowledgement = f"Đã cập nhật {_target_label(target)} thành {replacement}."
+            if not candidates:
+                userdata.record_failure(
+                    "PLACE_NOT_FOUND",
+                    f"Không tìm thấy {_target_label(target)} phù hợp với {replacement}.",
+                    fallback_action="repeat_or_text",
+                )
+                await self._respond_after_grounded_change(
+                    userdata,
+                    acknowledgement=acknowledgement,
+                    followup=(
+                        f"{acknowledgement} Chưa tìm thấy địa điểm phù hợp. "
+                        f"Bạn vui lòng nói lại {_target_label(target)} hoặc nhập tên khác."
+                    ),
+                    change_token=change_token,
+                )
+                return
+            if can_auto_select_place(candidates):
+                selected = draft.select_place(target, candidates[0].place_id)
+                userdata.clear_failure()
+                acknowledgement = f"Đã đổi {_target_label(target)} thành {selected.display_name}."
+                await self._respond_after_grounded_change(
+                    userdata,
+                    acknowledgement=acknowledgement,
+                    followup=_acknowledgement_followup(draft, acknowledgement),
+                    change_token=change_token,
+                )
+                return
 
-        userdata.clear_failure()
-        clarification = _candidate_clarification_prompt(draft, target)
-        await self._respond_after_grounded_change(
-            userdata,
-            acknowledgement=acknowledgement,
-            followup=f"{acknowledgement} {clarification}",
-        )
+            userdata.clear_failure()
+            clarification = _candidate_clarification_prompt(draft, target)
+            await self._respond_after_grounded_change(
+                userdata,
+                acknowledgement=acknowledgement,
+                followup=f"{acknowledgement} {clarification}",
+                change_token=change_token,
+            )
 
     async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
         userdata = self._session_data or self.session.userdata

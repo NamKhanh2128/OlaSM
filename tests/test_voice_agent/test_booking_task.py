@@ -700,6 +700,19 @@ def test_explicit_booking_change_consumes_only_standalone_linker(
     assert extract_explicit_booking_change(message) == expected
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Tôi muốn đi sang VinUni",
+        "Cho tôi đi tới nhà thầy Sang",
+        "Tôi thay anh Nam đi đến VinUni",
+        "Điểm đến sáng nay là VinUni",
+    ],
+)
+def test_normal_route_or_proper_name_is_not_an_explicit_booking_change(message: str) -> None:
+    assert extract_explicit_booking_change(message) is None
+
+
 def test_explicit_booking_change_unknown_field_mapping_fails_safe(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -868,6 +881,61 @@ async def test_newer_barge_in_wins_while_async_place_search_is_pending(
         await asyncio.wait_for(older, timeout=2)
 
     assert userdata.booking_draft.destination_query == "Hồ Gươm"
+
+
+@pytest.mark.asyncio
+async def test_stale_vehicle_change_cannot_mutate_or_speak_after_newer_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+
+    class _Session:
+        def __init__(self) -> None:
+            self.userdata = userdata
+            self.interrupt_count = 0
+            self.replies: list[str] = []
+
+        async def interrupt(self, *, force: bool = False) -> None:
+            assert force is True
+            self.interrupt_count += 1
+            if self.interrupt_count == 1:
+                await asyncio.sleep(0.2)
+
+        def say(self, text: str, *, allow_interruptions: bool) -> None:
+            assert allow_interruptions is True
+            self.replies.append(text)
+
+    async def ignore_publish(_: object) -> bool:
+        return True
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", ignore_publish)
+    session = _Session()
+    task = BookingTask(session_data=userdata, state_store=EphemeralVoiceStateStore())
+    task._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
+
+    older = asyncio.create_task(
+        task._handle_explicit_booking_change(userdata, "Đổi loại xe thành xe bảy chỗ")
+    )
+    await asyncio.sleep(0.02)
+    newer = asyncio.create_task(
+        task._handle_explicit_booking_change(userdata, "Đổi loại xe thành xe máy")
+    )
+
+    with pytest.raises(StopResponse):
+        await asyncio.wait_for(newer, timeout=2)
+    with pytest.raises(StopResponse):
+        await asyncio.wait_for(older, timeout=2)
+
+    assert userdata.booking_draft.vehicle_type == "MOTORBIKE"
+    assert session.replies == [
+        "Đã đổi loại xe thành xe máy. Vui lòng cho biết điểm đón. "
+        "Nếu muốn đổi, bạn có thể nói lại."
+    ]
 
 
 @pytest.mark.asyncio
