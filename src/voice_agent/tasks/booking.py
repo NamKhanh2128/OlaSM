@@ -414,6 +414,80 @@ def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | No
     return None
 
 
+_CONTRAST_NEGATION_TOKENS = ("khong", "phai")
+_CONTRAST_REPLACEMENT_TOKENS = ("ma", "la")
+
+
+def _current_booking_surface_field(
+    draft: BookingDraft,
+    value: str,
+) -> BookingField | None:
+    """Resolve one old value against current slots without guessing from candidates."""
+
+    normalized = _normalize_confirmation(value)
+    if not normalized:
+        return None
+    surfaces: dict[BookingField, tuple[str | None, ...]] = {
+        "pickup": (
+            draft.pickup_query,
+            draft.pickup.display_name if draft.pickup is not None else None,
+            draft.pickup.address if draft.pickup is not None else None,
+        ),
+        "destination": (
+            draft.destination_query,
+            draft.destination.display_name if draft.destination is not None else None,
+            draft.destination.address if draft.destination is not None else None,
+        ),
+        "vehicle_type": (
+            draft.vehicle_query,
+            vehicle_spoken_label(draft.vehicle_type),
+        ),
+    }
+    matches = {
+        field
+        for field, values in surfaces.items()
+        if any(surface and _normalize_confirmation(surface) == normalized for surface in values)
+    }
+    return next(iter(matches)) if len(matches) == 1 else None
+
+
+def extract_contextual_booking_change(
+    draft: BookingDraft,
+    value: str,
+) -> tuple[BookingField, str, str] | None:
+    """Ground ``không phải OLD mà là NEW`` against one current booking slot."""
+
+    compact = " ".join(unicodedata.normalize("NFC", value).split())[:1_000]
+    raw_tokens = tuple(token.strip(" ,.!?;:") for token in compact.split())
+    folded_tokens = tuple(_normalize_confirmation(token) for token in raw_tokens)
+    replacement_marker = next(
+        (
+            index
+            for index in range(len(folded_tokens) - 1)
+            if folded_tokens[index : index + 2] == _CONTRAST_REPLACEMENT_TOKENS
+        ),
+        None,
+    )
+    if replacement_marker is None:
+        return None
+    negation_markers = [
+        index
+        for index in range(replacement_marker - 1)
+        if folded_tokens[index : index + 2] == _CONTRAST_NEGATION_TOKENS
+    ]
+    if not negation_markers:
+        return None
+    negation_marker = negation_markers[-1]
+    previous_value = " ".join(raw_tokens[negation_marker + 2 : replacement_marker]).strip()
+    replacement = _trim_trailing_non_entity_clause(
+        " ".join(raw_tokens[replacement_marker + 2 :])
+    )
+    if not previous_value or not replacement:
+        return None
+    field = _current_booking_surface_field(draft, previous_value)
+    return (field, replacement, previous_value) if field is not None else None
+
+
 def seed_complete_booking_turn(
     draft: BookingDraft,
     places: PlaceToolsService,
@@ -798,10 +872,16 @@ class BookingTask(AgentTask[BookingOutcome]):
         userdata: AloSMSessionData,
         user_text: str,
     ) -> None:
-        change = extract_explicit_booking_change(user_text)
-        if change is None:
-            return
-        field, replacement = change
+        explicit_change = extract_explicit_booking_change(user_text)
+        previous_value: str | None = None
+        if explicit_change is not None:
+            field, replacement = explicit_change
+        else:
+            draft_snapshot = userdata.booking_draft.model_copy(deep=True)
+            contextual_change = extract_contextual_booking_change(draft_snapshot, user_text)
+            if contextual_change is None:
+                return
+            field, replacement, previous_value = contextual_change
         change_token = await self._next_booking_change_token(field)
         await self._force_barge_in_interrupt()
         logger.info(
@@ -815,6 +895,11 @@ class BookingTask(AgentTask[BookingOutcome]):
             async with self._booking_change_transaction_lock:
                 self._raise_if_stale_booking_change(change_token)
                 draft = userdata.booking_draft
+                if (
+                    previous_value is not None
+                    and _current_booking_surface_field(draft, previous_value) != field
+                ):
+                    raise StopResponse()
                 vehicle_type = extract_vehicle_type(replacement)
                 if vehicle_type is None:
                     draft.mark_vehicle_needs_clarification(replacement)
@@ -841,6 +926,11 @@ class BookingTask(AgentTask[BookingOutcome]):
         target: BookingTarget = "pickup" if field == "pickup" else "destination"
         async with self._booking_change_transaction_lock:
             self._raise_if_stale_booking_change(change_token)
+            if (
+                previous_value is not None
+                and _current_booking_surface_field(userdata.booking_draft, previous_value) != field
+            ):
+                raise StopResponse()
             candidates = tuple(await self._places.search_async(replacement))
             self._raise_if_stale_booking_change(change_token)
             draft = userdata.booking_draft

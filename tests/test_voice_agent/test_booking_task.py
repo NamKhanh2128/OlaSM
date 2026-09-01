@@ -15,6 +15,7 @@ from src.voice_agent.tasks.booking import (
     BookingTask,
     can_auto_select_place,
     extract_complete_route,
+    extract_contextual_booking_change,
     extract_explicit_booking_change,
     extract_vehicle_type,
     grounded_named_place_selection,
@@ -649,19 +650,6 @@ def test_complete_route_parser_ignores_short_spoken_fillers() -> None:
 @pytest.mark.parametrize(
     ("message", "expected"),
     [
-        ("À, đổi điểm đến là Hồ Tây", ("destination", "Hồ Tây")),
-        ("Sửa giúp tôi điểm đón thành Times City", ("pickup", "Times City")),
-        ("Điểm đến chuyển sang Long Biên", ("destination", "Long Biên")),
-        ("Đổi loại xe sang xe bảy chỗ", ("vehicle_type", "xe bảy chỗ")),
-        (
-            "Tôi chọn số 2 nhưng đổi điểm đến thành Hồ Gươm",
-            ("destination", "Hồ Gươm"),
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    ("message", "expected"),
-    [
         ("Đi từ VinUni đến Hồ Gươm bằng xe bốn chỗ", ("VinUni", "Hồ Gươm")),
         ("Từ, VinUni tới Hồ Gươm; đặt giúp tôi", ("VinUni", "Hồ Gươm")),
         ("Từ VinUni đến Hồ Gươm với ô tô bốn chỗ", ("VinUni", "Hồ Gươm")),
@@ -678,6 +666,20 @@ def test_complete_route_parser_bounds_long_malformed_asr() -> None:
     malformed = "Từ " + ("VinUni " * 10_000)
     assert extract_complete_route(malformed) is None
 
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("À, đổi điểm đến là Hồ Tây", ("destination", "Hồ Tây")),
+        ("Sửa giúp tôi điểm đón thành Times City", ("pickup", "Times City")),
+        ("Điểm đến chuyển sang Long Biên", ("destination", "Long Biên")),
+        ("Đổi loại xe sang xe bảy chỗ", ("vehicle_type", "xe bảy chỗ")),
+        (
+            "Tôi chọn số 2 nhưng đổi điểm đến thành Hồ Gươm",
+            ("destination", "Hồ Gươm"),
+        ),
+    ],
+)
 def test_explicit_booking_change_parser_prioritizes_replacement_intent(
     message: str,
     expected: tuple[str, str],
@@ -774,6 +776,27 @@ def test_explicit_booking_change_rejects_oversized_unbounded_remark() -> None:
     unrelated_tail = " ".join(["nội dung không liên quan"] * 30)
 
     assert extract_explicit_booking_change(f"Đổi điểm đón thành VinUni {unrelated_tail}") is None
+
+
+def test_contextual_correction_grounds_old_value_to_destination_slot() -> None:
+    draft = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    ).booking_draft
+    seed_complete_booking_turn(
+        draft,
+        PlaceToolsService(),
+        "Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm.",
+    )
+
+    change = extract_contextual_booking_change(
+        draft,
+        "À, nó không phải, không phải Hồ Gươm mà là Long Biên.",
+    )
+
+    assert change == ("destination", "Long Biên", "Hồ Gươm")
 
 
 @pytest.mark.asyncio
@@ -1123,6 +1146,65 @@ async def test_unknown_destination_barge_in_does_not_resume_old_pickup_list(
         "Bạn vui lòng nói lại điểm đến hoặc nhập tên khác."
     ]
     assert "VinUni" not in session.replies[0]
+
+
+@pytest.mark.asyncio
+async def test_contextual_destination_barge_in_replaces_only_destination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    draft = userdata.booking_draft
+    seed_complete_booking_turn(
+        draft,
+        PlaceToolsService(),
+        "Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm.",
+    )
+    original_pickup_candidates = list(draft.pickup_candidates)
+
+    class _BargeInSession:
+        def __init__(self) -> None:
+            self.userdata = userdata
+            self.interrupted = False
+            self.replies: list[str] = []
+
+        async def interrupt(self, *, force: bool = False) -> None:
+            self.interrupted = force
+
+        def say(self, text: str, *, allow_interruptions: bool) -> None:
+            assert allow_interruptions is True
+            self.replies.append(text)
+
+    session = _BargeInSession()
+    task = BookingTask(session_data=userdata, state_store=EphemeralVoiceStateStore())
+    task._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
+
+    async def ignore_publish(_: object) -> bool:
+        return True
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", ignore_publish)
+
+    with pytest.raises(StopResponse):
+        await task.on_user_turn_completed(
+            llm.ChatContext.empty(),
+            llm.ChatMessage(
+                role="user",
+                content=["À, nó không phải, không phải Hồ Gươm mà là Long Biên."],
+            ),
+        )
+
+    assert session.interrupted is True
+    assert draft.pickup_query == "VinUni"
+    assert draft.pickup_candidates == original_pickup_candidates
+    assert draft.destination_query == "Long Biên"
+    assert draft.destination_candidates
+    assert draft.pending_candidate_target == "destination"
+    assert session.replies[0].startswith("Đã cập nhật điểm đến thành Long Biên.")
+    assert "liên quan đến Long Biên cho điểm đến" in session.replies[0]
 
 
 @pytest.mark.asyncio
