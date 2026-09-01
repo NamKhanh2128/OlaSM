@@ -27,11 +27,13 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
-          manualChunks: {
-            vendor: ["react", "react-dom", "react-router-dom"],
-            query: ["@tanstack/react-query"],
-            livekit: ["livekit-client", "@livekit/components-react"],
-            form: ["react-hook-form", "zod", "@hookform/resolvers"],
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return undefined
+            if (id.includes("@livekit") || id.includes("livekit-client")) return "livekit"
+            if (id.includes("@tanstack/react-query")) return "query"
+            if (id.includes("react-hook-form") || id.includes("@hookform") || id.includes("/zod/")) return "form"
+            if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/react-router-dom/")) return "vendor"
+            return undefined
           },
         },
       },

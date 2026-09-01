@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.backend.api.routes import health_router, router  # noqa: E402
 from src.backend.config import get_settings  # noqa: E402
+from src.backend.observability.tracing import TracingMiddleware  # noqa: E402
 
 
 @asynccontextmanager
@@ -34,22 +35,36 @@ async def lifespan(app: FastAPI):
         )
     )
     print(f"Starting {settings.app_name} in {settings.app_env} mode")
-    try:
-        from src.backend.db.base import get_engine
-        from src.backend.db.models import Base
+    if settings.app_env != "production":
+        try:
+            from src.backend.db.base import get_engine
+            from src.backend.db.models import Base
 
-        engine = get_engine()
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        print("Database schema verified/initialized.")
-    except Exception as exc:
-        print(f"Database schema initialization notice: {exc}")
+            engine = get_engine()
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            print("Database schema verified/initialized.")
+        except Exception as exc:
+            print(f"Database schema initialization notice: {exc}")
+    else:
+        print("Production: skipping create_all, use Alembic migrations.")
+        if settings.database_url.startswith(("postgres://", "postgresql://", "postgresql+")):
+            try:
+                from sqlalchemy import text
+
+                from src.backend.db.base import get_engine
+
+                engine = get_engine()
+                async with engine.connect() as conn:
+                    await conn.execute(text("SELECT 1"))
+                print("Database warmup OK.")
+            except Exception as exc:
+                print(f"Database warmup notice: {exc}")
     try:
         yield
     finally:
         shutdown_langfuse(settings.langfuse_flush_timeout_seconds)
         print("Shutting down...")
-
 
 
 app = FastAPI(
@@ -60,6 +75,7 @@ app = FastAPI(
 )
 
 settings = get_settings()
+app.add_middleware(TracingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins.split(","),
