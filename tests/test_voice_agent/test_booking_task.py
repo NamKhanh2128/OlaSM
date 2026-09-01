@@ -1,3 +1,4 @@
+import asyncio
 import json
 import unicodedata
 from contextlib import asynccontextmanager
@@ -683,6 +684,22 @@ def test_explicit_booking_change_normalizes_unicode_case_and_whitespace(
     assert extract_explicit_booking_change(message) == expected
 
 
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("Đổi điểm đón VinUni", ("pickup", "VinUni")),
+        ("Đổi điểm đón là VinUni", ("pickup", "VinUni")),
+        ("Đổi điểm đón: thành VinUni", ("pickup", "VinUni")),
+        ("Đổi điểm đón Làng Vòng", ("pickup", "Làng Vòng")),
+    ],
+)
+def test_explicit_booking_change_consumes_only_standalone_linker(
+    message: str,
+    expected: tuple[str, str],
+) -> None:
+    assert extract_explicit_booking_change(message) == expected
+
+
 def test_explicit_booking_change_unknown_field_mapping_fails_safe(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -780,6 +797,77 @@ async def test_destination_barge_in_interrupts_pickup_prompt_and_focuses_new_lis
     assert "cho điểm đến" in response
     assert "số thứ tự" in response
     assert "liên quan đến VinUni cho điểm đón" not in response
+
+
+@pytest.mark.asyncio
+async def test_newer_barge_in_wins_while_async_place_search_is_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+
+    class _Places:
+        def search(self, query: str) -> list[PlaceCandidate]:
+            return [
+                PlaceCandidate(
+                    place_id=f"{query}-one",
+                    display_name=f"{query} một",
+                    address=query,
+                    provider="local_landmark_mock",
+                ),
+                PlaceCandidate(
+                    place_id=f"{query}-two",
+                    display_name=f"{query} hai",
+                    address=query,
+                    provider="local_landmark_mock",
+                ),
+            ]
+
+        async def search_async(self, query: str) -> list[PlaceCandidate]:
+            if query == "Long Biên":
+                await asyncio.sleep(0.25)
+            return self.search(query)
+
+    class _Session:
+        def __init__(self) -> None:
+            self.userdata = userdata
+
+        async def interrupt(self, *, force: bool = False) -> None:
+            assert force is True
+
+        def say(self, _: str, *, allow_interruptions: bool) -> None:
+            assert allow_interruptions is True
+
+    async def ignore_publish(_: object) -> bool:
+        return True
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", ignore_publish)
+    task = BookingTask(
+        places=_Places(),  # type: ignore[arg-type]
+        session_data=userdata,
+        state_store=EphemeralVoiceStateStore(),
+    )
+    task._activity = SimpleNamespace(session=_Session())  # type: ignore[assignment]
+
+    older = asyncio.create_task(
+        task._handle_explicit_booking_change(userdata, "Đổi điểm đến thành Long Biên")
+    )
+    await asyncio.sleep(0.02)
+    assert older.done() is False
+
+    newer = asyncio.create_task(
+        task._handle_explicit_booking_change(userdata, "Đổi điểm đến thành Hồ Gươm")
+    )
+    with pytest.raises(StopResponse):
+        await asyncio.wait_for(newer, timeout=2)
+    with pytest.raises(StopResponse):
+        await asyncio.wait_for(older, timeout=2)
+
+    assert userdata.booking_draft.destination_query == "Hồ Gươm"
 
 
 @pytest.mark.asyncio

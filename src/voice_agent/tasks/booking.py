@@ -173,18 +173,18 @@ _CHANGE_FIELD = (
     r"(?P<field>điểm\s+đón|điểm\s+đi|nơi\s+đón|"
     r"điểm\s+đến|nơi\s+đến|đích\s+đến|loại\s+xe)"
 )
-_CHANGE_LINK = r"(?:là|thành|sang|qua)?"
 _CHANGE_PATTERNS = (
     re.compile(
         rf"\b{_CHANGE_CUE}\s+(?:(?:cho|giúp)\s+(?:tôi|mình)\s+)?"
-        rf"{_CHANGE_FIELD}\s*{_CHANGE_LINK}\s*",
+        rf"{_CHANGE_FIELD}(?=\s|[:,]|$)",
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b{_CHANGE_FIELD}\s+{_CHANGE_CUE}\s*{_CHANGE_LINK}\s*",
+        rf"\b{_CHANGE_FIELD}\s+{_CHANGE_CUE}(?=\s|[:,]|$)",
         re.IGNORECASE,
     ),
 )
+_CHANGE_LINKS = ("là", "thành", "sang", "qua")
 
 
 def _normalize_change_field(value: str) -> str:
@@ -247,6 +247,19 @@ _MAX_CHANGE_ENTITY_TOKENS = 24
 
 def _starts_with_phrase(value: str, phrase: str) -> bool:
     return value == phrase or value.startswith(f"{phrase} ")
+
+
+def _consume_change_link(value: str) -> str:
+    """Consume one standalone linker without treating an address prefix as a linker."""
+
+    remainder = value.lstrip(" ,:")
+    folded = unicodedata.normalize("NFC", remainder).casefold()
+    for link in _CHANGE_LINKS:
+        if folded == link:
+            return ""
+        if folded.startswith(f"{link} "):
+            return remainder[len(link) :].lstrip(" ,:")
+    return remainder
 
 
 def _trim_trailing_non_entity_clause(value: str) -> str:
@@ -313,7 +326,9 @@ def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | No
         field = _CHANGE_FIELD_TARGETS.get(_normalize_change_field(match.group("field")))
         if field is None:
             continue
-        replacement = _trim_trailing_non_entity_clause(compact[match.end() :])
+        replacement = _trim_trailing_non_entity_clause(
+            _consume_change_link(compact[match.end() :])
+        )
         if replacement:
             return field, replacement
     return None
@@ -533,6 +548,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         self._handoff_handler = handoff_handler
         self._session_data = session_data
         self._transcript_rewriter = transcript_rewriter
+        self._booking_change_generation = 0
         super().__init__(
             chat_ctx=chat_ctx,
             instructions=(
@@ -665,6 +681,8 @@ class BookingTask(AgentTask[BookingOutcome]):
         if change is None:
             return
         field, replacement = change
+        self._booking_change_generation += 1
+        change_generation = self._booking_change_generation
         await self._force_barge_in_interrupt()
         draft = userdata.booking_draft
         logger.info(
@@ -697,7 +715,17 @@ class BookingTask(AgentTask[BookingOutcome]):
             return
 
         target: BookingTarget = "pickup" if field == "pickup" else "destination"
-        candidates = self._places.search(replacement)
+        candidates = await self._places.search_async(replacement)
+        if change_generation != self._booking_change_generation:
+            logger.info(
+                "Ignoring stale booking place search session=%s field=%s replacement=%r generation=%d current=%d",
+                userdata.app_session_id,
+                field,
+                replacement,
+                change_generation,
+                self._booking_change_generation,
+            )
+            raise StopResponse()
         draft.set_candidates(target, replacement, candidates, prioritize=True)
         acknowledgement = f"Đã cập nhật {_target_label(target)} thành {replacement}."
         if not candidates:
