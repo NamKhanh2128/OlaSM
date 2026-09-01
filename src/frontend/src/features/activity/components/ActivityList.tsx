@@ -51,6 +51,21 @@ export const ActivityList: React.FC<ActivityListProps> = memo(({ activeFilter = 
     return () => window.removeEventListener(BOOKING_CREATED_EVENT, loadBookings);
   }, [loadBookings]);
 
+  const filtered = useMemo(() => {
+    if (!bookings) return [];
+    return bookings.filter((booking) => {
+      if (activeFilter === "cancelled") return booking.status === "CANCELLED";
+      if (activeFilter === "recent") return booking.status === "COMPLETED";
+      if (activeFilter === "last_month") {
+        if (!booking.created_at) return false;
+        const createdAt = new Date(booking.created_at).getTime();
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        return createdAt >= thirtyDaysAgo;
+      }
+      return true;
+    });
+  }, [bookings, activeFilter]);
+
   // Đặt lại 1 chuyến đã có giờ cũng nối thẳng vào AI Assistant (kèm sẵn tuyến đường
   // cũ trong câu mở đầu) thay vì tự mở form/modal riêng — cùng 1 đường đặt xe duy
   // nhất trong toàn app, xem BookingPage.tsx/HomePage.tsx.
@@ -72,21 +87,6 @@ export const ActivityList: React.FC<ActivityListProps> = memo(({ activeFilter = 
   if (bookings === null) {
     return <div className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">Đang tải lịch sử chuyến đi...</div>;
   }
-
-  const filtered = useMemo(() => {
-    if (!bookings) return [];
-    return bookings.filter((booking) => {
-      if (activeFilter === "cancelled") return booking.status === "CANCELLED";
-      if (activeFilter === "recent") return booking.status === "COMPLETED";
-      if (activeFilter === "last_month") {
-        if (!booking.created_at) return false;
-        const createdAt = new Date(booking.created_at).getTime();
-        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-        return createdAt >= thirtyDaysAgo;
-      }
-      return true;
-    });
-  }, [bookings, activeFilter]);
 
   if (filtered.length === 0) {
     return (
