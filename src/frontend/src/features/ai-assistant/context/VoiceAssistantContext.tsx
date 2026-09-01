@@ -163,7 +163,11 @@ export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = (
         if (cachedResult.status === "fulfilled") {
           setSessionId(cachedSessionId);
           setStatus("idle");
-          if (userResult.status === "fulfilled" && userResult.value.session_id !== cachedSessionId) {
+          if (
+            userResult.status === "fulfilled" &&
+            userResult.value.session_id &&
+            userResult.value.session_id !== cachedSessionId
+          ) {
             saveAuthSession({
               access_token: getAccessToken() || "",
               user_id: userResult.value.user_id,
