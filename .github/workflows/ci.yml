@@ -62,6 +62,8 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
+      - name: Verify npm availability
+        run: npm --version && node --version
       - run: npm ci
       - run: npm run lint
       - run: npm run test
@@ -75,4 +77,5 @@ jobs:
       packages: write
       id-token: write
     uses: ./.github/workflows/deploy-staging.yml
-    secrets: inherit
+    secrets:
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}

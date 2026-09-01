@@ -4,10 +4,10 @@ run:
 	uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
 livekit-backend:
-	uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+	uv run --python 3.12 uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
 livekit-worker:
-	uv run python -m src.voice_agent.server dev --log-level INFO
+	uv run --python 3.12 python -m src.voice_agent.server dev --log-level INFO
 
 livekit-frontend:
 	cd src/frontend && npm run dev
@@ -24,13 +24,16 @@ test-coverage:
 frontend-check:
 	cd src/frontend && npm run lint && npm run test && npm run build
 
-ci-check: lint compile migration-check test-coverage frontend-check
+ci-check: check-uv-sync lint compile migration-check test-coverage frontend-check
+
+check-uv-sync:
+	@if [ ! -d .venv ] && [ ! -f uv.lock ]; then echo "ERROR: Run 'uv sync' first"; exit 1; fi
 
 lint:
-	uv run ruff check src tests scripts eval_cases
+	uv run --python 3.12 ruff check src tests scripts eval_cases
 
 compile:
-	uv run python -m compileall -q src tests scripts eval_cases
+	uv run --python 3.12 python -m compileall -q src tests scripts eval_cases
 
 migration-check:
 	APP_ENV=test DATABASE_URL=sqlite:///./data/ci.db uv run python -m alembic heads
