@@ -23,6 +23,19 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(import.meta.dirname, './src'),
       },
     },
+    build: {
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ["react", "react-dom", "react-router-dom"],
+            query: ["@tanstack/react-query"],
+            livekit: ["livekit-client", "@livekit/components-react"],
+            form: ["react-hook-form", "zod", "@hookform/resolvers"],
+          },
+        },
+      },
+    },
     server: {
       proxy: {
         '/api': {
