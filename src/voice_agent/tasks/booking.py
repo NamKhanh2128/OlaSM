@@ -597,7 +597,11 @@ class BookingTask(AgentTask[BookingOutcome]):
             "vehicle_type": 0,
         }
         self._booking_change_generation_lock = asyncio.Lock()
-        self._booking_change_commit_lock = asyncio.Lock()
+        # One explicit barge-in change is a transaction: lookup, draft mutation,
+        # persistence, state publication, and acknowledgement must observe the
+        # same session state. Generation tokens can still stale an older request
+        # while it is awaiting provider I/O.
+        self._booking_change_transaction_lock = asyncio.Lock()
         super().__init__(
             chat_ctx=chat_ctx,
             instructions=(
@@ -770,7 +774,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         )
 
         if field == "vehicle_type":
-            async with self._booking_change_commit_lock:
+            async with self._booking_change_transaction_lock:
                 self._raise_if_stale_booking_change(change_token)
                 draft = userdata.booking_draft
                 vehicle_type = extract_vehicle_type(replacement)
@@ -797,8 +801,9 @@ class BookingTask(AgentTask[BookingOutcome]):
             return
 
         target: BookingTarget = "pickup" if field == "pickup" else "destination"
-        candidates = tuple(await self._places.search_async(replacement))
-        async with self._booking_change_commit_lock:
+        async with self._booking_change_transaction_lock:
+            self._raise_if_stale_booking_change(change_token)
+            candidates = tuple(await self._places.search_async(replacement))
             self._raise_if_stale_booking_change(change_token)
             draft = userdata.booking_draft
             draft.set_candidates(target, replacement, list(candidates), prioritize=True)

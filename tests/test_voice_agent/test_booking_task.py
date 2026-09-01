@@ -910,7 +910,7 @@ async def test_same_field_generation_tokens_are_unique_under_concurrency() -> No
 
 
 @pytest.mark.asyncio
-async def test_different_field_searches_commit_serially_without_losing_state(
+async def test_different_field_changes_serialize_lookup_and_commit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     userdata = AloSMSessionData(
@@ -919,16 +919,19 @@ async def test_different_field_searches_commit_serially_without_losing_state(
         user_id="user",
         participant_identity="participant",
     )
-    both_searches_started = asyncio.Event()
-    release_searches = asyncio.Event()
-    started_queries: set[str] = set()
+    first_search_started = asyncio.Event()
+    second_search_started = asyncio.Event()
+    release_first_search = asyncio.Event()
+    started_queries: list[str] = []
 
     class _Places:
         async def search_async(self, query: str) -> list[PlaceCandidate]:
-            started_queries.add(query)
-            if len(started_queries) == 2:
-                both_searches_started.set()
-            await release_searches.wait()
+            started_queries.append(query)
+            if query == "VinUni":
+                first_search_started.set()
+                await release_first_search.wait()
+            else:
+                second_search_started.set()
             return [
                 PlaceCandidate(
                     place_id=f"{query}-one",
@@ -968,20 +971,25 @@ async def test_different_field_searches_commit_serially_without_losing_state(
     pickup_change = asyncio.create_task(
         task._handle_explicit_booking_change(userdata, "Đổi điểm đón thành VinUni")
     )
+    await asyncio.wait_for(first_search_started.wait(), timeout=1)
     destination_change = asyncio.create_task(
         task._handle_explicit_booking_change(userdata, "Đổi điểm đến thành Hồ Gươm")
     )
-    await asyncio.wait_for(both_searches_started.wait(), timeout=1)
+
+    with pytest.raises(TimeoutError):
+        await asyncio.wait_for(second_search_started.wait(), timeout=0.05)
+    assert started_queries == ["VinUni"]
     assert userdata.booking_draft.pickup_query is None
     assert userdata.booking_draft.destination_query is None
 
-    release_searches.set()
+    release_first_search.set()
     results = await asyncio.wait_for(
         asyncio.gather(pickup_change, destination_change, return_exceptions=True),
         timeout=2,
     )
 
     assert all(isinstance(result, StopResponse) for result in results)
+    assert started_queries == ["VinUni", "Hồ Gươm"]
     assert userdata.booking_draft.pickup_query == "VinUni"
     assert userdata.booking_draft.destination_query == "Hồ Gươm"
 
