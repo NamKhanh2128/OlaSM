@@ -174,6 +174,9 @@ def record_langfuse_observation(
     attributes: dict[str, str | bool | int | float] | None = None,
     end_timestamp: float | None = None,
     duration_seconds: float | None = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
+    call_id: str | None = None,
 ) -> None:
     """Export one allowlisted metric observation without any content payload."""
 
@@ -190,6 +193,12 @@ def record_langfuse_observation(
     if provider:
         span_attributes["gen_ai.provider.name"] = provider
         span_attributes["langfuse.observation.metadata.provider"] = provider
+    if session_hash := privacy_hash(session_id):
+        span_attributes["langfuse.session.id"] = session_hash
+    if user_hash := privacy_hash(user_id):
+        span_attributes["langfuse.user.id"] = user_hash
+    if call_hash := privacy_hash(call_id):
+        span_attributes["langfuse.trace.metadata.call_id"] = call_hash
     if usage_details:
         safe_usage = {
             key: value

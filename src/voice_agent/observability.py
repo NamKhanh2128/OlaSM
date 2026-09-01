@@ -339,14 +339,22 @@ class LiveKitSessionObserver:
         self.event_log.emit(event_name, event_created_at=created_at, **fields)
         self._record_safe_event(event_name, fields, created_at=created_at)
 
+    def _record_observation(self, **kwargs: Any) -> None:
+        from src.backend.observability.langfuse_client import record_langfuse_observation
+
+        record_langfuse_observation(
+            **kwargs,
+            session_id=self.event_log.userdata.app_session_id,
+            user_id=self.event_log.userdata.user_id,
+            call_id=self.event_log.userdata.call_id,
+        )
+
     def record_model_metrics(self, metrics: object) -> None:
         """Export only numeric/provider metadata from LiveKit model metrics."""
 
         if isinstance(metrics, TTSMetrics):
             self.record_tts_metrics(metrics)
             return
-
-        from src.backend.observability.langfuse_client import record_langfuse_observation
 
         metadata = getattr(metrics, "metadata", None)
         model = metadata.model_name if metadata is not None else None
@@ -396,7 +404,7 @@ class LiveKitSessionObserver:
             }
             event_name = "livekit_stt"
         elif isinstance(metrics, VADMetrics):
-            record_langfuse_observation(
+            self._record_observation(
                 name="livekit_vad",
                 observation_type="span",
                 attributes={
@@ -412,7 +420,7 @@ class LiveKitSessionObserver:
         else:
             return
 
-        record_langfuse_observation(
+        self._record_observation(
             name=event_name,
             observation_type="generation",
             model=model,
@@ -438,10 +446,8 @@ class LiveKitSessionObserver:
             characters_count=metrics.characters_count,
             cancelled=metrics.cancelled,
         )
-        from src.backend.observability.langfuse_client import record_langfuse_observation
-
         metadata = metrics.metadata
-        record_langfuse_observation(
+        self._record_observation(
             name="livekit_tts",
             observation_type="generation",
             model=metadata.model_name if metadata is not None else None,
@@ -464,10 +470,7 @@ class LiveKitSessionObserver:
             duration_seconds=metrics.duration,
         )
 
-    @staticmethod
-    def _record_safe_event(event_name: str, fields: dict[str, object], *, created_at: float | None) -> None:
-        from src.backend.observability.langfuse_client import record_langfuse_observation
-
+    def _record_safe_event(self, event_name: str, fields: dict[str, object], *, created_at: float | None) -> None:
         if event_name == "conversation_item_added":
             raw_metrics = fields.get("metrics")
             if not isinstance(raw_metrics, dict) or not raw_metrics:
@@ -478,7 +481,7 @@ class LiveKitSessionObserver:
                 if key in _SAFE_METRIC_FIELDS and isinstance(value, int | float)
             }
             if metrics:
-                record_langfuse_observation(
+                self._record_observation(
                     name="livekit_turn_latency",
                     observation_type="span",
                     attributes=metrics,
@@ -489,7 +492,7 @@ class LiveKitSessionObserver:
 
         if event_name == "tool_execution_updated" and fields.get("duration_ms") is not None:
             duration_ms = float(fields["duration_ms"])
-            record_langfuse_observation(
+            self._record_observation(
                 name="livekit_tool",
                 observation_type="tool",
                 attributes={
@@ -503,7 +506,7 @@ class LiveKitSessionObserver:
             return
 
         if event_name in {"error", "user_transcription_timeout"}:
-            record_langfuse_observation(
+            self._record_observation(
                 name=f"livekit_{event_name}",
                 observation_type="event",
                 attributes={
