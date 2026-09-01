@@ -204,6 +204,31 @@ def extract_complete_route(value: str) -> tuple[str, str] | None:
     return pickup, destination
 
 
+_LABELED_PLACE_FIELD = (
+    r"(?:điểm\s+đón|điểm\s+đi|nơi\s+đón|"
+    r"điểm\s+đến|nơi\s+đến|đích\s+đến)"
+)
+_LABELED_PLACE_PATTERN = re.compile(
+    rf"\b(?P<label>{_LABELED_PLACE_FIELD})\s*(?:(?:là|ở|tại)\s+)?"
+    rf"(?P<value>[^.!?;]{{1,240}}?)(?=(?:\s*,\s*)?{_LABELED_PLACE_FIELD}\b|[.!?;]|$)",
+    re.IGNORECASE,
+)
+
+
+def extract_labeled_booking_places(value: str) -> dict[BookingTarget, str]:
+    """Extract every explicitly labelled pickup/destination in one user turn."""
+
+    places: dict[BookingTarget, str] = {}
+    compact = " ".join(unicodedata.normalize("NFC", value[:1_000]).split())
+    for match in _LABELED_PLACE_PATTERN.finditer(compact):
+        label = " ".join(match.group("label").casefold().split())
+        target: BookingTarget = "pickup" if label in {"điểm đón", "điểm đi", "nơi đón"} else "destination"
+        place = match.group("value").strip(" ,:")[:200]
+        if place:
+            places[target] = place
+    return places
+
+
 def extract_vehicle_type(value: str) -> VehicleType | None:
     """Map one explicit supported Vietnamese vehicle phrase without an LLM."""
 
@@ -602,6 +627,90 @@ _SHORT_CANDIDATE_SELECTION = re.compile(
     r"^(?:(?:toi|minh)\s+)?(?:(?:chon|lay)\s+)?(?:(?:phuong\s+an|lua\s+chon)\s+)?"
     r"(?:(?:so|thu)\s+)?(1|2|3|4|5|mot|hai|ba|bon|tu|nam|nhat)$"
 )
+
+_ORDINAL_MENTION_PATTERN = re.compile(r"\b(?:(?:so|thu)\s+)?(?P<ordinal>1|2|3|4|5|mot|hai|ba|bon|tu|nam|nhat)\b")
+_RESELECTION_CUE_PATTERN = re.compile(r"\b(?:nham|chon lai|doi lai)\b")
+_RESELECTION_CONFIRMATIONS = frozenset({"dung", "dung roi", "vang", "chinh xac", "xac nhan"})
+OrdinalReselectionAction = Literal["select", "confirm", "reopen"]
+_ORDINAL_RESELECTION_WINDOW_SECONDS = 20.0
+
+
+def _candidate_for_ordinal(
+    draft: BookingDraft,
+    target: BookingTarget,
+    ordinal: str,
+) -> PlaceCandidate | None:
+    index = _CANDIDATE_NUMBER_TOKENS.get(ordinal)
+    candidates = draft.pickup_candidates if target == "pickup" else draft.destination_candidates
+    return candidates[index] if index is not None and index < len(candidates) else None
+
+
+def grounded_candidate_reselection(
+    draft: BookingDraft,
+    user_text: str,
+) -> tuple[OrdinalReselectionAction, BookingTarget, PlaceCandidate | None] | None:
+    """Resolve immediate ordinal corrections without letting the LLM guess the slot."""
+
+    normalized = _normalize_confirmation(user_text)
+    mentions = list(_ORDINAL_MENTION_PATTERN.finditer(normalized))
+    cues = list(_RESELECTION_CUE_PATTERN.finditer(normalized))
+    next_field = draft.next_required_field()
+    active_target: BookingTarget | None = None
+    if next_field == "pickup" and draft.pickup_candidates:
+        active_target = "pickup"
+    elif next_field == "destination" and draft.destination_candidates:
+        active_target = "destination"
+    selection_age = (
+        time.time() - draft.last_selected_candidate_at if draft.last_selected_candidate_at is not None else None
+    )
+    last_selection_is_recent = selection_age is not None and 0 <= selection_age <= _ORDINAL_RESELECTION_WINDOW_SECONDS
+    recent_target = draft.last_selected_candidate_target if last_selection_is_recent else None
+    if cues:
+        mentions_before_cue = any(mention.end() <= cues[0].start() for mention in mentions)
+        preferred_target = active_target if mentions_before_cue else recent_target
+        target = draft.pending_reselection_target or preferred_target or active_target or recent_target
+    else:
+        target = draft.pending_reselection_target or active_target or recent_target
+    if target is None:
+        return None
+
+    if cues:
+        last_cue_end = cues[-1].end()
+        corrected_mentions = [mention for mention in mentions if mention.start() >= last_cue_end]
+        if not corrected_mentions:
+            return "reopen", target, None
+        candidate = _candidate_for_ordinal(
+            draft,
+            target,
+            corrected_mentions[-1].group("ordinal"),
+        )
+        return ("select", target, candidate) if candidate is not None else None
+
+    if not mentions:
+        return None
+    last_ordinal = mentions[-1].group("ordinal")
+    candidate = _candidate_for_ordinal(draft, target, last_ordinal)
+    if candidate is None:
+        return None
+    repeated_last = sum(mention.group("ordinal") == last_ordinal for mention in mentions) >= 2
+    pending_same_candidate = (
+        draft.pending_reselection_target == target and draft.pending_reselection_place_id == candidate.place_id
+    )
+    if repeated_last or pending_same_candidate:
+        return "select", target, candidate
+    if active_target is None or len(mentions) > 1:
+        return "confirm", target, candidate
+    return None
+
+
+def is_candidate_reselection_confirmation(draft: BookingDraft, user_text: str) -> bool:
+    """Confirm only a staged candidate change, never the booking itself."""
+
+    return (
+        draft.pending_reselection_target is not None
+        and draft.pending_reselection_place_id is not None
+        and _normalize_confirmation(user_text) in _RESELECTION_CONFIRMATIONS
+    )
 
 
 def grounded_ordinal_selection(
@@ -1043,6 +1152,104 @@ class BookingTask(AgentTask[BookingOutcome]):
                 change_token=change_token,
             )
 
+    async def _handle_labeled_booking_places(
+        self,
+        userdata: AloSMSessionData,
+        user_text: str,
+    ) -> None:
+        labelled = extract_labeled_booking_places(user_text)
+        if not labelled:
+            return
+
+        await self._force_barge_in_interrupt()
+        async with self._booking_change_transaction_lock:
+            draft = userdata.booking_draft
+            acknowledgements: list[str] = []
+            missing: list[tuple[BookingTarget, str]] = []
+            for target in ("pickup", "destination"):
+                query = labelled.get(target)
+                if query is None:
+                    continue
+                candidates = tuple(await self._places.search_async(query))
+                draft.set_candidates(target, query, list(candidates))
+                if not candidates:
+                    missing.append((target, query))
+                    acknowledgements.append(f"Chưa tìm thấy {_target_label(target)} phù hợp với {query}.")
+                    continue
+                if can_auto_select_place(candidates):
+                    selected = draft.select_place(target, candidates[0].place_id)
+                    acknowledgements.append(f"Đã chọn {_target_label(target)} là {selected.display_name}.")
+                else:
+                    acknowledgements.append(f"Đã ghi nhận {_target_label(target)} là {query}.")
+
+            if missing:
+                target, query = missing[0]
+                userdata.record_failure(
+                    "PLACE_NOT_FOUND",
+                    f"Không tìm thấy {_target_label(target)} phù hợp với {query}.",
+                    fallback_action="repeat_or_text",
+                )
+            else:
+                userdata.clear_failure()
+            acknowledgement = " ".join(acknowledgements)
+            await self._respond_after_grounded_change(
+                userdata,
+                acknowledgement=acknowledgement,
+                followup=_acknowledgement_followup(draft, acknowledgement),
+            )
+
+    async def _handle_candidate_reselection(
+        self,
+        userdata: AloSMSessionData,
+        user_text: str,
+    ) -> None:
+        draft = userdata.booking_draft
+        if is_candidate_reselection_confirmation(draft, user_text):
+            target, selected = draft.confirm_candidate_reselection()
+            acknowledgement = f"Đã đổi {_target_label(target)} thành {selected.display_name}."
+            await self._respond_after_grounded_change(
+                userdata,
+                acknowledgement=acknowledgement,
+                followup=_acknowledgement_followup(draft, acknowledgement),
+            )
+
+        decision = grounded_candidate_reselection(draft, user_text)
+        if decision is None:
+            return
+        action, target, candidate = decision
+        if action == "reopen":
+            draft.reopen_candidate_selection(target)
+            acknowledgement = f"Đã ghi nhận bạn chọn nhầm {_target_label(target)}."
+            await self._respond_after_grounded_change(
+                userdata,
+                acknowledgement=acknowledgement,
+                followup=_acknowledgement_followup(draft, acknowledgement),
+            )
+
+        if candidate is None:
+            return
+        if action == "confirm":
+            current = draft.pickup if target == "pickup" else draft.destination
+            draft.stage_candidate_reselection(target, candidate.place_id)
+            current_name = f" từ {current.display_name}" if current is not None else ""
+            acknowledgement = (
+                f"Bạn muốn đổi {_target_label(target)}{current_name} thành {candidate.display_name} đúng không? "
+                "Vui lòng nói đúng hoặc lặp lại số đó để xác nhận."
+            )
+            await self._respond_after_grounded_change(
+                userdata,
+                acknowledgement=acknowledgement,
+                followup=acknowledgement,
+            )
+
+        selected = draft.select_place(target, candidate.place_id)
+        acknowledgement = f"Đã đổi {_target_label(target)} thành {selected.display_name}."
+        await self._respond_after_grounded_change(
+            userdata,
+            acknowledgement=acknowledgement,
+            followup=_acknowledgement_followup(draft, acknowledgement),
+        )
+
     async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
         userdata = self._session_data or self.session.userdata
         await rewrite_livekit_user_turn(
@@ -1051,20 +1258,23 @@ class BookingTask(AgentTask[BookingOutcome]):
             turn_ctx=turn_ctx,
             new_message=new_message,
         )
+        user_text = new_message.text_content or ""
+        await self._handle_candidate_reselection(userdata, user_text)
 
         # An explicit correction during barge-in always outranks the candidate
         # list that happened to be active when the agent started speaking.
         await self._handle_explicit_booking_change(
             userdata,
-            new_message.text_content or "",
+            user_text,
         )
+        await self._handle_labeled_booking_places(userdata, user_text)
 
         grounded = grounded_ordinal_selection(
             userdata.booking_draft,
-            new_message.text_content or "",
+            user_text,
         ) or grounded_named_place_selection(
             userdata.booking_draft,
-            new_message.text_content or "",
+            user_text,
         )
         if grounded is not None:
             target, candidate = grounded
@@ -1083,7 +1293,7 @@ class BookingTask(AgentTask[BookingOutcome]):
                 followup=followup,
             )
 
-        vehicle_type = grounded_vehicle_selection(userdata.booking_draft, new_message.text_content or "")
+        vehicle_type = grounded_vehicle_selection(userdata.booking_draft, user_text)
         if vehicle_type is not None:
             userdata.booking_draft.set_vehicle_type(vehicle_type)
             logger.info(

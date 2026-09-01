@@ -27,6 +27,11 @@ _SHORT_ORDINAL = re.compile(
     rf"^(?:(?:toi|minh)\s+)?(?:(?:chon|lay)\s+)?(?:(?:phuong\s+an|lua\s+chon)\s+)?"
     rf"(?:(?:so|thu)\s+)?{_ORDINAL_TOKEN}$"
 )
+_REPEATED_SHORT_ORDINAL = re.compile(
+    rf"^(?:(?:toi|minh)\s+)?(?:(?:chon|lay)\s+)?(?:(?:phuong\s+an|lua\s+chon)\s+)?"
+    rf"(?:(?:so|thu)\s+)?(?P<ordinal>{_ORDINAL_TOKEN})"
+    rf"(?:\s+(?:(?:so|thu)\s+)?(?P=ordinal)){{1,4}}$"
+)
 
 REWRITE_INSTRUCTIONS = """Bạn sửa transcript ASR tiếng Việt cho tổng đài đặt xe AloSM.
 
@@ -97,7 +102,7 @@ def is_short_ordinal_selection(text: str) -> bool:
     """Return true only for a self-contained numbered candidate choice."""
 
     folded = _fold(text)
-    return bool(folded and _SHORT_ORDINAL.fullmatch(folded))
+    return bool(folded and (_SHORT_ORDINAL.fullmatch(folded) or _REPEATED_SHORT_ORDINAL.fullmatch(folded)))
 
 
 def _recent_dialogue_pairs(

@@ -115,7 +115,7 @@ def _openai_rewriter(normalized_text: str) -> OpenAITranscriptRewriter:
     )
 
 
-@pytest.mark.parametrize("text", ["2", "số 2", "tôi chọn số 2", "chọn thứ hai"])
+@pytest.mark.parametrize("text", ["2", "số 2", "tôi chọn số 2", "chọn thứ hai", "số bốn, số bốn"])
 def test_short_ordinal_selection_is_deterministic(text: str) -> None:
     assert is_short_ordinal_selection(text) is True
 

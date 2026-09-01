@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -134,6 +135,10 @@ class BookingDraft(BaseModel):
     destination: PlaceCandidate | None = None
     destination_candidates: list[PlaceCandidate] = Field(default_factory=list)
     pending_candidate_target: BookingTarget | None = None
+    last_selected_candidate_target: BookingTarget | None = None
+    last_selected_candidate_at: float | None = None
+    pending_reselection_target: BookingTarget | None = None
+    pending_reselection_place_id: str | None = None
     vehicle_query: str | None = None
     vehicle_type: VehicleType | None = None
     quote: QuoteSnapshot | None = None
@@ -161,6 +166,10 @@ class BookingDraft(BaseModel):
             return "destination" if self.destination_candidates else None
         return None
 
+    def _clear_pending_reselection(self) -> None:
+        self.pending_reselection_target = None
+        self.pending_reselection_place_id = None
+
     def set_candidates(
         self,
         target: BookingTarget,
@@ -177,6 +186,7 @@ class BookingDraft(BaseModel):
             self.destination_candidates = candidates
         self.pending_candidate_target = self._next_pending_candidate_target()
         self._invalidate_quote_and_confirmation()
+        self._clear_pending_reselection()
         self.revision += 1
 
     def select_place(self, target: BookingTarget, place_id: str) -> PlaceCandidate:
@@ -192,8 +202,50 @@ class BookingDraft(BaseModel):
                 self.destination = selected
             self._invalidate_quote_and_confirmation()
             self.revision += 1
+            self.last_selected_candidate_target = target
+            self.last_selected_candidate_at = time.time()
+            self._clear_pending_reselection()
         self.pending_candidate_target = self._next_pending_candidate_target()
         return selected
+
+    def stage_candidate_reselection(self, target: BookingTarget, place_id: str) -> PlaceCandidate:
+        """Hold one uncertain ordinal correction until the user confirms it."""
+
+        candidates = self.pickup_candidates if target == "pickup" else self.destination_candidates
+        selected = next((candidate for candidate in candidates if candidate.place_id == place_id), None)
+        if selected is None:
+            raise ValueError("PLACE_CANDIDATE_NOT_IN_CURRENT_SEARCH")
+        self.pending_reselection_target = target
+        self.pending_reselection_place_id = place_id
+        self._invalidate_quote_and_confirmation()
+        self.revision += 1
+        return selected
+
+    def confirm_candidate_reselection(self) -> tuple[BookingTarget, PlaceCandidate]:
+        """Commit the candidate previously staged by an uncertain ordinal."""
+
+        target = self.pending_reselection_target
+        place_id = self.pending_reselection_place_id
+        if target is None or place_id is None:
+            raise ValueError("PLACE_RESELECTION_NOT_PENDING")
+        return target, self.select_place(target, place_id)
+
+    def reopen_candidate_selection(self, target: BookingTarget) -> None:
+        """Return one selected place to clarification after an explicit mistake cue."""
+
+        candidates = self.pickup_candidates if target == "pickup" else self.destination_candidates
+        if not candidates:
+            raise ValueError("PLACE_CANDIDATES_REQUIRED")
+        if target == "pickup":
+            self.pickup = None
+        else:
+            self.destination = None
+        self.last_selected_candidate_target = target
+        self.last_selected_candidate_at = time.time()
+        self._clear_pending_reselection()
+        self.pending_candidate_target = self._next_pending_candidate_target()
+        self._invalidate_quote_and_confirmation()
+        self.revision += 1
 
     def place_clarification(self, target: BookingTarget) -> dict[str, object] | None:
         """Return one target-owned candidate list without coupling it to the other slot."""

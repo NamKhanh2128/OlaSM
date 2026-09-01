@@ -9,7 +9,7 @@ from livekit.agents import StopResponse, llm
 
 from src.voice_agent.agent import AloSMAgent
 from src.voice_agent.persistence import EphemeralVoiceStateStore
-from src.voice_agent.session_data import AloSMSessionData, HandoffState, PlaceCandidate, QuoteSnapshot
+from src.voice_agent.session_data import AloSMSessionData, BookingDraft, HandoffState, PlaceCandidate, QuoteSnapshot
 from src.voice_agent.tasks import booking as booking_module
 from src.voice_agent.tasks.booking import (
     BookingTask,
@@ -17,7 +17,9 @@ from src.voice_agent.tasks.booking import (
     extract_complete_route,
     extract_contextual_booking_change,
     extract_explicit_booking_change,
+    extract_labeled_booking_places,
     extract_vehicle_type,
+    grounded_candidate_reselection,
     grounded_named_place_selection,
     grounded_ordinal_selection,
     grounded_vehicle_selection,
@@ -1662,3 +1664,168 @@ async def test_booking_task_handoff_tool_delegates_llm_reason_to_call_level_hand
         await BookingTask.request_handoff._func(task, context, "Kết nối tôi với người hỗ trợ về chuyến này")
 
     assert reasons == ["Kết nối tôi với người hỗ trợ về chuyến này"]
+
+
+class _DeterministicBookingSession:
+    def __init__(self, userdata: AloSMSessionData) -> None:
+        self.userdata = userdata
+        self.replies: list[str] = []
+        self.interruptions = 0
+
+    async def interrupt(self, *, force: bool = False) -> None:
+        assert force is True
+        self.interruptions += 1
+
+    def say(self, text: str, *, allow_interruptions: bool) -> None:
+        assert allow_interruptions is True
+        self.replies.append(text)
+
+
+def test_labeled_place_parser_extracts_all_slots_independent_of_current_prompt() -> None:
+    assert extract_labeled_booking_places("Điểm đón là VinUni, điểm đến là Hồ Gươm.") == {
+        "pickup": "VinUni",
+        "destination": "Hồ Gươm",
+    }
+    assert extract_labeled_booking_places("Điểm đến là Hồ Gươm") == {"destination": "Hồ Gươm"}
+
+
+@pytest.mark.asyncio
+async def test_labeled_pickup_and_destination_are_saved_in_one_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    userdata.booking_draft.set_vehicle_type("CAR_4")
+    session = _DeterministicBookingSession(userdata)
+    task = BookingTask(session_data=userdata, state_store=EphemeralVoiceStateStore())
+    task._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
+
+    async def ignore_publish(_: object) -> bool:
+        return True
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", ignore_publish)
+
+    with pytest.raises(StopResponse):
+        await task.on_user_turn_completed(
+            llm.ChatContext.empty(),
+            llm.ChatMessage(
+                role="user",
+                content=["Điểm đón là VinUni, điểm đến là Hồ Gươm."],
+            ),
+        )
+
+    draft = userdata.booking_draft
+    assert draft.pickup_query == "VinUni"
+    assert draft.destination_query == "Hồ Gươm"
+    assert draft.pickup_candidates
+    assert draft.destination_candidates
+    assert draft.pending_candidate_target == "pickup"
+    assert session.interruptions == 1
+    assert "Đã ghi nhận điểm đón là VinUni." in session.replies[0]
+    assert "Đã ghi nhận điểm đến là Hồ Gươm." in session.replies[0]
+    assert "liên quan đến VinUni cho điểm đón" in session.replies[0]
+
+
+def _draft_with_third_destination_selected() -> tuple[BookingDraft, list[PlaceCandidate]]:
+    draft = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    ).booking_draft
+    service = PlaceToolsService()
+    pickup = service.search("VinUni")
+    destination = service.search("Hồ Gươm")
+    draft.set_candidates("pickup", "VinUni", pickup)
+    draft.select_place("pickup", pickup[0].place_id)
+    draft.set_candidates("destination", "Hồ Gươm", destination)
+    draft.select_place("destination", destination[2].place_id)
+    return draft, destination
+
+
+def test_repeated_or_explicitly_corrected_ordinal_selects_latest_number() -> None:
+    draft, destination = _draft_with_third_destination_selected()
+
+    single = grounded_candidate_reselection(draft, "Số bốn")
+    repeated = grounded_candidate_reselection(draft, "Số bốn, số bốn, số bốn")
+    explicit = grounded_candidate_reselection(draft, "Số ba, nhầm, số bốn")
+    interrupted = grounded_candidate_reselection(draft, "Số ba, nhầm, nhầm")
+
+    assert single == ("confirm", "destination", destination[3])
+    assert repeated == ("select", "destination", destination[3])
+    assert explicit == ("select", "destination", destination[3])
+    assert interrupted == ("reopen", "destination", None)
+    draft.last_selected_candidate_at = 0.0
+    assert grounded_candidate_reselection(draft, "Số bốn, số bốn") is None
+
+
+@pytest.mark.parametrize("confirmation", ["Số bốn", "Đúng"])
+@pytest.mark.asyncio
+async def test_single_new_ordinal_is_staged_until_user_confirms(
+    monkeypatch: pytest.MonkeyPatch,
+    confirmation: str,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    service = PlaceToolsService()
+    pickup = service.search("VinUni")
+    destination = service.search("Hồ Gươm")
+    draft = userdata.booking_draft
+    draft.set_candidates("pickup", "VinUni", pickup)
+    draft.select_place("pickup", pickup[0].place_id)
+    draft.set_candidates("destination", "Hồ Gươm", destination)
+    draft.select_place("destination", destination[2].place_id)
+    session = _DeterministicBookingSession(userdata)
+    task = BookingTask(session_data=userdata, state_store=EphemeralVoiceStateStore())
+    task._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
+
+    async def ignore_publish(_: object) -> bool:
+        return True
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", ignore_publish)
+
+    with pytest.raises(StopResponse):
+        await task.on_user_turn_completed(
+            llm.ChatContext.empty(),
+            llm.ChatMessage(role="user", content=["Số bốn"]),
+        )
+
+    assert draft.destination == destination[2]
+    assert draft.pending_reselection_target == "destination"
+    assert draft.pending_reselection_place_id == destination[3].place_id
+    assert "Vui lòng nói đúng hoặc lặp lại số đó" in session.replies[0]
+
+    with pytest.raises(StopResponse):
+        await task.on_user_turn_completed(
+            llm.ChatContext.empty(),
+            llm.ChatMessage(role="user", content=[confirmation]),
+        )
+
+    assert draft.destination == destination[3]
+    assert draft.pending_reselection_target is None
+    assert draft.pending_reselection_place_id is None
+    assert session.replies[-1].startswith(f"Đã đổi điểm đến thành {destination[3].display_name}.")
+
+
+def test_mistake_cue_targets_recent_slot_unless_same_turn_started_active_selection() -> None:
+    draft = BookingDraft()
+    service = PlaceToolsService()
+    pickup = service.search("VinUni")
+    destination = service.search("Hồ Gươm")
+    draft.set_candidates("pickup", "VinUni", pickup)
+    draft.select_place("pickup", pickup[0].place_id)
+    draft.set_candidates("destination", "Hồ Gươm", destination)
+
+    previous_turn_correction = grounded_candidate_reselection(draft, "Nhầm, số hai")
+    same_turn_correction = grounded_candidate_reselection(draft, "Số một, nhầm, số hai")
+
+    assert previous_turn_correction == ("select", "pickup", pickup[1])
+    assert same_turn_correction == ("select", "destination", destination[1])
