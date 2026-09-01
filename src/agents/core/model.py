@@ -1,5 +1,7 @@
+import hashlib
 import json
 import logging
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -71,10 +73,10 @@ class OpenAIConversationModel:
         tools: Sequence[dict[str, Any]],
         exchanges: Sequence[ToolExchange] = (),
     ) -> ModelDecision:
-        # The configured gateway requires an explicit ``none`` when function
-        # tools are used. Omitting the field lets the gateway apply its default
-        # reasoning mode, which rejects Chat Completions tool calling.
         kwargs: dict[str, Any] = {"reasoning_effort": self.reasoning_effort}
+        start = time.perf_counter()
+        usage: dict[str, Any] | None = None
+        preview = json.dumps(context, ensure_ascii=False, separators=(",", ":"))[:500]
         try:
             messages: list[dict[str, Any]] = [
                 {"role": "system", "content": instructions},
@@ -114,6 +116,12 @@ class OpenAIConversationModel:
                 timeout=self.timeout_seconds,
                 **kwargs,
             )
+            usage = getattr(response, "usage", None)
+            if usage is not None and not isinstance(usage, dict):
+                try:
+                    usage = usage.model_dump()  # type: ignore[union-attr]
+                except Exception:
+                    usage = {"raw": str(usage)[:500]}
         except (OpenAIError, TimeoutError, ValueError) as exc:
             logger.warning(
                 "Conversation model request failed: model=%s error_type=%s",
@@ -122,7 +130,32 @@ class OpenAIConversationModel:
             )
             raise ConversationModelError("conversation model failed") from exc
 
-        message = response.choices[0].message
+        latency_ms = (time.perf_counter() - start) * 1000
+        try:
+            from src.backend.observability.langfuse_client import get_langfuse
+
+            client = get_langfuse()
+            if client is not None:
+                trace = client.trace(
+                    name="agent_llm_decide",
+                    metadata={"model": self.model, "latency_ms": round(latency_ms, 2)},
+                    input=hashlib.sha256(preview.encode()).hexdigest()[:16],
+                )
+                gen = trace.generation(
+                    name="agent_llm_decide",
+                    model=self.model,
+                    input=hashlib.sha256(preview.encode()).hexdigest()[:16],
+                    metadata={"latency_ms": round(latency_ms, 2)},
+                    usage=usage if isinstance(usage, dict) else None,
+                )
+                try:
+                    gen.end()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        message = response.choices[0].message  # type: ignore[possibly-undefined]
         if message.tool_calls:
             call = message.tool_calls[0]
             try:

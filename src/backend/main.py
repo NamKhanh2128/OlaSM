@@ -29,6 +29,12 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         print(f"Database schema initialization notice: {exc}")
     yield
+    try:
+        from src.backend.observability.langfuse_client import flush_langfuse
+
+        flush_langfuse()
+    except Exception:
+        pass
     print("Shutting down...")
 
 
