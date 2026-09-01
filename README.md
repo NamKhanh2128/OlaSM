@@ -83,6 +83,19 @@ Transcript mặc định không được lưu; chỉ bật `LIVEKIT_DEBUG_TRANSC
 phiên local đã được phép debug. Logger không ghi raw audio, token, credential, tool
 arguments hoặc provider payload.
 
+### Quality gates trước khi mở PR
+
+Chạy cùng các gate như CI bằng một lệnh:
+
+```bash
+make ci-check
+```
+
+Backend phải đạt tối thiểu 60% line coverage và xuất `coverage.xml`. Frontend phải
+qua unit tests, lint và production build. CI chạy trên mọi push và pull request vào
+`main`/`develop`; staging chỉ deploy commit `develop` sau khi workflow CI của chính
+commit đó thành công.
+
 ## 2. Environment variables
 
 Copy `.env.example` thành `.env`; không commit secret.
