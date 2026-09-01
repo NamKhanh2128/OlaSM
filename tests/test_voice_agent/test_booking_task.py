@@ -1687,6 +1687,62 @@ def test_labeled_place_parser_extracts_all_slots_independent_of_current_prompt()
         "destination": "Hồ Gươm",
     }
     assert extract_labeled_booking_places("Điểm đến là Hồ Gươm") == {"destination": "Hồ Gươm"}
+    assert extract_labeled_booking_places(
+        "Tôi chọn số 1 là điểm đến, là điểm đón, nhưng điểm đến phải là Hồ Gươm."
+    ) == {"destination": "Hồ Gươm"}
+
+
+@pytest.mark.asyncio
+async def test_ordinal_pickup_and_destination_correction_update_draft_in_same_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    draft = userdata.booking_draft
+    seed_complete_booking_turn(
+        draft,
+        PlaceToolsService(),
+        "Cho tôi xe 4 chỗ đi từ VinUni tới Long Biên.",
+    )
+    pickup_candidates = list(draft.pickup_candidates)
+    session = _DeterministicBookingSession(userdata)
+    task = BookingTask(session_data=userdata, state_store=EphemeralVoiceStateStore())
+    task._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
+
+    async def ignore_publish(_: object) -> bool:
+        return True
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", ignore_publish)
+
+    with pytest.raises(StopResponse):
+        await task.on_user_turn_completed(
+            llm.ChatContext.empty(),
+            llm.ChatMessage(
+                role="user",
+                content=[
+                    "Tôi chọn số 1 là điểm đến, là điểm đón, "
+                    "nhưng điểm đến phải là Hồ Gươm."
+                ],
+            ),
+        )
+
+    assert draft.pickup == pickup_candidates[0]
+    assert draft.pickup_query == "VinUni"
+    assert draft.destination is None
+    assert draft.destination_query == "Hồ Gươm"
+    assert draft.destination_candidates == PlaceToolsService().search("Hồ Gươm")
+    assert draft.slot_labels()["pickup"] == pickup_candidates[0].display_name
+    assert draft.slot_labels()["destination"] == "Hồ Gươm"
+    assert "nhưng" not in draft.slot_labels().values()
+    assert "phải là Hồ Gươm" not in draft.slot_labels().values()
+    assert session.replies[0].startswith(
+        f"Đã chọn điểm đón là {pickup_candidates[0].display_name}. "
+        "Đã ghi nhận điểm đến là Hồ Gươm."
+    )
 
 
 @pytest.mark.asyncio

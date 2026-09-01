@@ -213,6 +213,42 @@ _LABELED_PLACE_PATTERN = re.compile(
     rf"(?P<value>[^.!?;]{{1,240}}?)(?=(?:\s*,\s*)?{_LABELED_PLACE_FIELD}\b|[.!?;]|$)",
     re.IGNORECASE,
 )
+_LABELED_PLACE_VALUE_PREFIXES = (
+    ("phải", "là"),
+    ("sẽ", "là"),
+    ("là",),
+    ("ở",),
+    ("tại",),
+    ("thành",),
+    ("sang",),
+)
+_INVALID_LABELED_PLACE_VALUES = frozenset(
+    {
+        "la",
+        "nhung",
+        "phai",
+        "phai la",
+        "diem don",
+        "diem den",
+    }
+)
+
+
+def _clean_labeled_place_value(value: str) -> str:
+    """Keep only a meaningful labelled place, never discourse/linker tokens."""
+
+    raw_tokens = value.strip(" ,:").split()
+    folded_tokens = tuple(_normalize_confirmation(token) for token in raw_tokens)
+    for prefix in _LABELED_PLACE_VALUE_PREFIXES:
+        normalized_prefix = tuple(_normalize_confirmation(token) for token in prefix)
+        if _tokens_start_with(folded_tokens, 0, normalized_prefix):
+            raw_tokens = raw_tokens[len(prefix) :]
+            break
+    place = _trim_trailing_non_entity_clause(" ".join(raw_tokens))
+    normalized = _normalize_confirmation(place)
+    if not normalized or normalized in _INVALID_LABELED_PLACE_VALUES:
+        return ""
+    return place[:200]
 
 
 def extract_labeled_booking_places(value: str) -> dict[BookingTarget, str]:
@@ -223,7 +259,7 @@ def extract_labeled_booking_places(value: str) -> dict[BookingTarget, str]:
     for match in _LABELED_PLACE_PATTERN.finditer(compact):
         label = " ".join(match.group("label").casefold().split())
         target: BookingTarget = "pickup" if label in {"điểm đón", "điểm đi", "nơi đón"} else "destination"
-        place = match.group("value").strip(" ,:")[:200]
+        place = _clean_labeled_place_value(match.group("value"))
         if place:
             places[target] = place
     return places
@@ -627,6 +663,10 @@ _SHORT_CANDIDATE_SELECTION = re.compile(
     r"^(?:(?:toi|minh)\s+)?(?:(?:chon|lay)\s+)?(?:(?:phuong\s+an|lua\s+chon)\s+)?"
     r"(?:(?:so|thu)\s+)?(1|2|3|4|5|mot|hai|ba|bon|tu|nam|nhat)$"
 )
+_LEADING_CANDIDATE_SELECTION = re.compile(
+    r"^(?:(?:toi|minh)\s+)?(?:(?:chon|lay)\s+)?(?:(?:phuong\s+an|lua\s+chon)\s+)?"
+    r"(?:(?:so|thu)\s+)?(?P<ordinal>1|2|3|4|5|mot|hai|ba|bon|tu|nam|nhat)\b"
+)
 
 _ORDINAL_MENTION_PATTERN = re.compile(r"\b(?:(?:so|thu)\s+)?(?P<ordinal>1|2|3|4|5|mot|hai|ba|bon|tu|nam|nhat)\b")
 _RESELECTION_CUE_PATTERN = re.compile(r"\b(?:nham|chon lai|doi lai)\b")
@@ -732,6 +772,29 @@ def grounded_ordinal_selection(
     if index >= len(candidates):
         return None
     return target, candidates[index]
+
+
+def grounded_ordinal_selection_in_labeled_turn(
+    draft: BookingDraft,
+    user_text: str,
+    labelled_places: dict[BookingTarget, str],
+) -> tuple[BookingTarget, PlaceCandidate] | None:
+    """Resolve a leading ordinal before applying other explicitly labelled slots.
+
+    This supports one self-correcting turn such as ``chọn số 1 là điểm đón,
+    nhưng điểm đến phải là Hồ Gươm`` without allowing arbitrary long speech to
+    take ownership of the active candidate list.
+    """
+
+    if not labelled_places:
+        return None
+    match = _LEADING_CANDIDATE_SELECTION.match(_normalize_confirmation(user_text))
+    next_field = draft.next_required_field()
+    target: BookingTarget | None = next_field if next_field in {"pickup", "destination"} else None
+    if match is None or target is None:
+        return None
+    candidate = _candidate_for_ordinal(draft, target, match.group("ordinal"))
+    return (target, candidate) if candidate is not None else None
 
 
 def _candidate_surfaces(draft: BookingDraft, target: BookingTarget, candidate: PlaceCandidate) -> set[str]:
@@ -1166,6 +1229,17 @@ class BookingTask(AgentTask[BookingOutcome]):
             draft = userdata.booking_draft
             acknowledgements: list[str] = []
             missing: list[tuple[BookingTarget, str]] = []
+            ordinal_selection = grounded_ordinal_selection_in_labeled_turn(
+                draft,
+                user_text,
+                labelled,
+            )
+            if ordinal_selection is not None:
+                ordinal_target, ordinal_candidate = ordinal_selection
+                selected = draft.select_place(ordinal_target, ordinal_candidate.place_id)
+                acknowledgements.append(
+                    f"Đã chọn {_target_label(ordinal_target)} là {selected.display_name}."
+                )
             for target in ("pickup", "destination"):
                 query = labelled.get(target)
                 if query is None:
