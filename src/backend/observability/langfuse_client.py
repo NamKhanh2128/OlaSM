@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any
@@ -18,6 +21,7 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.trace import Span, Status, StatusCode
 
 logger = logging.getLogger(__name__)
 
@@ -117,10 +121,101 @@ def get_langfuse_provider() -> TracerProvider | None:
     return _provider
 
 
-def get_langfuse() -> None:
-    """Temporary compatibility shim for the pre-OTLP Core Agent wrapper."""
+@dataclass
+class LangfuseGeneration:
+    """Small OTEL generation adapter with an explicitly privacy-safe surface."""
 
-    return None
+    span: Span
+
+    def set_usage(self, usage: Any) -> None:
+        try:
+            payload = usage if isinstance(usage, dict) else getattr(usage, "model_dump", lambda: {})()
+            if not isinstance(payload, dict):
+                return
+            input_tokens = payload.get("prompt_tokens", payload.get("input_tokens"))
+            output_tokens = payload.get("completion_tokens", payload.get("output_tokens"))
+            total_tokens = payload.get("total_tokens")
+            details = {
+                key: int(value)
+                for key, value in {
+                    "input": input_tokens,
+                    "output": output_tokens,
+                    "total": total_tokens,
+                }.items()
+                if isinstance(value, int | float) and value >= 0
+            }
+            if not details:
+                return
+            self.span.set_attribute(
+                "langfuse.observation.usage_details",
+                json.dumps(details, separators=(",", ":")),
+            )
+            if "input" in details:
+                self.span.set_attribute("gen_ai.usage.input_tokens", details["input"])
+            if "output" in details:
+                self.span.set_attribute("gen_ai.usage.output_tokens", details["output"])
+        except Exception as exc:
+            logger.warning("Langfuse usage mapping skipped error_type=%s", type(exc).__name__)
+
+    def set_output(self, value: str | None, *, outcome: str, tool_name: str | None = None) -> None:
+        self.span.set_attribute(
+            "langfuse.observation.output",
+            json.dumps({"fingerprint": privacy_fingerprint(value)}, separators=(",", ":")),
+        )
+        self.span.set_attribute("langfuse.observation.metadata.outcome", outcome)
+        if tool_name:
+            self.span.set_attribute("langfuse.observation.metadata.tool_name", tool_name)
+
+    def set_error(self, error: BaseException) -> None:
+        error_type = type(error).__name__
+        self.span.set_attribute("langfuse.observation.level", "ERROR")
+        self.span.set_attribute("langfuse.observation.status_message", error_type)
+        self.span.set_attribute("langfuse.observation.metadata.error_type", error_type)
+        self.span.set_status(Status(StatusCode.ERROR, error_type))
+
+
+@contextmanager
+def langfuse_generation(
+    *,
+    name: str,
+    model: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
+    turn_id: str | None = None,
+    prompt_preview: str = "",
+) -> Iterator[LangfuseGeneration | None]:
+    """Trace the real provider-call duration and propagate safe correlations."""
+
+    tracer = get_langfuse_tracer("alosm.generations")
+    if tracer is None:
+        yield None
+        return
+
+    attributes: dict[str, str] = {
+        "langfuse.trace.name": name,
+        "langfuse.observation.type": "generation",
+        "langfuse.observation.model.name": model,
+        "gen_ai.operation.name": "chat",
+        "gen_ai.request.model": model,
+        "langfuse.observation.input": json.dumps(
+            {"fingerprint": privacy_fingerprint(prompt_preview)},
+            separators=(",", ":"),
+        ),
+    }
+    if session_hash := privacy_hash(session_id):
+        attributes["langfuse.session.id"] = session_hash
+    if user_hash := privacy_hash(user_id):
+        attributes["langfuse.user.id"] = user_hash
+    if turn_hash := privacy_hash(turn_id):
+        attributes["langfuse.observation.metadata.turn_id"] = turn_hash
+
+    with tracer.start_as_current_span(name, attributes=attributes, record_exception=False) as span:
+        generation = LangfuseGeneration(span)
+        try:
+            yield generation
+        except BaseException as exc:
+            generation.set_error(exc)
+            raise
 
 
 def flush_langfuse(timeout_seconds: float = 5.0) -> bool:

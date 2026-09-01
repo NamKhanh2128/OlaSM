@@ -84,6 +84,8 @@ class ModelDrivenAgent:
                     context=session.public_context(),
                     tools=self.registry.definitions(session),
                     exchanges=exchanges,
+                    session_id=state.session_id,
+                    turn_id=agent_input.turn_id,
                 )
             except ConversationModelError:
                 return self._handle_model_failure(session)
