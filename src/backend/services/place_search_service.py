@@ -199,7 +199,7 @@ class PlaceSearchService:
             # Keep ambiguous generic words unresolved so the agent asks for a
             # name/address instead of auto-selecting an unrelated landmark.
             return []
-        
+
         # For single-word queries, only allow exact matches (canonical names or aliases).
         # Reject substring matches that might correspond to filler/discourse words.
         if len(normalized_query.split()) == 1 and not alias_match:
@@ -209,7 +209,7 @@ class PlaceSearchService:
                 # This means we found matches via substring, but not via exact name.
                 # Filter to exact canonical matches only.
                 matches = [name for name in _load_place_names() if normalized_query == _normalize(name)]
-        
+
         if not matches:
             fuzzy_match = _fuzzy_canonical_match(normalized_query)
             matches = [fuzzy_match] if fuzzy_match else []
