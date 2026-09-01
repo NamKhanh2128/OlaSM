@@ -691,6 +691,26 @@ def test_explicit_booking_change_unknown_field_mapping_fails_safe(
     assert extract_explicit_booking_change("Đổi điểm đón sang Times City") is None
 
 
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("Đổi điểm đón thành VinUni và gọi cho tôi", ("pickup", "VinUni")),
+        ("Đổi điểm đến sang Hồ Gươm rồi nhắn biển số nhé", ("destination", "Hồ Gươm")),
+        ("Đổi điểm đón thành Times City. Gọi cho tôi sau", ("pickup", "Times City")),
+        ("Đổi loại xe sang xe bảy chỗ giúp tôi nhé", ("vehicle_type", "xe bảy chỗ")),
+        (
+            "Đổi điểm đến thành Viện Khoa học và Công nghệ Việt Nam",
+            ("destination", "Viện Khoa học và Công nghệ Việt Nam"),
+        ),
+    ],
+)
+def test_explicit_booking_change_keeps_only_the_booking_entity_span(
+    message: str,
+    expected: tuple[str, str],
+) -> None:
+    assert extract_explicit_booking_change(message) == expected
+
+
 @pytest.mark.asyncio
 async def test_destination_barge_in_interrupts_pickup_prompt_and_focuses_new_list(
     monkeypatch: pytest.MonkeyPatch,
@@ -735,7 +755,7 @@ async def test_destination_barge_in_interrupts_pickup_prompt_and_focuses_new_lis
             llm.ChatContext.empty(),
             llm.ChatMessage(
                 role="user",
-                content=["Tôi chọn số 2 nhưng đổi điểm đến thành Long Biên"],
+                content=["Tôi chọn số 2 nhưng đổi điểm đến thành Long Biên và gọi cho tôi"],
             ),
         )
 

@@ -173,7 +173,11 @@ _CHANGE_FIELD = (
     r"(?P<field>điểm\s+đón|điểm\s+đi|nơi\s+đón|"
     r"điểm\s+đến|nơi\s+đến|đích\s+đến|loại\s+xe)"
 )
-_CHANGE_VALUE = r"(?:là|thành|sang|qua)?\s*(?P<value>.+?)\s*[.!?;]*$"
+_CHANGE_VALUE = (
+    r"(?:là|thành|sang|qua)?\s*"
+    r"(?P<value>[^.!?;]{1,400})"
+    r"(?:[.!?;][^\n]{0,400})?$"
+)
 _CHANGE_PATTERNS = (
     re.compile(
         rf"\b{_CHANGE_CUE}\s+(?:(?:cho|giúp)\s+(?:tôi|mình)\s+)?{_CHANGE_FIELD}\s*{_CHANGE_VALUE}",
@@ -193,6 +197,76 @@ def _normalize_change_field(value: str) -> str:
     return " ".join(normalized.split())
 
 
+_TRAILING_CLAUSE_SEPARATORS = (
+    " và sau đó ",
+    " sau đó ",
+    " và rồi ",
+    " rồi ",
+    " và ",
+    ", ",
+)
+_TRAILING_ACTION_PREFIXES = (
+    "gọi",
+    "nhắn",
+    "báo",
+    "liên hệ",
+    "đặt xe",
+    "đặt chuyến",
+    "xác nhận",
+    "tính giá",
+    "ước tính",
+    "cho tôi biết",
+    "giúp tôi",
+    "giúp mình",
+    "nói",
+    "đọc",
+)
+_TRAILING_POLITE_SUFFIXES = (
+    "được không",
+    "giúp tôi",
+    "giúp mình",
+    "nhé",
+    "nha",
+    "ạ",
+)
+
+
+def _starts_with_phrase(value: str, phrase: str) -> bool:
+    return value == phrase or value.startswith(f"{phrase} ")
+
+
+def _trim_trailing_non_entity_clause(value: str) -> str:
+    """Keep the entity span while dropping explicit follow-up action clauses."""
+
+    entity = " ".join(unicodedata.normalize("NFC", value).split()).strip(" ,.!?;:")
+    folded = entity.casefold()
+    cut_at = len(entity)
+    for separator in _TRAILING_CLAUSE_SEPARATORS:
+        search_from = 0
+        while (position := folded.find(separator, search_from)) >= 0:
+            tail = folded[position + len(separator) :].lstrip(" ,")
+            if any(_starts_with_phrase(tail, action) for action in _TRAILING_ACTION_PREFIXES):
+                cut_at = min(cut_at, position)
+                break
+            search_from = position + len(separator)
+    entity = entity[:cut_at].rstrip(" ,")
+
+    while entity:
+        folded = entity.casefold()
+        suffix = next(
+            (
+                candidate
+                for candidate in _TRAILING_POLITE_SUFFIXES
+                if folded == candidate or folded.endswith(f" {candidate}")
+            ),
+            None,
+        )
+        if suffix is None:
+            break
+        entity = entity[: -len(suffix)].rstrip(" ,")
+    return entity
+
+
 _CHANGE_FIELD_TARGETS: dict[str, BookingField] = {
     "điểm đón": "pickup",
     "điểm đi": "pickup",
@@ -207,7 +281,7 @@ _CHANGE_FIELD_TARGETS: dict[str, BookingField] = {
 def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | None:
     """Extract one explicit slot replacement without correcting the ASR text."""
 
-    compact = " ".join(unicodedata.normalize("NFC", value).split())
+    compact = " ".join(unicodedata.normalize("NFC", value).split())[:1_000]
     for pattern in _CHANGE_PATTERNS:
         match = pattern.search(compact)
         if match is None:
@@ -215,7 +289,7 @@ def extract_explicit_booking_change(value: str) -> tuple[BookingField, str] | No
         field = _CHANGE_FIELD_TARGETS.get(_normalize_change_field(match.group("field")))
         if field is None:
             continue
-        replacement = match.group("value").strip(" ,.!?;:")[:200]
+        replacement = _trim_trailing_non_entity_clause(match.group("value"))[:200]
         if replacement:
             return field, replacement
     return None
