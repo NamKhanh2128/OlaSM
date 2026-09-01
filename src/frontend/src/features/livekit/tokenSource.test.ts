@@ -1,14 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockEndpoint } = vi.hoisted(() => ({
-  mockEndpoint: vi.fn(),
-}));
+const mockEndpoint = vi.hoisted(() => vi.fn());
 
 vi.mock("livekit-client", () => ({
   TokenSource: {
     endpoint: mockEndpoint,
   },
-}));
+}), { esmock: true });
 
 import { createAloSMTokenSource } from "./tokenSource";
 
