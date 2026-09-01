@@ -196,65 +196,76 @@ def _normalize_change_field(value: str) -> str:
     return " ".join(normalized.split())
 
 
-_TRAILING_CLAUSE_SEPARATORS = (
-    " và sau đó ",
-    " sau đó ",
-    " và rồi ",
-    " rồi ",
-    " và ",
-    ", ",
+_TRAILING_CONNECTOR_TOKEN_SEQUENCES = (
+    ("và", "sau", "đó"),
+    ("sau", "đó"),
+    ("và", "rồi"),
+    ("rồi",),
+    ("và",),
 )
-_TRAILING_ACTION_CLAUSE_PREFIXES = (
-    "gọi cho tôi",
-    "gọi giúp tôi",
-    "gọi lại cho tôi",
-    "nhắn cho tôi",
-    "nhắn giúp tôi",
-    "nhắn biển số",
-    "báo cho tôi",
-    "báo lại cho tôi",
-    "liên hệ với tôi",
-    "đặt xe",
-    "đặt chuyến",
-    "xác nhận chuyến",
-    "xác nhận giúp tôi",
-    "tính giá",
-    "ước tính giá",
-    "cho tôi biết",
-    "giúp tôi",
-    "giúp mình",
-    "nói lại",
-    "đọc lại",
+_TRAILING_ACTION_TOKEN_PREFIXES = (
+    ("gọi", "cho", "tôi"),
+    ("gọi", "giúp", "tôi"),
+    ("gọi", "lại", "cho", "tôi"),
+    ("nhắn", "cho", "tôi"),
+    ("nhắn", "giúp", "tôi"),
+    ("nhắn", "biển", "số"),
+    ("báo", "cho", "tôi"),
+    ("báo", "lại", "cho", "tôi"),
+    ("liên", "hệ", "với", "tôi"),
+    ("đặt", "xe"),
+    ("đặt", "chuyến"),
+    ("xác", "nhận", "chuyến"),
+    ("xác", "nhận", "giúp", "tôi"),
+    ("tính", "giá"),
+    ("ước", "tính", "giá"),
+    ("cho", "tôi", "biết"),
+    ("giúp", "tôi"),
+    ("giúp", "mình"),
+    ("nói", "lại"),
+    ("đọc", "lại"),
 )
-_TRAILING_POLITE_SUFFIXES = (
-    "được không",
-    "giúp tôi",
-    "giúp mình",
-    "nhé",
-    "nha",
-    "ạ",
+_TRAILING_POLITE_SUFFIX_TOKEN_SEQUENCES = (
+    ("được", "không"),
+    ("giúp", "tôi"),
+    ("giúp", "mình"),
+    ("nhé",),
+    ("nha",),
+    ("ạ",),
 )
-_TRAILING_REMARK_PREFIXES = (
-    "nhưng",
-    "tuy nhiên",
-    "tiện thể",
-    "ngoài ra",
-    "tôi muốn",
-    "tôi cần",
-    "tôi đang",
-    "mình muốn",
-    "mình cần",
-    "bạn hãy",
-    "bạn gọi",
-    "trời đang",
-    "trời mưa",
+_TRAILING_REMARK_TOKEN_PREFIXES = (
+    ("nhưng",),
+    ("tuy", "nhiên"),
+    ("tiện", "thể"),
+    ("ngoài", "ra"),
+    ("tôi", "muốn"),
+    ("tôi", "cần"),
+    ("tôi", "đang"),
+    ("mình", "muốn"),
+    ("mình", "cần"),
+    ("bạn", "hãy"),
+    ("bạn", "gọi"),
+    ("trời", "đang"),
+    ("trời", "mưa"),
 )
 _MAX_CHANGE_ENTITY_CHARS = 200
 _MAX_CHANGE_ENTITY_TOKENS = 24
 
 
-def _starts_with_phrase(value: str, phrase: str) -> bool:
-    return value == phrase or value.startswith(f"{phrase} ")
+def _tokens_start_with(
+    tokens: tuple[str, ...],
+    start: int,
+    prefix: tuple[str, ...],
+) -> bool:
+    return tokens[start : start + len(prefix)] == prefix
+
+
+def _tokens_start_with_any(
+    tokens: tuple[str, ...],
+    start: int,
+    prefixes: tuple[tuple[str, ...], ...],
+) -> bool:
+    return any(_tokens_start_with(tokens, start, prefix) for prefix in prefixes)
 
 
 def _consume_change_link(value: str) -> str:
@@ -271,46 +282,67 @@ def _consume_change_link(value: str) -> str:
 
 
 def _trim_trailing_non_entity_clause(value: str) -> str:
-    """Keep the entity span while dropping explicit follow-up action clauses."""
+    """Extract one bounded entity span with a single token scan."""
 
     entity = " ".join(unicodedata.normalize("NFC", value).split()).strip(" ,.!?;:")
-    punctuation_positions = [entity.find(mark) for mark in ".!?;" if entity.find(mark) >= 0]
-    if punctuation_positions:
-        entity = entity[: min(punctuation_positions)].rstrip(" ,")
-    folded = entity.casefold()
-    cut_at = len(entity)
-    for separator in _TRAILING_CLAUSE_SEPARATORS:
-        search_from = 0
-        while (position := folded.find(separator, search_from)) >= 0:
-            tail = folded[position + len(separator) :].lstrip(" ,")
-            if any(
-                _starts_with_phrase(tail, action)
-                for action in _TRAILING_ACTION_CLAUSE_PREFIXES
-            ):
-                cut_at = min(cut_at, position)
-                break
-            search_from = position + len(separator)
-    for prefix in _TRAILING_REMARK_PREFIXES:
-        marker = f" {prefix} "
-        position = folded.find(marker)
-        if position >= 0:
-            cut_at = min(cut_at, position)
-    entity = entity[:cut_at].rstrip(" ,")
+    sentence_end = next(
+        (index for index, character in enumerate(entity) if character in ".!?;"),
+        len(entity),
+    )
+    raw_tokens = entity[:sentence_end].rstrip(" ,").split()
+    folded_tokens = tuple(token.casefold().strip(" ,:") for token in raw_tokens)
+    cut_at = len(raw_tokens)
 
-    while entity:
-        folded = entity.casefold()
-        suffix = next(
+    for index in range(len(folded_tokens)):
+        if index > 0 and _tokens_start_with_any(
+            folded_tokens,
+            index,
+            _TRAILING_REMARK_TOKEN_PREFIXES,
+        ):
+            cut_at = index
+            break
+        if raw_tokens[index].endswith(",") and _tokens_start_with_any(
+            folded_tokens,
+            index + 1,
+            _TRAILING_ACTION_TOKEN_PREFIXES,
+        ):
+            cut_at = index + 1
+            break
+        connector_length = next(
             (
-                candidate
-                for candidate in _TRAILING_POLITE_SUFFIXES
-                if folded == candidate or folded.endswith(f" {candidate}")
+                len(connector)
+                for connector in _TRAILING_CONNECTOR_TOKEN_SEQUENCES
+                if _tokens_start_with(folded_tokens, index, connector)
             ),
             None,
         )
-        if suffix is None:
+        if connector_length is not None and _tokens_start_with_any(
+            folded_tokens,
+            index + connector_length,
+            _TRAILING_ACTION_TOKEN_PREFIXES,
+        ):
+            cut_at = index
             break
-        entity = entity[: -len(suffix)].rstrip(" ,")
-    if len(entity) > _MAX_CHANGE_ENTITY_CHARS or len(entity.split()) > _MAX_CHANGE_ENTITY_TOKENS:
+
+    raw_tokens = raw_tokens[:cut_at]
+    folded_tokens = folded_tokens[:cut_at]
+    while folded_tokens:
+        suffix_length = next(
+            (
+                len(suffix)
+                for suffix in _TRAILING_POLITE_SUFFIX_TOKEN_SEQUENCES
+                if len(folded_tokens) >= len(suffix)
+                and folded_tokens[-len(suffix) :] == suffix
+            ),
+            None,
+        )
+        if suffix_length is None:
+            break
+        raw_tokens = raw_tokens[:-suffix_length]
+        folded_tokens = folded_tokens[:-suffix_length]
+
+    entity = " ".join(raw_tokens).strip(" ,")
+    if len(entity) > _MAX_CHANGE_ENTITY_CHARS or len(raw_tokens) > _MAX_CHANGE_ENTITY_TOKENS:
         return ""
     return entity
 
@@ -730,7 +762,6 @@ class BookingTask(AgentTask[BookingOutcome]):
         field, replacement = change
         change_token = await self._next_booking_change_token(field)
         await self._force_barge_in_interrupt()
-        draft = userdata.booking_draft
         logger.info(
             "Booking barge-in change detected session=%s field=%s replacement=%r",
             userdata.app_session_id,
@@ -741,6 +772,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         if field == "vehicle_type":
             async with self._booking_change_commit_lock:
                 self._raise_if_stale_booking_change(change_token)
+                draft = userdata.booking_draft
                 vehicle_type = extract_vehicle_type(replacement)
                 if vehicle_type is None:
                     draft.mark_vehicle_needs_clarification(replacement)
@@ -765,10 +797,11 @@ class BookingTask(AgentTask[BookingOutcome]):
             return
 
         target: BookingTarget = "pickup" if field == "pickup" else "destination"
-        candidates = await self._places.search_async(replacement)
+        candidates = tuple(await self._places.search_async(replacement))
         async with self._booking_change_commit_lock:
             self._raise_if_stale_booking_change(change_token)
-            draft.set_candidates(target, replacement, candidates, prioritize=True)
+            draft = userdata.booking_draft
+            draft.set_candidates(target, replacement, list(candidates), prioritize=True)
             acknowledgement = f"Đã cập nhật {_target_label(target)} thành {replacement}."
             if not candidates:
                 userdata.record_failure(

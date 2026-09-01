@@ -910,6 +910,83 @@ async def test_same_field_generation_tokens_are_unique_under_concurrency() -> No
 
 
 @pytest.mark.asyncio
+async def test_different_field_searches_commit_serially_without_losing_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    both_searches_started = asyncio.Event()
+    release_searches = asyncio.Event()
+    started_queries: set[str] = set()
+
+    class _Places:
+        async def search_async(self, query: str) -> list[PlaceCandidate]:
+            started_queries.add(query)
+            if len(started_queries) == 2:
+                both_searches_started.set()
+            await release_searches.wait()
+            return [
+                PlaceCandidate(
+                    place_id=f"{query}-one",
+                    display_name=f"{query} một",
+                    address=query,
+                    provider="local_landmark_mock",
+                ),
+                PlaceCandidate(
+                    place_id=f"{query}-two",
+                    display_name=f"{query} hai",
+                    address=query,
+                    provider="local_landmark_mock",
+                ),
+            ]
+
+    class _Session:
+        def __init__(self) -> None:
+            self.userdata = userdata
+
+        async def interrupt(self, *, force: bool = False) -> None:
+            assert force is True
+
+        def say(self, _: str, *, allow_interruptions: bool) -> None:
+            assert allow_interruptions is True
+
+    async def ignore_publish(_: object) -> bool:
+        return True
+
+    monkeypatch.setattr(booking_module, "publish_booking_state", ignore_publish)
+    task = BookingTask(
+        places=_Places(),  # type: ignore[arg-type]
+        session_data=userdata,
+        state_store=EphemeralVoiceStateStore(),
+    )
+    task._activity = SimpleNamespace(session=_Session())  # type: ignore[assignment]
+
+    pickup_change = asyncio.create_task(
+        task._handle_explicit_booking_change(userdata, "Đổi điểm đón thành VinUni")
+    )
+    destination_change = asyncio.create_task(
+        task._handle_explicit_booking_change(userdata, "Đổi điểm đến thành Hồ Gươm")
+    )
+    await asyncio.wait_for(both_searches_started.wait(), timeout=1)
+    assert userdata.booking_draft.pickup_query is None
+    assert userdata.booking_draft.destination_query is None
+
+    release_searches.set()
+    results = await asyncio.wait_for(
+        asyncio.gather(pickup_change, destination_change, return_exceptions=True),
+        timeout=2,
+    )
+
+    assert all(isinstance(result, StopResponse) for result in results)
+    assert userdata.booking_draft.pickup_query == "VinUni"
+    assert userdata.booking_draft.destination_query == "Hồ Gươm"
+
+
+@pytest.mark.asyncio
 async def test_stale_vehicle_change_cannot_mutate_or_speak_after_newer_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
