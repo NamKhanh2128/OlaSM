@@ -74,6 +74,9 @@ def test_agent_exposes_native_booking_entrypoint_and_authoritative_status_tool()
         "get_booking_status",
         "search_knowledge",
         "get_vehicle_options",
+        "send_driver_request",
+        "track_booking",
+        "finish_customer_service",
     }
 
 
@@ -287,6 +290,8 @@ async def test_repeated_booking_request_does_not_reenter_completed_booking() -> 
 
     assert "book-existing" in result
     assert "đã được đặt thành công" in result
+    assert "1. Chuyển yêu cầu thêm cho tài xế" in result
+    assert userdata.post_booking_support is not None
 
 
 @pytest.mark.asyncio
@@ -352,6 +357,44 @@ async def test_cancel_booking_uses_llm_decision_before_backend_call(
 
     assert backend.calls == [("book-1", "session:cancel_booking:book-1", "user")]
     assert '"cancelled": true' in second
+    assert userdata.lifecycle_status == "cancelled"
+    assert userdata.post_booking_support is not None
+    assert userdata.post_booking_support.stage == "restart_requested"
+
+
+@pytest.mark.asyncio
+async def test_post_booking_tools_persist_driver_request_tracking_and_rating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    booking = booking_module.BookingResult(
+        booking_id="book-support",
+        status="SEARCHING_DRIVER",
+        estimated_fare=100_000,
+        currency="VND",
+        eta_minutes=10,
+    )
+    userdata.booking_draft.booking = booking
+    userdata.post_booking_support = booking_module.PostBookingSupportState.for_booking(booking)
+    agent = AloSMAgent(session_data=userdata)
+    agent._activity = SimpleNamespace(session=SimpleNamespace(userdata=userdata))  # type: ignore[assignment]
+    monkeypatch.setattr("src.voice_agent.agent.publish_booking_state", _noop_publish)
+
+    sent = await agent.send_driver_request("  Gọi cho tôi khi tới. ")
+    tracked = await agent.track_booking(3)
+    finished = await agent.finish_customer_service()
+
+    assert '"sent": true' in sent
+    assert userdata.post_booking_support.last_driver_request == "Gọi cho tôi khi tới"
+    assert '"eta_minutes": 7' in tracked
+    assert '"distance_to_pickup_km": 2.5' in tracked
+    assert '"rating_requested": true' in finished
+    assert userdata.post_booking_support.stage == "rating_requested"
 
 
 async def _noop_publish(*_: object) -> None:

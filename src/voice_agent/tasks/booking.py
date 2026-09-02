@@ -28,8 +28,10 @@ from src.voice_agent.session_data import (
     BookingResult,
     BookingTarget,
     PlaceCandidate,
+    PostBookingSupportState,
     QuoteSnapshot,
     VehicleType,
+    post_booking_menu_message,
     vehicle_spoken_label,
 )
 from src.voice_agent.state_sync import publish_booking_state
@@ -2002,11 +2004,12 @@ class BookingTask(AgentTask[BookingOutcome]):
                 await self._commit(context)
                 raise ToolError("BOOKING_RESULT_UNKNOWN") from exc
             context.userdata.clear_failure()
+            context.userdata.post_booking_support = PostBookingSupportState.for_booking(booking)
             await self._commit(context)
         outcome = BookingOutcome(
             status="created",
             booking=booking,
-            message=f"Đặt chuyến thành công. Xe dự kiến tới sau {booking.eta_minutes} phút.",
+            message=post_booking_menu_message(booking.booking_id),
         )
         if not self.done():
             self.complete(outcome)

@@ -10,7 +10,12 @@ from src.backend.services.knowledge_service import KnowledgeService
 from src.backend.services.pricing_service import PricingService
 from src.voice_agent.persistence import EphemeralVoiceStateStore, VoiceStateConflictError, VoiceStateStore
 from src.voice_agent.safety import SafetyClassifier
-from src.voice_agent.session_data import AloSMSessionData, HandoffState
+from src.voice_agent.session_data import (
+    AloSMSessionData,
+    HandoffState,
+    PostBookingSupportState,
+    post_booking_menu_message,
+)
 from src.voice_agent.state_sync import publish_booking_state
 from src.voice_agent.tasks import BookingTask
 from src.voice_agent.tasks.booking import seed_complete_booking_turn
@@ -69,6 +74,12 @@ class AloSMAgent(Agent):
                 "Mọi câu hỏi về trạng thái đặt xe, đặt thành công hay mã chuyến đều phải gọi "
                 "get_booking_status trước khi trả lời. Chỉ được nói đã đặt thành công khi kết quả tool "
                 "có booking_id; nếu booking_id là null thì phải nói chuyến chưa được tạo. "
+                "Sau khi chuyến đã tạo, cung cấp đúng menu hỗ trợ trong kết quả BookingTask. "
+                "Nếu khách chọn một, hãy hỏi nội dung cần gửi rồi gọi send_driver_request; không tự bịa yêu cầu. "
+                "Nếu khách chọn hai, hỏi khách muốn mô phỏng theo dõi sau bao nhiêu phút rồi gọi track_booking. "
+                "Nếu khách chọn ba, gọi cancel_booking với quy trình xác nhận hủy hiện có. "
+                "Nếu khách nói không cần hỗ trợ thêm, kết thúc hoặc dừng cuộc gọi, gọi finish_customer_service "
+                "để giao diện hiện đánh giá; không tự kết thúc phiên đăng nhập. "
                 "Khi khách yêu cầu gặp tổng đài viên thật, gọi request_handoff; sau đó không trả lời thêm vì hệ thống sẽ chờ người thật vào phòng. "
                 "Khi khách yêu cầu hủy chuyến đã tạo, gọi cancel_booking với confirmation_decision=request. Tool sẽ phát tín hiệu để giao diện hiển thị nút xác nhận. Sau khi khách chọn hoặc nói xác nhận, gọi lại cancel_booking với confirmation_decision=confirm; nếu khách từ chối, dùng confirmation_decision=decline. Chỉ được nói đã hủy khi tool trả về cancelled=true. Nếu khách dừng một booking draft chưa tạo chuyến, BookingTask sẽ trả về trạng thái abandoned. "
                 "Khi khách hỏi chính sách, hành lý, phí hoặc điều kiện dịch vụ, gọi search_knowledge; "
@@ -98,9 +109,10 @@ class AloSMAgent(Agent):
         if self._session_data is not None:
             existing_booking = self._session_data.booking_draft.booking
             if existing_booking is not None and existing_booking.status != "CANCELLED":
-                return (
-                    f"Chuyến xe đã được đặt thành công với mã {existing_booking.booking_id}. Không tạo thêm chuyến mới."
-                )
+                if self._session_data.post_booking_support is None:
+                    self._session_data.post_booking_support = PostBookingSupportState.for_booking(existing_booking)
+                    await self._state_store.save(self._session_data)
+                return post_booking_menu_message(existing_booking.booking_id)
         # LiveKit recommends carrying conversation history into a task while
         # excluding the parent instructions, so the focused task prompt remains
         # small and authoritative.
@@ -399,6 +411,10 @@ class AloSMAgent(Agent):
                 },
                 ensure_ascii=False,
             )
+        support = self._session_data.post_booking_support or PostBookingSupportState.for_booking(cancelled)
+        support.request_restart()
+        self._session_data.post_booking_support = support
+        self._session_data.lifecycle_status = "cancelled"
         draft.mark_booking_cancelled(cancelled)
         await self._state_store.save(self._session_data)
         await publish_booking_state(self.session)
@@ -408,6 +424,124 @@ class AloSMAgent(Agent):
                 "booking_id": cancelled.booking_id,
                 "status": cancelled.status,
                 "instruction": "Thông báo ngắn gọn rằng chuyến đã được hủy thành công.",
+            },
+            ensure_ascii=False,
+        )
+
+    def _active_post_booking_support(self) -> PostBookingSupportState | None:
+        if self._session_data is None:
+            return None
+        booking = self._session_data.booking_draft.booking
+        support = self._session_data.post_booking_support
+        if booking is None or booking.status == "CANCELLED":
+            return None
+        if support is None:
+            support = PostBookingSupportState.for_booking(booking)
+            self._session_data.post_booking_support = support
+        if support.booking_id != booking.booking_id:
+            return None
+        return support
+
+    async def _save_and_publish_support(self) -> None:
+        if self._session_data is None:
+            return
+        await self._state_store.save(self._session_data)
+        await publish_booking_state(self.session)
+
+    @function_tool()
+    async def send_driver_request(self, request: str) -> str:
+        """Mock việc chuyển một yêu cầu bổ sung cho tài xế của chuyến vừa đặt.
+
+        Chỉ gọi sau khi khách đã chọn mục một và đã nói rõ nội dung yêu cầu.
+        Không dùng câu menu, số thứ tự hoặc suy đoán làm nội dung. Dịch vụ demo
+        chỉ ghi nhận yêu cầu trong state của phiên và trả biên nhận thành công.
+
+        Args:
+            request: Nội dung nguyên ý khách muốn gửi tài xế, ngắn gọn, tối đa
+                240 ký tự; không thêm thông tin khách chưa nói.
+        """
+        support = self._active_post_booking_support()
+        if support is None:
+            return json.dumps(
+                {"sent": False, "instruction": "Không có chuyến đang hoạt động để gửi yêu cầu."},
+                ensure_ascii=False,
+            )
+        try:
+            support.record_driver_request(request)
+        except ValueError as exc:
+            return json.dumps({"sent": False, "error": str(exc)}, ensure_ascii=False)
+        await self._save_and_publish_support()
+        return json.dumps(
+            {
+                "sent": True,
+                "booking_id": support.booking_id,
+                "request": support.last_driver_request,
+                "instruction": "Xác nhận yêu cầu đã được gửi thành công cho tài xế, rồi hỏi khách có cần hỗ trợ thêm không.",
+            },
+            ensure_ascii=False,
+        )
+
+    @function_tool()
+    async def track_booking(self, minutes: int) -> str:
+        """Mô phỏng hành trình tài xế sau số phút do khách lựa chọn.
+
+        Chỉ gọi sau khi khách chọn mục hai và cung cấp số phút từ một đến ba
+        mươi. Mỗi lần gọi giảm ETA và khoảng cách so với snapshot trước đó;
+        tuyệt đối không tự tạo dữ liệu theo dõi ngoài kết quả tool.
+
+        Args:
+            minutes: Số phút khách muốn tua tiến hành trình mock, từ 1 đến 30.
+        """
+        support = self._active_post_booking_support()
+        if support is None:
+            return json.dumps(
+                {"tracked": False, "instruction": "Không có chuyến đang hoạt động để theo dõi."},
+                ensure_ascii=False,
+            )
+        try:
+            support.advance_tracking(minutes)
+        except ValueError as exc:
+            return json.dumps({"tracked": False, "error": str(exc)}, ensure_ascii=False)
+        await self._save_and_publish_support()
+        arrived = support.eta_minutes == 0
+        return json.dumps(
+            {
+                "tracked": True,
+                "booking_id": support.booking_id,
+                "elapsed_minutes": support.elapsed_minutes,
+                "eta_minutes": support.eta_minutes,
+                "distance_to_pickup_km": support.distance_to_pickup_km,
+                "arrived": arrived,
+                "instruction": (
+                    "Thông báo tài xế đã đến điểm đón và hỏi khách có cần hỗ trợ thêm không."
+                    if arrived
+                    else "Đọc đúng ETA và khoảng cách còn lại, rồi hỏi khách có muốn theo dõi tiếp không."
+                ),
+            },
+            ensure_ascii=False,
+        )
+
+    @function_tool()
+    async def finish_customer_service(self) -> str:
+        """Kết thúc hỗ trợ hậu đặt xe và yêu cầu giao diện hiển thị đánh giá.
+
+        Gọi khi khách nói không cần hỗ trợ thêm, muốn kết thúc hoặc dừng cuộc
+        gọi sau khi đã đặt thành công. Tool không đăng xuất và không xóa tài
+        khoản; nó chỉ phát trạng thái mở popup đánh giá.
+        """
+        support = self._active_post_booking_support()
+        if support is None:
+            return json.dumps(
+                {"rating_requested": False, "instruction": "Không có chuyến hoàn tất để đánh giá."},
+                ensure_ascii=False,
+            )
+        support.request_rating()
+        await self._save_and_publish_support()
+        return json.dumps(
+            {
+                "rating_requested": True,
+                "booking_id": support.booking_id,
+                "instruction": "Cảm ơn khách và nói rằng bảng đánh giá đang hiển thị trên màn hình.",
             },
             ensure_ascii=False,
         )
