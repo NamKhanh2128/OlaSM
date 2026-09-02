@@ -9,6 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from src.voice_agent.place_query_validator import is_valid_place_query
+
 BookingTarget = Literal["pickup", "destination"]
 BookingField = Literal["pickup", "destination", "vehicle_type"]
 BookingSlotStatus = Literal["missing", "needs_clarification", "resolved"]
@@ -176,6 +178,8 @@ class BookingDraft(BaseModel):
         query: str,
         candidates: list[PlaceCandidate],
     ) -> None:
+        if not is_valid_place_query(query):
+            raise ValueError("PLACE_QUERY_INVALID")
         if target == "pickup":
             self.pickup_query = query
             self.pickup = None
