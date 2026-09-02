@@ -2009,7 +2009,11 @@ class BookingTask(AgentTask[BookingOutcome]):
         outcome = BookingOutcome(
             status="created",
             booking=booking,
-            message=post_booking_menu_message(booking.booking_id),
+            message=post_booking_menu_message(
+                booking.booking_id,
+                booking.estimated_fare,
+                booking.currency,
+            ),
         )
         if not self.done():
             self.complete(outcome)

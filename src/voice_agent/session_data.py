@@ -59,11 +59,12 @@ def vehicle_spoken_label(vehicle_type: VehicleType | None) -> str | None:
     return _VEHICLE_SPOKEN_LABELS.get(vehicle_type) if vehicle_type else None
 
 
-def post_booking_menu_message(booking_id: str) -> str:
+def post_booking_menu_message(booking_id: str, estimated_fare: int, currency: str = "VND") -> str:
     """Return the single authoritative post-booking customer-service prompt."""
 
+    fare = f"{estimated_fare:,}".replace(",", ".")
     return (
-        f"Chuyến xe {booking_id} đã được đặt thành công. "
+        f"Chuyến xe {booking_id} đã được đặt thành công với giá {fare} {currency}. "
         "Tôi có thể hỗ trợ bạn: 1. Chuyển yêu cầu thêm cho tài xế, "
         "2. Theo dõi hành trình chuyến xe, "
         "3. Hủy chuyến xe và đặt lại chuyến mới. "

@@ -193,6 +193,44 @@ async def test_short_ordinal_skips_provider_but_change_uses_three_context_pairs(
     assert rewriter.calls[0]["context"]["asr_confidence"] == 0.37
 
 
+@pytest.mark.parametrize("raw", ["Nam", "Nam Phúc", "Năm Phúc", "số Nam"])
+@pytest.mark.asyncio
+async def test_tracking_minutes_context_recovers_five_before_short_ordinal_bypass(raw: str) -> None:
+    context = llm.ChatContext.empty()
+    context.add_message(role="assistant", content="Bạn muốn theo dõi chuyến xe sau bao nhiêu phút?")
+    message = llm.ChatMessage(role="user", content=[raw])
+
+    result = await rewrite_livekit_user_turn(
+        rewriter=None,
+        userdata=_userdata(),
+        turn_ctx=context,
+        new_message=message,
+    )
+
+    assert result is not None
+    assert result.reason == "contextual_tracking_interval"
+    assert result.inferred_intent == "TRACK_BOOKING"
+    assert message.text_content == "5 phút"
+
+
+@pytest.mark.asyncio
+async def test_tracking_homophone_is_not_changed_outside_tracking_minutes_context() -> None:
+    context = llm.ChatContext.empty()
+    context.add_message(role="assistant", content="Bạn muốn gửi yêu cầu gì cho tài xế?")
+    message = llm.ChatMessage(role="user", content=["Nam Phúc"])
+
+    result = await rewrite_livekit_user_turn(
+        rewriter=None,
+        userdata=_userdata(),
+        turn_ctx=context,
+        new_message=message,
+    )
+
+    assert result is not None
+    assert result.reason == "disabled_or_unconfigured"
+    assert message.text_content == "Nam Phúc"
+
+
 @pytest.mark.parametrize("normalized", ["1C muốn đặt xe", "1515 muốn đặt xe"])
 @pytest.mark.asyncio
 async def test_rewrite_rejects_numeric_tokens_not_present_in_raw_transcript(

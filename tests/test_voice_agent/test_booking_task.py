@@ -290,6 +290,7 @@ async def test_repeated_booking_request_does_not_reenter_completed_booking() -> 
 
     assert "book-existing" in result
     assert "đã được đặt thành công" in result
+    assert "100.000 VND" in result
     assert "1. Chuyển yêu cầu thêm cho tài xế" in result
     assert userdata.post_booking_support is not None
 

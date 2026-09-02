@@ -112,7 +112,11 @@ class AloSMAgent(Agent):
                 if self._session_data.post_booking_support is None:
                     self._session_data.post_booking_support = PostBookingSupportState.for_booking(existing_booking)
                     await self._state_store.save(self._session_data)
-                return post_booking_menu_message(existing_booking.booking_id)
+                return post_booking_menu_message(
+                    existing_booking.booking_id,
+                    existing_booking.estimated_fare,
+                    existing_booking.currency,
+                )
         # LiveKit recommends carrying conversation history into a task while
         # excluding the parent instructions, so the focused task prompt remains
         # small and authoritative.
