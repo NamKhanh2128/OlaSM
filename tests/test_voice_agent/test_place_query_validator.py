@@ -1,5 +1,6 @@
 """Regression tests for place query validation."""
 
+
 from src.voice_agent.place_query_validator import is_valid_place_query, is_valid_single_word_place_query
 
 
@@ -89,8 +90,7 @@ class TestPickupDestinationQueryValidation:
 
     def test_problematic_single_words_for_explicit_change(self) -> None:
         """Regression: filler words should not be accepted in explicit change queries."""
-        # These come from extract_explicit_booking_change
-        # After extraction, these values would be passed to the validator:
+        # These values can be produced by extract_explicit_booking_change.
         problematic_queries = ["rồi", "thôi", "vâng", "nhầm"]
         for query in problematic_queries:
             assert is_valid_place_query(query) is False

@@ -9,9 +9,10 @@ from functools import lru_cache
 
 def _normalize(value: str) -> str:
     """Normalize Vietnamese text: casefold + remove diacritics + compress whitespace."""
-    # NFKD does not decompose Vietnamese đ/Đ; map it before stripping marks so
-    # filler-word checks remain stable for words such as "đến" and "đây".
-    decomposed = unicodedata.normalize("NFKD", value.casefold().replace("đ", "d"))
+    # Unicode decomposition removes combining marks from Vietnamese vowels, but
+    # the distinct letter "đ" does not decompose into "d" automatically.
+    casefolded = value.casefold().replace("đ", "d")
+    decomposed = unicodedata.normalize("NFKD", casefolded)
     without_marks = "".join(char for char in decomposed if not unicodedata.combining(char))
     return " ".join(re.sub(r"[^a-z0-9]+", " ", without_marks).split())
 

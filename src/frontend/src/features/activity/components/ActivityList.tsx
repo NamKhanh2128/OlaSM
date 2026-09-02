@@ -51,15 +51,6 @@ export const ActivityList: React.FC<ActivityListProps> = memo(({ activeFilter = 
     return () => window.removeEventListener(BOOKING_CREATED_EVENT, loadBookings);
   }, [loadBookings]);
 
-  // Đặt lại 1 chuyến đã có giờ cũng nối thẳng vào AI Assistant (kèm sẵn tuyến đường
-  // cũ trong câu mở đầu) thay vì tự mở form/modal riêng — cùng 1 đường đặt xe duy
-  // nhất trong toàn app, xem BookingPage.tsx/HomePage.tsx.
-  const rebookViaAssistant = (booking: BookingSummary) => {
-    const pickup = locationLabel(booking.pickup, "điểm đón cũ");
-    const destination = locationLabel(booking.destination, "điểm đến cũ");
-    openWithPrefill(`Tôi muốn đặt lại chuyến từ ${pickup} đến ${destination}.`);
-  };
-
   const filtered = useMemo(() => {
     if (!bookings) return [];
     return bookings.filter((booking) => {
@@ -75,6 +66,15 @@ export const ActivityList: React.FC<ActivityListProps> = memo(({ activeFilter = 
     });
   }, [bookings, activeFilter]);
 
+  // Đặt lại 1 chuyến đã có giờ cũng nối thẳng vào AI Assistant (kèm sẵn tuyến đường
+  // cũ trong câu mở đầu) thay vì tự mở form/modal riêng — cùng 1 đường đặt xe duy
+  // nhất trong toàn app, xem BookingPage.tsx/HomePage.tsx.
+  const rebookViaAssistant = (booking: BookingSummary) => {
+    const pickup = locationLabel(booking.pickup, "điểm đón cũ");
+    const destination = locationLabel(booking.destination, "điểm đến cũ");
+    openWithPrefill(`Tôi muốn đặt lại chuyến từ ${pickup} đến ${destination}.`);
+  };
+
   if (error) {
     return (
       <div className="flex items-center gap-2 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-4 dark:text-rose-300 dark:bg-rose-500/10 dark:border-rose-500/30">
@@ -87,6 +87,21 @@ export const ActivityList: React.FC<ActivityListProps> = memo(({ activeFilter = 
   if (bookings === null) {
     return <div className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">Đang tải lịch sử chuyến đi...</div>;
   }
+
+  const filtered = useMemo(() => {
+    if (!bookings) return [];
+    return bookings.filter((booking) => {
+      if (activeFilter === "cancelled") return booking.status === "CANCELLED";
+      if (activeFilter === "recent") return booking.status === "COMPLETED";
+      if (activeFilter === "last_month") {
+        if (!booking.created_at) return false;
+        const createdAt = new Date(booking.created_at).getTime();
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        return createdAt >= thirtyDaysAgo;
+      }
+      return true;
+    });
+  }, [bookings, activeFilter]);
 
   if (filtered.length === 0) {
     return (

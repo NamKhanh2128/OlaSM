@@ -28,11 +28,25 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (!id.includes("node_modules")) return undefined
-            if (id.includes("@livekit") || id.includes("livekit-client")) return "livekit"
-            if (id.includes("@tanstack/react-query")) return "query"
-            if (id.includes("react-hook-form") || id.includes("@hookform") || id.includes("/zod/")) return "form"
-            if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/react-router-dom/")) return "vendor"
+            if (!id.includes('/node_modules/')) return undefined
+            if (['react', 'react-dom', 'react-router-dom'].some((name) => id.includes(`/node_modules/${name}/`))) {
+              return 'vendor'
+            }
+            if (id.includes('/node_modules/@tanstack/react-query/')) return 'query'
+            if (
+              ['/node_modules/livekit-client/', '/node_modules/@livekit/components-react/'].some((name) =>
+                id.includes(name),
+              )
+            ) {
+              return 'livekit'
+            }
+            if (
+              ['/node_modules/react-hook-form/', '/node_modules/zod/', '/node_modules/@hookform/resolvers/'].some(
+                (name) => id.includes(name),
+              )
+            ) {
+              return 'form'
+            }
             return undefined
           },
         },
