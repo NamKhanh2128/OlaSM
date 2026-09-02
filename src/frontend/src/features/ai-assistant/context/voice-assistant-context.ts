@@ -59,7 +59,7 @@ export interface VoiceAssistantValue {
   showSuccessModal: boolean;
   completedBooking: CompletedBooking | null;
   closeSuccessModal: () => void;
-  submitRating: (rating: number) => Promise<void>;
+  submitRating: (rating: number, comment?: string) => Promise<boolean>;
   isSubmittingRating: boolean;
 
   // Lịch sử hội thoại cũ (tái dùng HistoryPanel/TranscriptModal có sẵn)

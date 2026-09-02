@@ -31,6 +31,7 @@ import { notifyBookingCreated } from "@/app/events";
 import { getCurrentUser } from "@/features/auth/api";
 import { CURRENT_POLICY_VERSION } from "@/features/policies/api";
 import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssistant";
+import { PostBookingRatingDialog } from "@/features/ai-assistant/components/PostBookingRatingDialog";
 import { vehicleLabel } from "@/features/ai-assistant/bookingLabels";
 import { getRideSession } from "@/features/ride/api";
 import { createAloSMTokenSource, LIVEKIT_AGENT_NAME } from "./tokenSource";
@@ -246,6 +247,7 @@ function LiveKitCallContent({
   autoRetry: boolean;
 }) {
   const agent = useAgent();
+  const { newSession, resetConversation, endSession, submitRating, isSubmittingRating } = useVoiceAssistant();
   const { messages, send } = useSessionMessages();
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const [speakerMuted, setSpeakerMuted] = useState(false);
@@ -254,6 +256,7 @@ function LiveKitCallContent({
   const [textError, setTextError] = useState<string | null>(null);
   const [bookingState, setBookingState] = useState<BookingState | null>(null);
   const announcedBookingId = useRef<string | null>(null);
+  const restartedBookingId = useRef<string | null>(null);
   const [wasConnected, setWasConnected] = useState(false);
   const { message: bookingStateMessage } = useDataChannel(BOOKING_STATE_TOPIC);
   const agentFailure = agent.failureReasons?.join("; ") ?? "";
@@ -296,6 +299,23 @@ function LiveKitCallContent({
       notifyBookingCreated(bookingId);
     }
   }, [bookingState?.booking?.booking_id]);
+
+  useEffect(() => {
+    const support = bookingState?.post_booking_support;
+    if (support?.stage !== "restart_requested") return;
+    if (restartedBookingId.current === support.booking_id) return;
+    if (agent.state === "thinking" || agent.state === "speaking") return;
+    restartedBookingId.current = support.booking_id;
+    const timeoutId = window.setTimeout(() => {
+      void resetConversation().then(() => newSession()).then((created) => {
+        if (!created) {
+          restartedBookingId.current = null;
+          setTextError("Đã hủy chuyến nhưng chưa thể tạo phiên đặt xe mới. Bạn vui lòng thử lại.");
+        }
+      });
+    }, 1_200);
+    return () => window.clearTimeout(timeoutId);
+  }, [agent.state, bookingState?.post_booking_support, newSession, resetConversation]);
 
   useEffect(() => {
     // Let livekit-client attempt its native Room reconnect first. If the managed
@@ -355,8 +375,18 @@ function LiveKitCallContent({
     [textSendPending, send],
   );
 
+  const exitAfterRating = useCallback(async () => {
+    await endSession();
+    onClose();
+  }, [endSession, onClose]);
+
+  const continueAfterRating = useCallback(async () => {
+    const created = await newSession();
+    if (!created) setTextError("Không thể tạo phiên đặt xe mới. Bạn vui lòng thử lại.");
+  }, [newSession]);
+
   return (
-    <div className="flex h-full min-h-[560px] w-full flex-col rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-950">
+    <div className="relative flex h-full min-h-[560px] w-full flex-col rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-950">
       <RoomAudioRenderer muted={speakerMuted} />
 
       <div className="text-center">
@@ -453,6 +483,17 @@ function LiveKitCallContent({
           {bookingState.handoff ? (
             <p className="col-span-2 font-semibold text-[#008F88]">
               {handoffConnected ? "Đã kết nối tổng đài viên" : "Đang chuyển tổng đài viên"}: {bookingState.handoff.handoff_id}
+            </p>
+          ) : null}
+          {bookingState.post_booking_support?.stage === "tracking" ? (
+            <p className="col-span-2 rounded-lg bg-sky-50 p-2 font-medium text-sky-800 dark:bg-sky-500/10 dark:text-sky-200">
+              Tài xế còn {bookingState.post_booking_support.distance_to_pickup_km.toLocaleString("vi-VN")} km,
+              dự kiến {bookingState.post_booking_support.eta_minutes} phút tới điểm đón.
+            </p>
+          ) : null}
+          {bookingState.post_booking_support?.stage === "driver_request_sent" ? (
+            <p className="col-span-2 rounded-lg bg-emerald-50 p-2 font-medium text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
+              Đã gửi cho tài xế: {bookingState.post_booking_support.last_driver_request}
             </p>
           ) : null}
           </div>
@@ -565,6 +606,15 @@ function LiveKitCallContent({
           <PhoneOff className="h-5 w-5" />
         </button>
       </div>
+      {bookingState?.post_booking_support?.stage === "rating_requested" ? (
+        <PostBookingRatingDialog
+          bookingId={bookingState.post_booking_support.booking_id}
+          isSubmitting={isSubmittingRating}
+          onSubmit={submitRating}
+          onExit={exitAfterRating}
+          onContinue={continueAfterRating}
+        />
+      ) : null}
     </div>
   );
 }
@@ -779,7 +829,7 @@ export const LiveKitVoiceSession: React.FC = () => {
 
   return (
     <LiveKitSessionAttempt
-      key={attempt}
+      key={`${sessionId ?? "none"}:${attempt}`}
       onClose={close}
       onRetry={() => setAttempt((value) => value + 1)}
       autoRetry={attempt === 0}

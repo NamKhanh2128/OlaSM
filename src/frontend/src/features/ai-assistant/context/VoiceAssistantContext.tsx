@@ -284,13 +284,15 @@ export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = (
   const closeSuccessModal = useCallback(() => setShowSuccessModal(false), []);
 
   const submitRating = useCallback(
-    async (rating: number) => {
-      if (!sessionId) return;
+    async (rating: number, comment?: string): Promise<boolean> => {
+      if (!sessionId) return false;
       setIsSubmittingRating(true);
       try {
-        await submitSessionFeedback(sessionId, rating);
+        await submitSessionFeedback(sessionId, rating, comment?.trim() || undefined);
+        return true;
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Không thể gửi đánh giá.");
+        return false;
       } finally {
         setIsSubmittingRating(false);
       }
