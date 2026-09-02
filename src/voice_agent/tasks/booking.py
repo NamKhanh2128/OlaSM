@@ -59,28 +59,80 @@ class BookingOutcome(BaseModel):
 HandoffHandler = Callable[[str], Awaitable[str]]
 BookingChangeToken = tuple[BookingField, int]
 
+_REQUIRED_BOOKING_CONFIRMATION_PHRASE = "tôi xác nhận đặt xe"
+_MIN_BOOKING_CONFIRMATION_WORDS = 4
+_CONFIRMATION_CORE_PHRASES = (
+    "xac nhan dat xe",
+    "xac nhan dat chuyen",
+    "dong y dat xe",
+    "dong y dat chuyen",
+    "dung roi dat xe",
+    "dat xe giup toi",
+    "dat xe cho toi",
+)
+_ADDITIONAL_REQUEST_MARKERS = (
+    " nhung ",
+    " tuy nhien ",
+    " dong thoi ",
+    " kem theo ",
+    " va hay ",
+    " voi yeu cau ",
+    " nho tai xe ",
+    " bao tai xe ",
+)
+_ALLOWED_CONFIRMATION_PREFIX_TOKENS = frozenset(
+    {"toi", "vang", "dung", "roi", "xin", "hoan", "toan", "da", "ok"}
+)
+_ALLOWED_CONFIRMATION_SUFFIX_TOKENS = frozenset(
+    {"nay", "nhe", "a", "giup", "toi", "luon", "di", "cho", "minh", "roi", "va", "cam", "on", "ban"}
+)
+
 
 def _normalize_confirmation(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", value.casefold().replace("đ", "d"))
     plain = "".join(char for char in decomposed if not unicodedata.combining(char))
-    return " ".join(re.sub(r"[^a-z0-9]+", " ", plain).split())
+    normalized = " ".join(re.sub(r"[^a-z0-9]+", " ", plain).split())
+    return normalized.replace("xac nhan dap xe", "xac nhan dat xe")
+
+
+def _confirmation_core_span(normalized: str) -> tuple[int, int] | None:
+    matches = (
+        (normalized.find(phrase), phrase)
+        for phrase in _CONFIRMATION_CORE_PHRASES
+        if phrase in normalized
+    )
+    start, phrase = min(matches, default=(-1, ""), key=lambda item: item[0])
+    return (start, start + len(phrase)) if start >= 0 else None
+
+
+def has_additional_driver_request(value: str) -> bool:
+    """Reject confirmation turns that also contain a driver instruction."""
+
+    normalized = _normalize_confirmation(value)
+    padded = f" {normalized} "
+    if any(marker in padded for marker in _ADDITIONAL_REQUEST_MARKERS):
+        return True
+    core_span = _confirmation_core_span(normalized)
+    if core_span is None:
+        return False
+    start, end = core_span
+    prefix_tokens = normalized[:start].split()
+    suffix_tokens = normalized[end:].split()
+    return any(token not in _ALLOWED_CONFIRMATION_PREFIX_TOKENS for token in prefix_tokens) or any(
+        token not in _ALLOWED_CONFIRMATION_SUFFIX_TOKENS for token in suffix_tokens
+    )
 
 
 def is_explicit_confirmation(value: str) -> bool:
     normalized = _normalize_confirmation(value)
-    negative_tokens = {"khong", "chua", "huy", "thoi"}
-    if not normalized or negative_tokens.intersection(normalized.split()) or "dung dat" in normalized:
+    tokens = normalized.split()
+    if len(tokens) < _MIN_BOOKING_CONFIRMATION_WORDS:
         return False
-    affirmative_phrases = (
-        "toi xac nhan",
-        "xac nhan dat",
-        "dong y dat",
-        "dat chuyen nay",
-        "dat xe di",
-        "dung roi dat",
-        "ok dat",
-    )
-    return any(phrase in normalized for phrase in affirmative_phrases)
+    if {"khong", "chua", "huy", "thoi"}.intersection(tokens):
+        return False
+    if has_additional_driver_request(normalized):
+        return False
+    return _confirmation_core_span(normalized) is not None
 
 
 def is_booking_abandonment_request(value: str) -> bool:
@@ -891,6 +943,17 @@ def grounded_vehicle_selection(draft: BookingDraft, user_text: str) -> VehicleTy
     return selected
 
 
+def has_booking_change_intent(draft: BookingDraft, value: str) -> bool:
+    """Detect a slot correction before the turn can be treated as confirmation."""
+
+    return (
+        extract_explicit_booking_change(value) is not None
+        or extract_contextual_booking_change(draft, value) is not None
+        or bool(extract_labeled_booking_places(value))
+        or grounded_vehicle_selection(draft, value) is not None
+    )
+
+
 def _target_label(target: BookingTarget) -> str:
     return "điểm đón" if target == "pickup" else "điểm đến"
 
@@ -936,11 +999,12 @@ def _vehicle_followup(draft: BookingDraft, vehicle_type: VehicleType) -> str | N
     return _acknowledgement_followup(draft, prefix)
 
 
-def _quote_confirmation_prompt(draft: BookingDraft, acknowledgement: str, quote: QuoteSnapshot) -> str:
+def _booking_confirmation_prompt(draft: BookingDraft) -> str:
     return (
-        f"{acknowledgement} Bạn xác nhận chuyến xe đón tại {draft.pickup.display_name}, "
-        f"đến {draft.destination.display_name}, đi bằng {vehicle_spoken_label(draft.vehicle_type)}, "
-        f"giá dự kiến {quote.fare_amount} đồng và xe tới sau khoảng {quote.eta_minutes} phút chứ?"
+        f"Đã ghi nhận chuyến xe của bạn đi từ {draft.pickup.display_name}, "
+        f"đến {draft.destination.display_name}, {vehicle_spoken_label(draft.vehicle_type)}. "
+        f'Hãy kiểm tra lại thông tin và xác nhận đặt xe bằng câu "{_REQUIRED_BOOKING_CONFIRMATION_PHRASE}", '
+        "nếu cần sửa đổi thông tin gì thì hãy báo tôi nhé!"
     )
 
 
@@ -1002,12 +1066,14 @@ class BookingTask(AgentTask[BookingOutcome]):
                 "không hỏi lại slot đã resolved. "
                 "Sau mọi thay đổi điểm đón, điểm đến hoặc loại xe, câu trả lời bắt buộc phải bắt đầu bằng "
                 "'Đã chọn điểm đón là...', 'Đã chọn điểm đến là...' hoặc 'Đã chọn loại xe là...'; "
-                "chỉ sau câu đó mới hỏi trường tiếp theo. Nếu chưa có loại xe, phải hỏi khách chọn loại xe "
+                "chỉ sau câu đó mới hỏi trường tiếp theo, trừ khi cả ba slot đã đủ và cần đọc prompt xác nhận. "
+                "Nếu chưa có loại xe, phải hỏi khách chọn loại xe "
                 "theo số thứ tự được liệt kê bên dưới để giao diện hiện danh sách xe. "
                 "Thu thập đủ điểm đón, điểm đến và loại xe rồi gọi estimate_fare. "
-                "estimate_fare đồng thời khóa báo giá ở trạng thái chờ xác nhận; đọc lại đầy đủ "
-                "thông tin mà tool trả về và không tự bỏ qua bước này. "
-                "Chỉ gọi confirm_booking khi lượt nói mới nhất của khách xác nhận đặt chuyến rõ ràng. "
+                "estimate_fare đồng thời khóa báo giá ở trạng thái chờ xác nhận; đọc nguyên văn prompt "
+                "mà tool trả về và không tự bỏ qua bước này. Chỉ gọi confirm_booking khi câu xác nhận có ít nhất "
+                "bốn từ và thể hiện rõ ý định đặt xe. Luôn xử lý yêu cầu đổi slot trước confirmation; không dùng "
+                "một câu vừa xác nhận vừa thêm yêu cầu cho tài xế để xác nhận booking. "
                 "Chỉ gọi create_booking sau khi confirm_booking thành công. "
                 "Nếu khách sửa điểm đón, điểm đến hoặc loại xe, gọi tool tương ứng; hệ thống sẽ "
                 "tự xoá giá và xác nhận cũ. Không được tự bịa giá, ETA hoặc mã chuyến. "
@@ -1075,7 +1141,7 @@ class BookingTask(AgentTask[BookingOutcome]):
                 self._raise_if_stale_booking_change(change_token)
                 draft.set_quote(quote)
                 draft.request_confirmation()
-                response = _quote_confirmation_prompt(draft, acknowledgement, quote)
+                response = _booking_confirmation_prompt(draft)
                 userdata.clear_failure()
             except ValueError:
                 self._raise_if_stale_booking_change(change_token)
@@ -1623,7 +1689,7 @@ class BookingTask(AgentTask[BookingOutcome]):
                 await self._commit(context)
             acknowledgement = f"Đã chọn {_target_label(target)} là {selected.display_name}."
             spoken_prompt = (
-                _quote_confirmation_prompt(draft, acknowledgement, refreshed_quote)
+                _booking_confirmation_prompt(draft)
                 if refreshed_quote is not None
                 else _selection_followup(draft, target, selected) or acknowledgement
             )
@@ -1710,7 +1776,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             await self._commit(context)
         acknowledgement = f"Đã chọn {_target_label(target)} là {selected.display_name}."
         if refreshed_quote is not None:
-            return _quote_confirmation_prompt(draft, acknowledgement, refreshed_quote)
+            return _booking_confirmation_prompt(draft)
         return _selection_followup(draft, target, selected) or acknowledgement
 
     @function_tool()
@@ -1760,7 +1826,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             await self._commit(context)
         acknowledgement = f"Đã chọn loại xe là {vehicle_spoken_label(vehicle_type)}."
         if refreshed_quote is not None:
-            return _quote_confirmation_prompt(draft, acknowledgement, refreshed_quote)
+            return _booking_confirmation_prompt(draft)
         return _vehicle_followup(draft, vehicle_type) or acknowledgement
 
     @function_tool()
@@ -1800,16 +1866,16 @@ class BookingTask(AgentTask[BookingOutcome]):
 
         Chỉ gọi khi draft có pickup, destination và vehicle_type hợp lệ. Tool
         tạo hoặc dùng lại báo giá phù hợp, chuyển draft sang awaiting
-        confirmation, rồi trả về điểm đón, điểm đến, loại xe, giá và thời gian
-        xe tới dự kiến.
+        confirmation, rồi trả về prompt đọc lại điểm đón, điểm đến, loại xe và
+        câu xác nhận được khuyến nghị.
 
         Không gọi khi còn thiếu trường; hãy dùng search_place, select_place
         hoặc set_vehicle_type. Không tự tính, làm tròn hay đoán giá/ETA. Báo
         giá không có nghĩa là chuyến đã tạo và không thay thế xác nhận rõ ràng.
 
         Returns:
-            Hướng dẫn hỏi khách xác nhận cùng thông tin báo giá. Sau câu xác
-            nhận mới của khách, gọi confirm_booking.
+            Prompt hướng dẫn khách xác nhận riêng, không gộp yêu cầu đổi slot
+            hoặc yêu cầu thêm cho tài xế vào cùng lượt xác nhận.
         """
         context.disallow_interruptions()
         draft = self._draft(context)
@@ -1818,13 +1884,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             and draft.confirmation_status == "awaiting"
             and draft.confirmation_fingerprint == draft.quote.fingerprint
         ):
-            quote = draft.quote
-            return (
-                f"Hãy hỏi xác nhận rõ ràng: đón tại {draft.pickup.display_name}, "
-                f"đến {draft.destination.display_name}, đi bằng {vehicle_spoken_label(draft.vehicle_type)}, "
-                f"giá dự kiến {quote.fare_amount} đồng, "
-                f"thời gian xe tới dự kiến {quote.eta_minutes} phút."
-            )
+            return _booking_confirmation_prompt(draft)
         try:
             quote = await self._quotes.estimate(
                 user_id=context.userdata.user_id,
@@ -1848,22 +1908,18 @@ class BookingTask(AgentTask[BookingOutcome]):
             raise ToolError(str(exc)) from exc
         context.userdata.clear_failure()
         await self._commit(context)
-        return (
-            f"Hãy hỏi xác nhận rõ ràng: đón tại {draft.pickup.display_name}, "
-            f"đến {draft.destination.display_name}, đi bằng {vehicle_spoken_label(draft.vehicle_type)}, "
-            f"giá dự kiến {quote.fare_amount} đồng, "
-            f"thời gian xe tới dự kiến {quote.eta_minutes} phút."
-        )
+        return _booking_confirmation_prompt(draft)
 
     @function_tool()
     async def confirm_booking(self, context: RunContext[AloSMSessionData]) -> str:
         """Ghi nhận xác nhận đặt chuyến rõ ràng từ câu mới nhất của khách.
 
-        Chỉ gọi sau khi khách đã được báo đầy đủ thông tin và câu mới nhất xác
-        nhận trực tiếp việc đặt xe, như “đặt xe đi” hoặc “tôi xác nhận”. Tool
-        tự kiểm tra câu mới nhất và trạng thái báo giá trước khi ghi nhận.
+        Chỉ gọi sau khi khách đã được báo đầy đủ thông tin và câu mới nhất có
+        ít nhất bốn từ, đồng thời thể hiện rõ ý định xác nhận đặt xe. Lỗi ASR
+        đã biết “đập xe” được sửa deterministic trước khi phân loại.
 
-        Không gọi cho câu hỏi về giá, đồng ý một địa điểm, “đúng rồi”, “ừ”
+        Yêu cầu đổi slot và yêu cầu thêm cho tài xế được ưu tiên trước
+        confirmation. Không gọi cho câu hỏi về giá hoặc câu ngắn, mơ hồ
         hoặc sự đồng ý mơ hồ không nói rõ việc đặt chuyến. Tool này chỉ ghi
         nhận confirmation, chưa tạo booking. Nếu thành công, bắt buộc gọi
         create_booking.
@@ -1876,9 +1932,13 @@ class BookingTask(AgentTask[BookingOutcome]):
         context.disallow_interruptions()
         latest = self._latest_user_message()
         latest_user_text = latest.text_content if latest is not None else ""
+        draft = self._draft(context)
+        if has_booking_change_intent(draft, latest_user_text):
+            raise ToolError("LATEST_USER_MESSAGE_REQUESTS_BOOKING_CHANGE")
+        if has_additional_driver_request(latest_user_text):
+            raise ToolError("LATEST_USER_MESSAGE_CONTAINS_ADDITIONAL_DRIVER_REQUEST")
         if not is_explicit_confirmation(latest_user_text):
             raise ToolError("LATEST_USER_MESSAGE_IS_NOT_EXPLICIT_BOOKING_CONFIRMATION")
-        draft = self._draft(context)
         existing_booking = draft.booking
         if existing_booking is not None and existing_booking.status != "CANCELLED":
             return f"Chuyến xe đã được đặt thành công với mã {existing_booking.booking_id}. Không tạo thêm chuyến mới."

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
-from livekit.agents import StopResponse, llm
+from livekit.agents import StopResponse, ToolError, llm
 
 from src.voice_agent.agent import AloSMAgent
 from src.voice_agent.persistence import EphemeralVoiceStateStore
@@ -23,6 +23,8 @@ from src.voice_agent.tasks.booking import (
     grounded_named_place_selection,
     grounded_ordinal_selection,
     grounded_vehicle_selection,
+    has_additional_driver_request,
+    has_booking_change_intent,
     is_explicit_confirmation,
     requires_location_clarification,
     seed_complete_booking_turn,
@@ -440,7 +442,11 @@ async def test_estimate_fare_atomically_starts_confirmation(
 
     assert draft.confirmation_status == "awaiting"
     assert draft.confirmation_fingerprint == draft.quote.fingerprint
-    assert "Hãy hỏi xác nhận rõ ràng" in result
+    assert result == (
+        "Đã ghi nhận chuyến xe của bạn đi từ Cổng chính VinUni, đến Bưu điện Hà Nội, "
+        'xe ô tô bốn chỗ. Hãy kiểm tra lại thông tin và xác nhận đặt xe bằng câu "tôi xác nhận đặt xe", '
+        "nếu cần sửa đổi thông tin gì thì hãy báo tôi nhé!"
+    )
 
 
 @pytest.mark.asyncio
@@ -492,7 +498,7 @@ async def test_duplicate_confirmation_is_idempotent_before_booking_creation(
 
     monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
     chat_ctx = llm.ChatContext.empty()
-    chat_ctx.add_message(role="user", content="Tôi xác nhận đặt chuyến này.")
+    chat_ctx.add_message(role="user", content="Tôi xác nhận đặt xe.")
     task = BookingTask(
         chat_ctx=chat_ctx,
         state_store=EphemeralVoiceStateStore(),
@@ -506,7 +512,7 @@ async def test_duplicate_confirmation_is_idempotent_before_booking_creation(
     first = await BookingTask.confirm_booking._func(task, context)
 
     second_chat_ctx = llm.ChatContext.empty()
-    second_chat_ctx.add_message(role="user", content="Tôi xác nhận lại, cứ đặt chuyến này nhé.")
+    second_chat_ctx.add_message(role="user", content="Tôi xác nhận đập xe.")
     second_task = BookingTask(
         chat_ctx=second_chat_ctx,
         state_store=EphemeralVoiceStateStore(),
@@ -605,11 +611,57 @@ def test_terminal_task_tools_follow_livekit_complete_without_narrating_inside_ta
         assert tool.__annotations__["return"] in {None, type(None), "None"}
 
 
-def test_explicit_confirmation_rejects_negative_or_ambiguous_text() -> None:
+def test_explicit_confirmation_requires_four_words_and_clear_booking_intent() -> None:
+    assert is_explicit_confirmation("Tôi xác nhận đặt xe") is True
+    assert is_explicit_confirmation("TÔI XÁC NHẬN ĐẶT XE!") is True
+    assert is_explicit_confirmation("Vâng, tôi xác nhận đập xe nhé.") is True
     assert is_explicit_confirmation("Tôi xác nhận đặt chuyến này") is True
     assert is_explicit_confirmation("Đúng rồi, đặt xe đi") is True
-    assert is_explicit_confirmation("Không đúng, sửa điểm đến") is False
+    assert is_explicit_confirmation("Vâng, đặt xe giúp tôi") is True
+    assert is_explicit_confirmation("Tôi xác nhận đặt xe và cảm ơn bạn") is True
+    assert is_explicit_confirmation("Vâng") is False
+    assert is_explicit_confirmation("Đúng rồi") is False
     assert is_explicit_confirmation("Ừ") is False
+    assert is_explicit_confirmation("Tôi không xác nhận đặt xe") is False
+    assert is_explicit_confirmation("Tôi xác nhận đặt xe, nhưng hãy đón tôi cách đó 2km") is False
+    assert is_explicit_confirmation("Tôi xác nhận đặt xe, hãy đón tôi cách đó 2km") is False
+
+
+def test_additional_driver_request_is_separated_from_booking_confirmation() -> None:
+    assert has_additional_driver_request("Tôi xác nhận đặt xe, nhưng hãy đón tôi cách đó 2km") is True
+    assert has_additional_driver_request("Tôi xác nhận đặt xe, hãy đón tôi cách đó 2km") is True
+    assert has_additional_driver_request("Tôi xác nhận đặt xe và cảm ơn bạn") is False
+
+
+@pytest.mark.asyncio
+async def test_confirm_booking_rejects_combined_driver_request() -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    chat_ctx = llm.ChatContext.empty()
+    chat_ctx.add_message(
+        role="user",
+        content="Tôi xác nhận đặt xe, nhưng hãy đón tôi cách đó 2km",
+    )
+    task = BookingTask(chat_ctx=chat_ctx, state_store=EphemeralVoiceStateStore())
+    context = SimpleNamespace(
+        userdata=userdata,
+        session=object(),
+        disallow_interruptions=lambda: None,
+    )
+
+    with pytest.raises(ToolError, match="LATEST_USER_MESSAGE_CONTAINS_ADDITIONAL_DRIVER_REQUEST"):
+        await BookingTask.confirm_booking._func(task, context)
+
+    assert userdata.booking_draft.confirmation_status == "not_requested"
+
+
+def test_booking_change_intent_outweighs_confirmation() -> None:
+    assert has_booking_change_intent(BookingDraft(), "Tôi xác nhận đặt xe nhưng đổi điểm đến thành Long Biên")
+    assert has_booking_change_intent(BookingDraft(), "Tôi xác nhận đặt xe") is False
 
 
 def test_booking_abandonment_requires_an_explicit_request() -> None:
