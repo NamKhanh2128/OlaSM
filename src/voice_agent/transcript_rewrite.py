@@ -32,6 +32,7 @@ _REPEATED_SHORT_ORDINAL = re.compile(
     rf"(?:(?:so|thu)\s+)?(?P<ordinal>{_ORDINAL_TOKEN})"
     rf"(?:\s+(?:(?:so|thu)\s+)?(?P=ordinal)){{1,4}}$"
 )
+_TRACKING_FIVE_MINUTES_ASR = re.compile(r"^(?:so\s+)?(?:nam|5)(?:\s+(?:phuc|phut))?$")
 
 REWRITE_INSTRUCTIONS = """Bạn sửa transcript ASR tiếng Việt cho tổng đài đặt xe AloSM.
 
@@ -45,6 +46,8 @@ Quy tắc bắt buộc:
 - Nếu khách đổi điểm đón, điểm đến hoặc loại xe, phải giữ chính xác intent đổi thông tin.
 - Không tự chọn candidate và không biến câu mơ hồ thành một địa điểm cụ thể.
 - Không đổi từ/cụm từ thành chữ số hoặc mã chữ-số không có trong transcript gốc.
+- Riêng khi câu hỏi gần nhất hỏi theo dõi chuyến xe sau bao nhiêu phút, cụm âm gần
+  "Nam", "Năm Phúc" có thể mang nghĩa "5 phút"; không áp dụng cách sửa này ở ngữ cảnh khác.
 - Có thể bỏ một mã chữ-số hoặc chuỗi số lặp rõ ràng do ASR sinh nhầm khi độ tin cậy ASR thấp
   và ngữ cảnh hội thoại chứng minh được cách sửa; không được bỏ số thứ tự, địa chỉ hoặc loại xe hợp lệ.
 - Không trả lời khách, không giải thích và không xuất chain-of-thought.
@@ -60,6 +63,7 @@ class RewriteOutput(BaseModel):
         "CHANGE_VEHICLE",
         "SELECT_LOCATION",
         "CONFIRM_BOOKING",
+        "TRACK_BOOKING",
         "OTHER",
         "UNCLEAR",
     ]
@@ -104,6 +108,28 @@ def is_short_ordinal_selection(text: str) -> bool:
 
     folded = _fold(text)
     return bool(folded and (_SHORT_ORDINAL.fullmatch(folded) or _REPEATED_SHORT_ORDINAL.fullmatch(folded)))
+
+
+def _contextual_tracking_interval(text: str, turn_ctx: llm.ChatContext) -> str | None:
+    """Recover five minutes only when the immediately preceding prompt asks for it."""
+
+    if not _TRACKING_FIVE_MINUTES_ASR.fullmatch(_fold(text)):
+        return None
+    latest_assistant = next(
+        (
+            (item.text_content or "").strip()
+            for item in reversed(turn_ctx.items)
+            if isinstance(item, llm.ChatMessage) and item.role == "assistant" and (item.text_content or "").strip()
+        ),
+        "",
+    )
+    folded_prompt = _fold(latest_assistant)
+    asks_tracking_minutes = (
+        "theo doi" in folded_prompt
+        and "phut" in folded_prompt
+        and any(marker in folded_prompt for marker in ("bao nhieu", "may phut", "sau"))
+    )
+    return "5 phút" if asks_tracking_minutes else None
 
 
 def _recent_dialogue_pairs(
@@ -154,6 +180,9 @@ def build_rewrite_context(
             "vehicle_type": draft.vehicle_type,
             "confirmation_status": draft.confirmation_status,
             "clarifications": draft.booking_clarifications(),
+            "post_booking_support": (
+                userdata.post_booking_support.model_dump(mode="json") if userdata.post_booking_support else None
+            ),
         },
         "asr_confidence": asr_confidence,
     }
@@ -377,6 +406,21 @@ async def _rewrite_finalized_text(
 ) -> TranscriptRewriteResult:
     """Compute one rewrite result without mutating the LiveKit message."""
 
+    tracking_interval = _contextual_tracking_interval(text, turn_ctx)
+    if tracking_interval is not None:
+        logger.info(
+            "Voice transcript rewrite applied deterministic tracking interval item_id=%s raw=%s",
+            item_id,
+            text,
+        )
+        return TranscriptRewriteResult(
+            raw_text=text,
+            normalized_text=tracking_interval,
+            applied=tracking_interval != text,
+            reason="contextual_tracking_interval",
+            inferred_intent="TRACK_BOOKING",
+            confidence=1.0,
+        )
     if is_short_ordinal_selection(text):
         logger.info("Voice transcript rewrite skipped item_id=%s reason=short_ordinal", item_id)
         return TranscriptRewriteResult(raw_text=text, normalized_text=text, reason="short_ordinal")

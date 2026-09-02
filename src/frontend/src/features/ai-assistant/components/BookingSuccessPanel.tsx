@@ -11,7 +11,7 @@ export type CompletedBooking = {
 
 type Props = {
   booking: CompletedBooking;
-  onSubmitRating: (rating: number) => Promise<void>;
+  onSubmitRating: (rating: number, comment?: string) => Promise<boolean>;
   onEndSession: () => void;
   onNewSession: () => void;
   isSubmittingRating?: boolean;
@@ -26,12 +26,13 @@ export const BookingSuccessPanel: React.FC<Props> = ({
 }) => {
   const [hovered, setHovered] = useState(0);
   const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const handleRate = async (value: number) => {
-    setRating(value);
-    await onSubmitRating(value);
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    if (rating === 0) return;
+    const accepted = await onSubmitRating(rating, comment);
+    if (accepted) setSubmitted(true);
   };
 
   if (booking.lifecycle_status === "FAILED") {
@@ -92,7 +93,7 @@ export const BookingSuccessPanel: React.FC<Props> = ({
                   disabled={isSubmittingRating || submitted}
                   onMouseEnter={() => setHovered(value)}
                   onMouseLeave={() => setHovered(0)}
-                  onClick={() => handleRate(value)}
+                  onClick={() => setRating(value)}
                   className="p-1 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20 disabled:opacity-60 transition"
                   aria-label={`${value} sao`}
                 >
@@ -106,6 +107,26 @@ export const BookingSuccessPanel: React.FC<Props> = ({
                 </button>
               ))}
             </div>
+            {!submitted ? (
+              <div className="mt-3 space-y-2">
+                <textarea
+                  value={comment}
+                  onChange={(event) => setComment(event.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  placeholder="Ý kiến về chất lượng dịch vụ (không bắt buộc)"
+                  className="w-full resize-none rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500 dark:border-emerald-500/30 dark:bg-white/5 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSubmit()}
+                  disabled={rating === 0 || isSubmittingRating}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {isSubmittingRating ? "Đang gửi…" : "Gửi đánh giá"}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <p className="text-sm text-slate-600 dark:text-slate-300 mt-4">Anh/chị muốn tiếp tục thế nào?</p>

@@ -38,6 +38,16 @@ export type HandoffState = {
   reason_code: string;
 };
 
+export type PostBookingSupportState = {
+  booking_id: string;
+  stage: "menu" | "driver_request_sent" | "tracking" | "rating_requested" | "restart_requested";
+  last_driver_request: string | null;
+  driver_request_count: number;
+  eta_minutes: number;
+  distance_to_pickup_km: number;
+  elapsed_minutes: number;
+};
+
 export type ClarificationTarget = "pickup" | "destination" | "vehicle_type";
 export type BookingSlotKey = ClarificationTarget;
 export type BookingSlotStatus = "missing" | "needs_clarification" | "resolved";
@@ -68,6 +78,7 @@ export type BookingState = {
   failure?: VoiceFailureState | null;
   handoff?: HandoffState | null;
   recovered?: boolean;
+  post_booking_support?: PostBookingSupportState | null;
   slot_statuses?: Record<BookingSlotKey, BookingSlotStatus>;
   slot_labels?: Record<BookingSlotKey, string | null>;
   next_required_field?: BookingSlotKey | null;
