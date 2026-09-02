@@ -106,6 +106,21 @@ def test_candidate_must_come_from_current_search_result() -> None:
         draft.select_place("pickup", "invented-place-id")
 
 
+@pytest.mark.parametrize("target", ["pickup", "destination"])
+def test_booking_draft_rejects_invalid_single_word_place_query(target: str) -> None:
+    draft = BookingDraft()
+
+    with pytest.raises(ValueError, match="PLACE_QUERY_INVALID"):
+        draft.set_candidates(target, "cho", [])  # type: ignore[arg-type]
+
+    assert draft.pickup_query is None
+    assert draft.destination_query is None
+    assert draft.pickup_candidates == []
+    assert draft.destination_candidates == []
+    assert draft.pending_candidate_target is None
+    assert draft.revision == 0
+
+
 @pytest.mark.parametrize("correction", ["pickup", "destination", "vehicle"])
 def test_every_booking_correction_invalidates_quote_confirmation_and_booking(
     correction: str,

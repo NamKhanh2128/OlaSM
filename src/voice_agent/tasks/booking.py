@@ -633,6 +633,8 @@ def extract_contextual_booking_change(
     if not previous_value or not replacement:
         return None
     field = _current_booking_surface_field(draft, previous_value)
+    if field in {"pickup", "destination"} and not is_valid_place_query(replacement):
+        return None
     return (field, replacement, previous_value) if field is not None else None
 
 
@@ -1148,6 +1150,14 @@ class BookingTask(AgentTask[BookingOutcome]):
             if contextual_change is None:
                 return
             field, replacement, previous_value = contextual_change
+        if field in {"pickup", "destination"} and not is_valid_place_query(replacement):
+            logger.info(
+                "Ignoring invalid booking place change session=%s field=%s replacement=%r",
+                userdata.app_session_id,
+                field,
+                replacement,
+            )
+            return
         change_token = await self._next_booking_change_token(field)
         await self._force_barge_in_interrupt()
         logger.info(

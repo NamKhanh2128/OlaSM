@@ -833,6 +833,57 @@ def test_contextual_change_does_not_guess_unknown_previous_value() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Không phải Hồ Gươm mà là cho",
+        "Không phải VinUni mà là rồi",
+    ],
+)
+def test_contextual_change_rejects_non_place_single_word_replacement(message: str) -> None:
+    draft = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    ).booking_draft
+    seed_complete_booking_turn(
+        draft,
+        PlaceToolsService(),
+        "Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm.",
+    )
+
+    assert extract_contextual_booking_change(draft, message) is None
+
+
+@pytest.mark.asyncio
+async def test_booking_change_handler_rejects_invalid_place_before_mutating_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    seed_complete_booking_turn(
+        userdata.booking_draft,
+        PlaceToolsService(),
+        "Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm.",
+    )
+    before = userdata.booking_draft.model_dump(mode="json")
+    task = BookingTask(session_data=userdata, state_store=EphemeralVoiceStateStore())
+    monkeypatch.setattr(
+        booking_module,
+        "extract_contextual_booking_change",
+        lambda *_: ("destination", "cho", "Hồ Gươm"),
+    )
+
+    await task._handle_explicit_booking_change(userdata, "nội dung sửa theo ngữ cảnh")
+
+    assert userdata.booking_draft.model_dump(mode="json") == before
+
+
 @pytest.mark.asyncio
 async def test_destination_barge_in_updates_destination_but_keeps_pickup_clarification_first(
     monkeypatch: pytest.MonkeyPatch,
