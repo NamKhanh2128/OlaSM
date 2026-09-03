@@ -9,11 +9,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from src.voice_agent.place_query_validator import is_valid_place_query
+
 BookingTarget = Literal["pickup", "destination"]
 BookingField = Literal["pickup", "destination", "vehicle_type"]
 BookingSlotStatus = Literal["missing", "needs_clarification", "resolved"]
 VehicleType = Literal["MOTORBIKE", "CAR_4", "CAR_7", "LUXURY"]
 ConfirmationStatus = Literal["not_requested", "awaiting", "confirmed"]
+PostBookingStage = Literal["menu", "driver_request_sent", "tracking", "rating_requested", "restart_requested"]
 FailureCode = Literal[
     "ASR_LOW_CONFIDENCE",
     "STT_UNAVAILABLE",
@@ -54,6 +57,19 @@ def vehicle_spoken_label(vehicle_type: VehicleType | None) -> str | None:
     """Return a Vietnamese label suitable for TTS, never a domain enum."""
 
     return _VEHICLE_SPOKEN_LABELS.get(vehicle_type) if vehicle_type else None
+
+
+def post_booking_menu_message(booking_id: str, estimated_fare: int, currency: str = "VND") -> str:
+    """Return the single authoritative post-booking customer-service prompt."""
+
+    fare = f"{estimated_fare:,}".replace(",", ".")
+    return (
+        f"Chuyến xe {booking_id} đã được đặt thành công với giá {fare} {currency}. "
+        "Tôi có thể hỗ trợ bạn: 1. Chuyển yêu cầu thêm cho tài xế, "
+        "2. Theo dõi hành trình chuyến xe, "
+        "3. Hủy chuyến xe và đặt lại chuyến mới. "
+        "Bạn có cần tôi hỗ trợ gì thêm không hay kết thúc cuộc gọi ở đây?"
+    )
 
 
 class PlaceCandidate(BaseModel):
@@ -123,6 +139,53 @@ class HandoffState(BaseModel):
     room_name: str | None = None
 
 
+class PostBookingSupportState(BaseModel):
+    """Durable, user-safe state for assistance after a booking is created."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    booking_id: str
+    stage: PostBookingStage = "menu"
+    last_driver_request: str | None = Field(default=None, max_length=240)
+    driver_request_count: int = Field(default=0, ge=0)
+    eta_minutes: int = Field(ge=0)
+    distance_to_pickup_km: float = Field(ge=0)
+    elapsed_minutes: int = Field(default=0, ge=0)
+
+    @classmethod
+    def for_booking(cls, booking: BookingResult) -> PostBookingSupportState:
+        return cls(
+            booking_id=booking.booking_id,
+            eta_minutes=booking.eta_minutes,
+            distance_to_pickup_km=round(max(booking.eta_minutes * 0.35, 0.0), 1),
+        )
+
+    def record_driver_request(self, request: str) -> None:
+        normalized = " ".join(request.split()).strip(" ,.!?;:")
+        if not normalized:
+            raise ValueError("DRIVER_REQUEST_REQUIRED")
+        if len(normalized) > 240:
+            raise ValueError("DRIVER_REQUEST_TOO_LONG")
+        self.last_driver_request = normalized
+        self.driver_request_count += 1
+        self.stage = "driver_request_sent"
+
+    def advance_tracking(self, minutes: int) -> None:
+        if minutes < 1 or minutes > 30:
+            raise ValueError("TRACKING_INTERVAL_OUT_OF_RANGE")
+        elapsed = min(minutes, self.eta_minutes)
+        self.eta_minutes = max(self.eta_minutes - elapsed, 0)
+        self.distance_to_pickup_km = round(max(self.distance_to_pickup_km - elapsed * 0.35, 0.0), 1)
+        self.elapsed_minutes += elapsed
+        self.stage = "tracking"
+
+    def request_rating(self) -> None:
+        self.stage = "rating_requested"
+
+    def request_restart(self) -> None:
+        self.stage = "restart_requested"
+
+
 class BookingDraft(BaseModel):
     """Mutable draft with deterministic dependent-field invalidation."""
 
@@ -176,6 +239,8 @@ class BookingDraft(BaseModel):
         query: str,
         candidates: list[PlaceCandidate],
     ) -> None:
+        if not is_valid_place_query(query):
+            raise ValueError("PLACE_QUERY_INVALID")
         if target == "pickup":
             self.pickup_query = query
             self.pickup = None
@@ -518,6 +583,7 @@ class AloSMSessionData(BaseModel):
     last_failure: VoiceFailure | None = None
     handoff: HandoffState | None = None
     lifecycle_status: SessionLifecycle = "active"
+    post_booking_support: PostBookingSupportState | None = None
 
     _transcript_rewrite_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
     _transcript_rewrite_tasks: dict[str, asyncio.Task[object]] = PrivateAttr(default_factory=dict)
@@ -556,6 +622,9 @@ class AloSMSessionData(BaseModel):
             "last_failure": (self.last_failure.model_dump(mode="json") if self.last_failure else None),
             "handoff": self.handoff.model_dump(mode="json") if self.handoff else None,
             "lifecycle_status": self.lifecycle_status,
+            "post_booking_support": (
+                self.post_booking_support.model_dump(mode="json") if self.post_booking_support else None
+            ),
         }
 
     def restore(self, state: dict[str, object], revision: int) -> None:
@@ -569,6 +638,10 @@ class AloSMSessionData(BaseModel):
         if lifecycle not in {"active", "completed", "cancelled"}:
             raise ValueError("VOICE_SESSION_LIFECYCLE_UNSUPPORTED")
         self.lifecycle_status = lifecycle
+        self.post_booking_support = (
+            PostBookingSupportState.model_validate(state["post_booking_support"])
+            if state.get("post_booking_support") else None
+        )
         self.persistence_revision = revision
         self.recovered = True
 
@@ -596,4 +669,7 @@ class AloSMSessionData(BaseModel):
             "failure": self.last_failure.model_dump(mode="json") if self.last_failure else None,
             "handoff": self.handoff.model_dump(mode="json") if self.handoff else None,
             "recovered": self.recovered,
+            "post_booking_support": (
+                self.post_booking_support.model_dump(mode="json") if self.post_booking_support else None
+            ),
         }

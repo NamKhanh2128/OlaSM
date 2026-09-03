@@ -4,6 +4,7 @@ from src.voice_agent.session_data import (
     BookingDraft,
     BookingResult,
     PlaceCandidate,
+    PostBookingSupportState,
     QuoteSnapshot,
     vehicle_spoken_label,
 )
@@ -104,6 +105,21 @@ def test_candidate_must_come_from_current_search_result() -> None:
 
     with pytest.raises(ValueError, match="PLACE_CANDIDATE_NOT_IN_CURRENT_SEARCH"):
         draft.select_place("pickup", "invented-place-id")
+
+
+@pytest.mark.parametrize("target", ["pickup", "destination"])
+def test_booking_draft_rejects_invalid_single_word_place_query(target: str) -> None:
+    draft = BookingDraft()
+
+    with pytest.raises(ValueError, match="PLACE_QUERY_INVALID"):
+        draft.set_candidates(target, "cho", [])  # type: ignore[arg-type]
+
+    assert draft.pickup_query is None
+    assert draft.destination_query is None
+    assert draft.pickup_candidates == []
+    assert draft.destination_candidates == []
+    assert draft.pending_candidate_target is None
+    assert draft.revision == 0
 
 
 @pytest.mark.parametrize("correction", ["pickup", "destination", "vehicle"])
@@ -396,3 +412,31 @@ def test_conversation_summary_is_compact_and_uses_spoken_vehicle_label() -> None
     assert "xe ô tô bốn chỗ" in summary
     assert "CAR_4" not in summary
     assert vehicle_spoken_label("MOTORBIKE") == "xe máy"
+
+
+def test_post_booking_support_counts_down_and_round_trips_durable_state() -> None:
+    booking = BookingResult(
+        booking_id="book-post-1",
+        status="SEARCHING_DRIVER",
+        estimated_fare=90_000,
+        eta_minutes=10,
+    )
+    support = PostBookingSupportState.for_booking(booking)
+    support.record_driver_request("Gọi cho tôi khi tới")
+    support.advance_tracking(3)
+
+    assert support.eta_minutes == 7
+    assert support.distance_to_pickup_km == 2.5
+    assert support.elapsed_minutes == 3
+    assert support.last_driver_request == "Gọi cho tôi khi tới"
+
+
+def test_post_booking_tracking_rejects_invalid_interval() -> None:
+    support = PostBookingSupportState.for_booking(
+        BookingResult(booking_id="book-post-2", status="SEARCHING_DRIVER", estimated_fare=90_000, eta_minutes=5)
+    )
+
+    with pytest.raises(ValueError, match="TRACKING_INTERVAL_OUT_OF_RANGE"):
+        support.advance_tracking(0)
+    with pytest.raises(ValueError, match="TRACKING_INTERVAL_OUT_OF_RANGE"):
+        support.advance_tracking(31)

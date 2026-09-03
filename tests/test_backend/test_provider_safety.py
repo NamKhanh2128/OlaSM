@@ -19,6 +19,13 @@ def test_generic_location_word_is_not_resolved_to_an_unrelated_landmark():
     assert PlaceSearchService().search("trường") == []
 
 
+@pytest.mark.parametrize("word", ["cho", "rồi", "thôi", "nhầm", "đây", "đó", "đi", "đến", "đón", "tôi"])
+def test_single_word_non_places_never_match_gazetteer(word: str) -> None:
+    """A generic word must not become a landmark through substring matching."""
+
+    assert PlaceSearchService().search(word) == []
+
+
 def test_hanoi_gazetteer_requires_specific_vinuni_and_ho_guom_points():
     service = PlaceSearchService()
 

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
-from livekit.agents import StopResponse, llm
+from livekit.agents import StopResponse, ToolError, llm
 
 from src.voice_agent.agent import AloSMAgent
 from src.voice_agent.persistence import EphemeralVoiceStateStore
@@ -23,6 +23,8 @@ from src.voice_agent.tasks.booking import (
     grounded_named_place_selection,
     grounded_ordinal_selection,
     grounded_vehicle_selection,
+    has_additional_driver_request,
+    has_booking_change_intent,
     is_explicit_confirmation,
     requires_location_clarification,
     seed_complete_booking_turn,
@@ -72,6 +74,9 @@ def test_agent_exposes_native_booking_entrypoint_and_authoritative_status_tool()
         "get_booking_status",
         "search_knowledge",
         "get_vehicle_options",
+        "send_driver_request",
+        "track_booking",
+        "finish_customer_service",
     }
 
 
@@ -285,6 +290,9 @@ async def test_repeated_booking_request_does_not_reenter_completed_booking() -> 
 
     assert "book-existing" in result
     assert "đã được đặt thành công" in result
+    assert "100.000 VND" in result
+    assert "1. Chuyển yêu cầu thêm cho tài xế" in result
+    assert userdata.post_booking_support is not None
 
 
 @pytest.mark.asyncio
@@ -350,6 +358,44 @@ async def test_cancel_booking_uses_llm_decision_before_backend_call(
 
     assert backend.calls == [("book-1", "session:cancel_booking:book-1", "user")]
     assert '"cancelled": true' in second
+    assert userdata.lifecycle_status == "cancelled"
+    assert userdata.post_booking_support is not None
+    assert userdata.post_booking_support.stage == "restart_requested"
+
+
+@pytest.mark.asyncio
+async def test_post_booking_tools_persist_driver_request_tracking_and_rating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    booking = booking_module.BookingResult(
+        booking_id="book-support",
+        status="SEARCHING_DRIVER",
+        estimated_fare=100_000,
+        currency="VND",
+        eta_minutes=10,
+    )
+    userdata.booking_draft.booking = booking
+    userdata.post_booking_support = booking_module.PostBookingSupportState.for_booking(booking)
+    agent = AloSMAgent(session_data=userdata)
+    agent._activity = SimpleNamespace(session=SimpleNamespace(userdata=userdata))  # type: ignore[assignment]
+    monkeypatch.setattr("src.voice_agent.agent.publish_booking_state", _noop_publish)
+
+    sent = await agent.send_driver_request("  Gọi cho tôi khi tới. ")
+    tracked = await agent.track_booking(3)
+    finished = await agent.finish_customer_service()
+
+    assert '"sent": true' in sent
+    assert userdata.post_booking_support.last_driver_request == "Gọi cho tôi khi tới"
+    assert '"eta_minutes": 7' in tracked
+    assert '"distance_to_pickup_km": 2.5' in tracked
+    assert '"rating_requested": true' in finished
+    assert userdata.post_booking_support.stage == "rating_requested"
 
 
 async def _noop_publish(*_: object) -> None:
@@ -440,7 +486,11 @@ async def test_estimate_fare_atomically_starts_confirmation(
 
     assert draft.confirmation_status == "awaiting"
     assert draft.confirmation_fingerprint == draft.quote.fingerprint
-    assert "Hãy hỏi xác nhận rõ ràng" in result
+    assert result == (
+        "Đã ghi nhận chuyến xe của bạn đi từ Cổng chính VinUni, đến Bưu điện Hà Nội, "
+        'xe ô tô bốn chỗ. Hãy kiểm tra lại thông tin và xác nhận đặt xe bằng câu "tôi xác nhận đặt xe", '
+        "nếu cần sửa đổi thông tin gì thì hãy báo tôi nhé!"
+    )
 
 
 @pytest.mark.asyncio
@@ -492,7 +542,7 @@ async def test_duplicate_confirmation_is_idempotent_before_booking_creation(
 
     monkeypatch.setattr(booking_module, "publish_booking_state", _publish)
     chat_ctx = llm.ChatContext.empty()
-    chat_ctx.add_message(role="user", content="Tôi xác nhận đặt chuyến này.")
+    chat_ctx.add_message(role="user", content="Tôi xác nhận đặt xe.")
     task = BookingTask(
         chat_ctx=chat_ctx,
         state_store=EphemeralVoiceStateStore(),
@@ -506,7 +556,7 @@ async def test_duplicate_confirmation_is_idempotent_before_booking_creation(
     first = await BookingTask.confirm_booking._func(task, context)
 
     second_chat_ctx = llm.ChatContext.empty()
-    second_chat_ctx.add_message(role="user", content="Tôi xác nhận lại, cứ đặt chuyến này nhé.")
+    second_chat_ctx.add_message(role="user", content="Tôi xác nhận đập xe.")
     second_task = BookingTask(
         chat_ctx=second_chat_ctx,
         state_store=EphemeralVoiceStateStore(),
@@ -605,11 +655,57 @@ def test_terminal_task_tools_follow_livekit_complete_without_narrating_inside_ta
         assert tool.__annotations__["return"] in {None, type(None), "None"}
 
 
-def test_explicit_confirmation_rejects_negative_or_ambiguous_text() -> None:
+def test_explicit_confirmation_requires_four_words_and_clear_booking_intent() -> None:
+    assert is_explicit_confirmation("Tôi xác nhận đặt xe") is True
+    assert is_explicit_confirmation("TÔI XÁC NHẬN ĐẶT XE!") is True
+    assert is_explicit_confirmation("Vâng, tôi xác nhận đập xe nhé.") is True
     assert is_explicit_confirmation("Tôi xác nhận đặt chuyến này") is True
     assert is_explicit_confirmation("Đúng rồi, đặt xe đi") is True
-    assert is_explicit_confirmation("Không đúng, sửa điểm đến") is False
+    assert is_explicit_confirmation("Vâng, đặt xe giúp tôi") is True
+    assert is_explicit_confirmation("Tôi xác nhận đặt xe và cảm ơn bạn") is True
+    assert is_explicit_confirmation("Vâng") is False
+    assert is_explicit_confirmation("Đúng rồi") is False
     assert is_explicit_confirmation("Ừ") is False
+    assert is_explicit_confirmation("Tôi không xác nhận đặt xe") is False
+    assert is_explicit_confirmation("Tôi xác nhận đặt xe, nhưng hãy đón tôi cách đó 2km") is False
+    assert is_explicit_confirmation("Tôi xác nhận đặt xe, hãy đón tôi cách đó 2km") is False
+
+
+def test_additional_driver_request_is_separated_from_booking_confirmation() -> None:
+    assert has_additional_driver_request("Tôi xác nhận đặt xe, nhưng hãy đón tôi cách đó 2km") is True
+    assert has_additional_driver_request("Tôi xác nhận đặt xe, hãy đón tôi cách đó 2km") is True
+    assert has_additional_driver_request("Tôi xác nhận đặt xe và cảm ơn bạn") is False
+
+
+@pytest.mark.asyncio
+async def test_confirm_booking_rejects_combined_driver_request() -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    chat_ctx = llm.ChatContext.empty()
+    chat_ctx.add_message(
+        role="user",
+        content="Tôi xác nhận đặt xe, nhưng hãy đón tôi cách đó 2km",
+    )
+    task = BookingTask(chat_ctx=chat_ctx, state_store=EphemeralVoiceStateStore())
+    context = SimpleNamespace(
+        userdata=userdata,
+        session=object(),
+        disallow_interruptions=lambda: None,
+    )
+
+    with pytest.raises(ToolError, match="LATEST_USER_MESSAGE_CONTAINS_ADDITIONAL_DRIVER_REQUEST"):
+        await BookingTask.confirm_booking._func(task, context)
+
+    assert userdata.booking_draft.confirmation_status == "not_requested"
+
+
+def test_booking_change_intent_outweighs_confirmation() -> None:
+    assert has_booking_change_intent(BookingDraft(), "Tôi xác nhận đặt xe nhưng đổi điểm đến thành Long Biên")
+    assert has_booking_change_intent(BookingDraft(), "Tôi xác nhận đặt xe") is False
 
 
 def test_booking_abandonment_requires_an_explicit_request() -> None:
@@ -831,6 +927,57 @@ def test_contextual_change_does_not_guess_unknown_previous_value() -> None:
         )
         is None
     )
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Không phải Hồ Gươm mà là cho",
+        "Không phải VinUni mà là rồi",
+    ],
+)
+def test_contextual_change_rejects_non_place_single_word_replacement(message: str) -> None:
+    draft = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    ).booking_draft
+    seed_complete_booking_turn(
+        draft,
+        PlaceToolsService(),
+        "Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm.",
+    )
+
+    assert extract_contextual_booking_change(draft, message) is None
+
+
+@pytest.mark.asyncio
+async def test_booking_change_handler_rejects_invalid_place_before_mutating_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userdata = AloSMSessionData(
+        app_session_id="session",
+        call_id="call",
+        user_id="user",
+        participant_identity="participant",
+    )
+    seed_complete_booking_turn(
+        userdata.booking_draft,
+        PlaceToolsService(),
+        "Cho tôi xe 4 chỗ đi từ VinUni tới Hồ Gươm.",
+    )
+    before = userdata.booking_draft.model_dump(mode="json")
+    task = BookingTask(session_data=userdata, state_store=EphemeralVoiceStateStore())
+    monkeypatch.setattr(
+        booking_module,
+        "extract_contextual_booking_change",
+        lambda *_: ("destination", "cho", "Hồ Gươm"),
+    )
+
+    await task._handle_explicit_booking_change(userdata, "nội dung sửa theo ngữ cảnh")
+
+    assert userdata.booking_draft.model_dump(mode="json") == before
 
 
 @pytest.mark.asyncio
