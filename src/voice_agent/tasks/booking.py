@@ -1158,13 +1158,13 @@ class BookingTask(AgentTask[BookingOutcome]):
             await self._state_store.save(userdata)
         except VoiceStateConflictError:
             self._raise_if_stale_booking_change(change_token)
-            userdata.record_failure(
+        userdata.record_failure(
                 "STATE_CONFLICT",
                 "Phiên này vừa được cập nhật ở kết nối khác.",
-                retryable=False,
-                fallback_action="handoff",
-            )
-            await publish_booking_state(self.session)
+            retryable=False,
+            fallback_action="handoff",
+        )
+        await publish_booking_state(self.session)
             raise StopResponse() from None
         self._raise_if_stale_booking_change(change_token)
         await publish_booking_state(self.session)
@@ -1240,7 +1240,7 @@ class BookingTask(AgentTask[BookingOutcome]):
                 self._raise_if_stale_booking_change(change_token)
                 draft = userdata.booking_draft
                 if previous_value is not None and _current_booking_surface_field(draft, previous_value) != field:
-                    raise StopResponse()
+                raise StopResponse()
                 vehicle_type = extract_vehicle_type(replacement)
                 if vehicle_type is None:
                     draft.mark_vehicle_needs_clarification(replacement)
@@ -1688,7 +1688,7 @@ class BookingTask(AgentTask[BookingOutcome]):
                 return "Đã cập nhật địa điểm nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
             context.userdata.clear_failure()
             if refreshed_quote is None:
-                await self._commit(context)
+            await self._commit(context)
             acknowledgement = f"Đã chọn {_target_label(target)} là {selected.display_name}."
             spoken_prompt = (
                 _booking_confirmation_prompt(draft)
@@ -1775,7 +1775,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             return "Đã xác nhận địa điểm nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
         context.userdata.clear_failure()
         if refreshed_quote is None:
-            await self._commit(context)
+        await self._commit(context)
         acknowledgement = f"Đã chọn {_target_label(target)} là {selected.display_name}."
         if refreshed_quote is not None:
             return _booking_confirmation_prompt(draft)
@@ -1825,7 +1825,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             return "Đã cập nhật loại xe nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
         context.userdata.clear_failure()
         if refreshed_quote is None:
-            await self._commit(context)
+        await self._commit(context)
         acknowledgement = f"Đã chọn loại xe là {vehicle_spoken_label(vehicle_type)}."
         if refreshed_quote is not None:
             return _booking_confirmation_prompt(draft)
@@ -1983,29 +1983,29 @@ class BookingTask(AgentTask[BookingOutcome]):
             "Đang hoàn tất đặt chuyến, bạn chờ một chút nhé.",
             delay=0.8,
         ):
-            try:
-                booking = await self._bookings.create(
-                    user_id=context.userdata.user_id,
-                    app_session_id=context.userdata.app_session_id,
-                    draft=draft,
-                )
-                draft.set_booking(booking)
-                context.userdata.lifecycle_status = "completed"
-            except ValueError as exc:
-                raise ToolError(str(exc)) from exc
-            except Exception as exc:
-                logger.exception("failed to create booking handoff session=%s", context.userdata.app_session_id)
-                context.userdata.record_failure(
-                    "BOOKING_RESULT_UNKNOWN",
-                    "Chưa xác định được kết quả tạo chuyến; không tự động tạo lại.",
-                    retryable=False,
-                    fallback_action="handoff",
-                )
-                await self._commit(context)
-                raise ToolError("BOOKING_RESULT_UNKNOWN") from exc
-            context.userdata.clear_failure()
-            context.userdata.post_booking_support = PostBookingSupportState.for_booking(booking)
+        try:
+            booking = await self._bookings.create(
+                user_id=context.userdata.user_id,
+                app_session_id=context.userdata.app_session_id,
+                draft=draft,
+            )
+            draft.set_booking(booking)
+            context.userdata.lifecycle_status = "completed"
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        except Exception as exc:
+            logger.exception("failed to create booking handoff session=%s", context.userdata.app_session_id)
+            context.userdata.record_failure(
+                "BOOKING_RESULT_UNKNOWN",
+                "Chưa xác định được kết quả tạo chuyến; không tự động tạo lại.",
+                retryable=False,
+                fallback_action="handoff",
+            )
             await self._commit(context)
+            raise ToolError("BOOKING_RESULT_UNKNOWN") from exc
+        context.userdata.clear_failure()
+            context.userdata.post_booking_support = PostBookingSupportState.for_booking(booking)
+        await self._commit(context)
         outcome = BookingOutcome(
             status="created",
             booking=booking,

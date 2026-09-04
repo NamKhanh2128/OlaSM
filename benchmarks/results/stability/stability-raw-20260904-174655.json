@@ -1,0 +1,349 @@
+{
+  "error_events": [
+    {
+      "request_id": "dry-0",
+      "scenario": "turn_0",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1134.2407021283434,
+      "details": ""
+    },
+    {
+      "request_id": "dry-1",
+      "scenario": "turn_1",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 2212.2425854803505,
+      "details": ""
+    },
+    {
+      "request_id": "dry-2",
+      "scenario": "turn_2",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 2668.500359441102,
+      "details": ""
+    },
+    {
+      "request_id": "dry-3",
+      "scenario": "turn_3",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 392.2027264933997,
+      "details": ""
+    },
+    {
+      "request_id": "dry-4",
+      "scenario": "turn_4",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 848.8788931484554,
+      "details": ""
+    },
+    {
+      "request_id": "dry-5",
+      "scenario": "turn_5",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 992.902503735679,
+      "details": ""
+    },
+    {
+      "request_id": "dry-6",
+      "scenario": "turn_6",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1155.4366593021464,
+      "details": ""
+    },
+    {
+      "request_id": "dry-7",
+      "scenario": "turn_7",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1951.8914974187917,
+      "details": ""
+    },
+    {
+      "request_id": "dry-8",
+      "scenario": "turn_8",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1148.232021594229,
+      "details": ""
+    },
+    {
+      "request_id": "dry-9",
+      "scenario": "turn_9",
+      "timestamp_iso": "",
+      "success": false,
+      "error_type": "backend_500",
+      "response_time_ms": 2390.8630599857966,
+      "details": ""
+    },
+    {
+      "request_id": "dry-10",
+      "scenario": "turn_10",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 592.5737932427569,
+      "details": ""
+    },
+    {
+      "request_id": "dry-11",
+      "scenario": "turn_11",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 2573.445543568248,
+      "details": ""
+    },
+    {
+      "request_id": "dry-12",
+      "scenario": "turn_12",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1923.7344541751204,
+      "details": ""
+    },
+    {
+      "request_id": "dry-13",
+      "scenario": "turn_13",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 473.70004640192775,
+      "details": ""
+    },
+    {
+      "request_id": "dry-14",
+      "scenario": "turn_14",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 2085.753441677526,
+      "details": ""
+    },
+    {
+      "request_id": "dry-15",
+      "scenario": "turn_15",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1269.9052607668127,
+      "details": ""
+    },
+    {
+      "request_id": "dry-16",
+      "scenario": "turn_16",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1962.5947708147717,
+      "details": ""
+    },
+    {
+      "request_id": "dry-17",
+      "scenario": "turn_17",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 800.3785191221739,
+      "details": ""
+    },
+    {
+      "request_id": "dry-18",
+      "scenario": "turn_18",
+      "timestamp_iso": "",
+      "success": false,
+      "error_type": "backend_500",
+      "response_time_ms": 1809.1465319671872,
+      "details": ""
+    },
+    {
+      "request_id": "dry-19",
+      "scenario": "turn_19",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1528.6716219923385,
+      "details": ""
+    },
+    {
+      "request_id": "dry-20",
+      "scenario": "turn_20",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 628.2145221475037,
+      "details": ""
+    },
+    {
+      "request_id": "dry-21",
+      "scenario": "turn_21",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1554.3449587416335,
+      "details": ""
+    },
+    {
+      "request_id": "dry-22",
+      "scenario": "turn_22",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 663.4581690134912,
+      "details": ""
+    },
+    {
+      "request_id": "dry-23",
+      "scenario": "turn_23",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 927.9948327513374,
+      "details": ""
+    },
+    {
+      "request_id": "dry-24",
+      "scenario": "turn_24",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1868.106223084677,
+      "details": ""
+    },
+    {
+      "request_id": "dry-25",
+      "scenario": "turn_25",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1957.6268371773012,
+      "details": ""
+    },
+    {
+      "request_id": "dry-26",
+      "scenario": "turn_26",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 2049.6756156232523,
+      "details": ""
+    },
+    {
+      "request_id": "dry-27",
+      "scenario": "turn_27",
+      "timestamp_iso": "",
+      "success": false,
+      "error_type": "stt_no_final",
+      "response_time_ms": 2362.145742052456,
+      "details": ""
+    },
+    {
+      "request_id": "dry-28",
+      "scenario": "turn_28",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 676.7440398162643,
+      "details": ""
+    },
+    {
+      "request_id": "dry-29",
+      "scenario": "turn_29",
+      "timestamp_iso": "",
+      "success": true,
+      "error_type": "",
+      "response_time_ms": 1933.9484696119005,
+      "details": ""
+    }
+  ],
+  "recovery": [
+    {
+      "run": 0,
+      "recovered": true
+    },
+    {
+      "run": 1,
+      "recovered": true
+    },
+    {
+      "run": 2,
+      "recovered": true
+    },
+    {
+      "run": 3,
+      "recovered": true
+    },
+    {
+      "run": 4,
+      "recovered": false
+    },
+    {
+      "run": 5,
+      "recovered": true
+    },
+    {
+      "run": 6,
+      "recovered": true
+    },
+    {
+      "run": 7,
+      "recovered": true
+    },
+    {
+      "run": 8,
+      "recovered": true
+    },
+    {
+      "run": 9,
+      "recovered": true
+    }
+  ],
+  "idempotency": [
+    {
+      "run": 0,
+      "is_idempotent": true,
+      "new_bookings": 1
+    },
+    {
+      "run": 1,
+      "is_idempotent": true,
+      "new_bookings": 1
+    },
+    {
+      "run": 2,
+      "is_idempotent": true,
+      "new_bookings": 1
+    },
+    {
+      "run": 3,
+      "is_idempotent": true,
+      "new_bookings": 1
+    },
+    {
+      "run": 4,
+      "is_idempotent": true,
+      "new_bookings": 1
+    }
+  ],
+  "concurrent": {
+    "concurrency": 5,
+    "succeeded": 5,
+    "failed": 0,
+    "success_rate": 100
+  }
+}

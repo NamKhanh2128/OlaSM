@@ -6,7 +6,7 @@ Bắt đầu đọc [docs/README.md](docs/README.md), sau đó xem
 [docs/LIVEKIT_TEAM_SETUP.md](docs/LIVEKIT_TEAM_SETUP.md) và
 [docs/PROJECT_SOURCE_OF_TRUTH.md](docs/PROJECT_SOURCE_OF_TRUTH.md).
 
-Kiến trúc tổng thể: [docs/architecture_diagram.md](docs/architecture_diagram.md) ·
+Kiến trúc tổng thể: [docs/PROJECT_SYSTEM_SPECIFICATION.md](docs/PROJECT_SYSTEM_SPECIFICATION.md) · [docs/architecture_diagram.md](docs/architecture_diagram.md) ·
 Product requirements: [docs/PRD_AloSM_Voice.md](docs/PRD_AloSM_Voice.md)
 
 Setup LiveKit chi tiết cho thành viên mới:

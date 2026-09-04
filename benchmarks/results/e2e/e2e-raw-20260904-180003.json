@@ -1,0 +1,188 @@
+[
+  {
+    "scenario_id": "E2E-F1-001",
+    "scenario_name": "Happy Path Booking",
+    "verdict": "PASS",
+    "review_id": "P160-F1-HAPPY-001, P160-F1-EDGE-005",
+    "duration_ms": 2763.729340630761,
+    "details": "4 steps, DRY RUN (PASS)",
+    "steps": [
+      {
+        "step": 1,
+        "dry_run": true
+      },
+      {
+        "step": 2,
+        "dry_run": true
+      },
+      {
+        "step": 3,
+        "dry_run": true
+      },
+      {
+        "step": 4,
+        "dry_run": true
+      }
+    ]
+  },
+  {
+    "scenario_id": "E2E-F1-002",
+    "scenario_name": "Multi-turn Incomplete Booking",
+    "verdict": "PASS",
+    "review_id": "P160-F1-EDGE-002",
+    "duration_ms": 2417.5619411519406,
+    "details": "5 steps, DRY RUN (PASS)",
+    "steps": [
+      {
+        "step": 1,
+        "dry_run": true
+      },
+      {
+        "step": 2,
+        "dry_run": true
+      },
+      {
+        "step": 3,
+        "dry_run": true
+      },
+      {
+        "step": 4,
+        "dry_run": true
+      },
+      {
+        "step": 5,
+        "dry_run": true
+      }
+    ]
+  },
+  {
+    "scenario_id": "E2E-F1-003",
+    "scenario_name": "Correction Invalidates Quote",
+    "verdict": "PASS",
+    "review_id": "P160-F1-UNHAPPY-004",
+    "duration_ms": 3135.0083395702213,
+    "details": "4 steps, DRY RUN (PASS)",
+    "steps": [
+      {
+        "step": 1,
+        "dry_run": true
+      },
+      {
+        "step": 2,
+        "dry_run": true
+      },
+      {
+        "step": 3,
+        "dry_run": true
+      },
+      {
+        "step": 4,
+        "dry_run": true
+      }
+    ]
+  },
+  {
+    "scenario_id": "E2E-F1-004",
+    "scenario_name": "Negative Confirmation",
+    "verdict": "PASS",
+    "review_id": "P160-F3-AI-904",
+    "duration_ms": 2276.3649524430666,
+    "details": "4 steps, DRY RUN (PASS)",
+    "steps": [
+      {
+        "step": 1,
+        "dry_run": true
+      },
+      {
+        "step": 2,
+        "dry_run": true
+      },
+      {
+        "step": 3,
+        "dry_run": true
+      },
+      {
+        "step": 4,
+        "dry_run": true
+      }
+    ]
+  },
+  {
+    "scenario_id": "E2E-F2-001",
+    "scenario_name": "Explicit Handoff Request",
+    "verdict": "PASS",
+    "review_id": "P160-F2-HAPPY-001",
+    "duration_ms": 2136.2158250598745,
+    "details": "2 steps, DRY RUN (PASS)",
+    "steps": [
+      {
+        "step": 1,
+        "dry_run": true
+      },
+      {
+        "step": 2,
+        "dry_run": true
+      }
+    ]
+  },
+  {
+    "scenario_id": "E2E-F3-001",
+    "scenario_name": "Price Inquiry Only",
+    "verdict": "PASS",
+    "review_id": "P160-F3-HAPPY-001",
+    "duration_ms": 1934.9860492027922,
+    "details": "1 steps, DRY RUN (PASS)",
+    "steps": [
+      {
+        "step": 1,
+        "dry_run": true
+      }
+    ]
+  },
+  {
+    "scenario_id": "E2E-F3-002",
+    "scenario_name": "FAQ Policy Query",
+    "verdict": "PASS",
+    "review_id": "P160-F3-AI-003",
+    "duration_ms": 2348.875751193479,
+    "details": "1 steps, DRY RUN (PASS)",
+    "steps": [
+      {
+        "step": 1,
+        "dry_run": true
+      }
+    ]
+  },
+  {
+    "scenario_id": "E2E-F3-003",
+    "scenario_name": "Out-of-scope Policy",
+    "verdict": "PASS",
+    "review_id": "P160-F3-UNHAPPY-004",
+    "duration_ms": 2460.137788561868,
+    "details": "1 steps, DRY RUN (PASS)",
+    "steps": [
+      {
+        "step": 1,
+        "dry_run": true
+      }
+    ]
+  },
+  {
+    "scenario_id": "E2E-F9-001",
+    "scenario_name": "Emergency During Booking",
+    "verdict": "PASS",
+    "review_id": "P160-F9-HAPPY-001, P160-F9-AI-906",
+    "duration_ms": 1873.0314219445918,
+    "details": "2 steps, DRY RUN (PASS)",
+    "steps": [
+      {
+        "step": 1,
+        "dry_run": true
+      },
+      {
+        "step": 2,
+        "dry_run": true
+      }
+    ]
+  }
+]

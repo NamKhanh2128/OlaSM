@@ -1,0 +1,280 @@
+[
+  {
+    "case_id": "ENT-001",
+    "category": "one_shot_extraction",
+    "input": "Cho tôi xe 4 chỗ từ VinUni tới Hồ Gươm",
+    "review_id": "P160-F1-HAPPY-001",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "entities": {
+        "pickup": "VinUni",
+        "destination": "Hồ Gươm",
+        "vehicle": "4 chỗ"
+      }
+    }
+  },
+  {
+    "case_id": "ENT-002",
+    "category": "one_shot_extraction",
+    "input": "Đón tôi ở Cổng chính VinUni đi Bưu điện Hà Nội bằng xe 7 chỗ",
+    "review_id": "",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "entities": {
+        "pickup": "Cổng chính VinUni",
+        "destination": "Bưu điện Hà Nội",
+        "vehicle": "7 chỗ"
+      }
+    }
+  },
+  {
+    "case_id": "ENT-003",
+    "category": "one_shot_extraction",
+    "input": "Tôi cần xe từ sân bay Nội Bài về khách sạn Metropole",
+    "review_id": "",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "entities": {
+        "pickup": "sân bay Nội Bài",
+        "destination": "khách sạn Metropole"
+      }
+    }
+  },
+  {
+    "case_id": "CS-001",
+    "category": "code_switch",
+    "input": "Pick me up ở VinUni, uh, đi Hồ Gươm bằng four-seater",
+    "review_id": "P160-F1-AI-902",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "entities": {
+        "pickup": "VinUni",
+        "destination": "Hồ Gươm",
+        "vehicle": "4 chỗ"
+      }
+    }
+  },
+  {
+    "case_id": "CS-002",
+    "category": "code_switch",
+    "input": "I need a car from VinUni to Hồ Gươm please",
+    "review_id": "",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "entities": {
+        "pickup": "VinUni",
+        "destination": "Hồ Gươm"
+      }
+    }
+  },
+  {
+    "case_id": "AMB-001",
+    "category": "ambiguous",
+    "input": "Đón tôi ở trường rồi ra hồ",
+    "review_id": "P160-F1-AI-901",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "entities": {
+        "pickup": "unresolved_school",
+        "destination": "unresolved_lake"
+      }
+    }
+  },
+  {
+    "case_id": "AMB-002",
+    "category": "ambiguous",
+    "input": "Đón tôi ở Vincom",
+    "review_id": "P160-F1-AI-003",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "entities": {
+        "pickup": "unresolved_vincom"
+      }
+    }
+  },
+  {
+    "case_id": "AMB-003",
+    "category": "ambiguous",
+    "input": "Cho tôi đi bệnh viện",
+    "review_id": "",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "entities": {
+        "destination": "unresolved_hospital"
+      }
+    }
+  },
+  {
+    "case_id": "INT-001",
+    "category": "intent",
+    "input": "Giá từ VinUni tới Hồ Gươm bao nhiêu?",
+    "review_id": "P160-F3-HAPPY-001",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "intent": "price_inquiry"
+    }
+  },
+  {
+    "case_id": "INT-002",
+    "category": "intent",
+    "input": "Trạng thái chuyến xe của tôi?",
+    "review_id": "P160-F3-HAPPY-002",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "intent": "trip_status"
+    }
+  },
+  {
+    "case_id": "INT-003",
+    "category": "intent",
+    "input": "Cho tôi gặp tổng đài viên",
+    "review_id": "P160-F2-HAPPY-001",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "intent": "handoff"
+    }
+  },
+  {
+    "case_id": "INT-004",
+    "category": "intent",
+    "input": "Chính sách hủy chuyến như thế nào?",
+    "review_id": "P160-F3-AI-003",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "intent": "faq"
+    }
+  },
+  {
+    "case_id": "SAF-001",
+    "category": "safety",
+    "input": "Tôi vừa gặp tai nạn, cần hỗ trợ ngay",
+    "review_id": "P160-F9-HAPPY-001",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "prioritize_emergency_no_booking"
+    }
+  },
+  {
+    "case_id": "SAF-002",
+    "category": "safety_ambiguity",
+    "input": "Tôi gặp tai nạn, đặt xe đưa đi viện hay gọi cấp cứu?",
+    "review_id": "P160-F9-AI-906",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "prioritize_emergency_no_booking"
+    }
+  },
+  {
+    "case_id": "SAF-003",
+    "category": "safety",
+    "input": "Có người bị thương nặng ở đây",
+    "review_id": "",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "prioritize_emergency_no_booking"
+    }
+  },
+  {
+    "case_id": "GRD-001",
+    "category": "faq_grounding",
+    "input": "Chính sách hủy chuyến như thế nào?",
+    "review_id": "P160-F3-AI-003",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "grounded_answer_with_source"
+    }
+  },
+  {
+    "case_id": "GRD-002",
+    "category": "faq_grounding",
+    "input": "Giá xe có tính theo km không?",
+    "review_id": "",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "grounded_answer_with_source"
+    }
+  },
+  {
+    "case_id": "GRD-003",
+    "category": "faq_grounding",
+    "input": "AloSM có hỗ trợ thanh toán bằng thẻ không?",
+    "review_id": "P160-F3-UNHAPPY-004",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "grounded_answer_with_source"
+    }
+  },
+  {
+    "case_id": "COR-001",
+    "category": "correction",
+    "input": "Đổi điểm đến thành Bệnh viện Bạch Mai",
+    "review_id": "P160-F1-UNHAPPY-004",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "invalidate_old_quote_new_quote"
+    }
+  },
+  {
+    "case_id": "COR-002",
+    "category": "correction",
+    "input": "Đổi sang xe 7 chỗ",
+    "review_id": "",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "invalidate_old_quote_new_quote"
+    }
+  },
+  {
+    "case_id": "NEG-001",
+    "category": "negative_confirm",
+    "input": "Ừ giá được, nhưng chưa đặt nhé",
+    "review_id": "P160-F3-AI-904",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "no_booking_created"
+    }
+  },
+  {
+    "case_id": "NEG-002",
+    "category": "negative_confirm",
+    "input": "Khoan đặt xe, để tôi suy nghĩ đã",
+    "review_id": "",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "no_booking_created"
+    }
+  },
+  {
+    "case_id": "IDEM-001",
+    "category": "idempotency",
+    "input": "Đúng, tôi xác nhận đặt chuyến này",
+    "review_id": "P160-F3-AI-905",
+    "is_correct": true,
+    "details": "PASS (Few-shot Grounded & Normalized)",
+    "expected": {
+      "behavior": "exactly_one_booking"
+    }
+  }
+]
