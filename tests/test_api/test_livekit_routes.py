@@ -8,7 +8,7 @@ from src.main import app
 
 
 class FakeLiveKitTokenService:
-    agent_name = "alosm-voice"
+    agent_name = "olasm-voice"
 
     def issue_for_user(
         self,
@@ -21,7 +21,7 @@ class FakeLiveKitTokenService:
         assert app_session_id
         assert call_instance_id
         return LiveKitConnectionDetails(
-            server_url="wss://alosm.test.livekit.cloud",
+            server_url="wss://olasm.test.livekit.cloud",
             participant_token="signed-test-token",
         )
 
@@ -41,7 +41,7 @@ def livekit_service_override():
 
 @pytest.mark.asyncio
 async def test_livekit_token_requires_authentication(client, livekit_service_override) -> None:
-    response = await client.post("/api/v1/livekit/token", json={"agent_name": "alosm-voice"})
+    response = await client.post("/api/v1/livekit/token", json={"agent_name": "olasm-voice"})
 
     assert response.status_code == 401
 
@@ -57,15 +57,15 @@ async def test_livekit_token_returns_standard_endpoint_contract(client, livekit_
     response = await client.post(
         "/api/v1/livekit/token",
         json={
-            "agent_name": "alosm-voice",
-            "participant_attributes": {"alosm.call_id": "11111111-1111-4111-8111-111111111111"},
+            "agent_name": "olasm-voice",
+            "participant_attributes": {"olasm.call_id": "11111111-1111-4111-8111-111111111111"},
         },
         headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 201
     assert response.json() == {
-        "server_url": "wss://alosm.test.livekit.cloud",
+        "server_url": "wss://olasm.test.livekit.cloud",
         "participant_token": "signed-test-token",
     }
 
@@ -81,9 +81,9 @@ async def test_livekit_token_rejects_client_controlled_identity(client, livekit_
     response = await client.post(
         "/api/v1/livekit/token",
         json={
-            "agent_name": "alosm-voice",
+            "agent_name": "olasm-voice",
             "participant_identity": "admin",
-            "participant_attributes": {"alosm.call_id": "11111111-1111-4111-8111-111111111111"},
+            "participant_attributes": {"olasm.call_id": "11111111-1111-4111-8111-111111111111"},
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -103,7 +103,7 @@ async def test_livekit_token_rejects_unconfigured_agent(client, livekit_service_
         "/api/v1/livekit/token",
         json={
             "agent_name": "attacker-agent",
-            "participant_attributes": {"alosm.call_id": "11111111-1111-4111-8111-111111111111"},
+            "participant_attributes": {"olasm.call_id": "11111111-1111-4111-8111-111111111111"},
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -121,12 +121,12 @@ async def test_livekit_token_requires_valid_call_instance(client, livekit_servic
 
     missing = await client.post(
         "/api/v1/livekit/token",
-        json={"agent_name": "alosm-voice"},
+        json={"agent_name": "olasm-voice"},
         headers={"Authorization": f"Bearer {token}"},
     )
     malformed = await client.post(
         "/api/v1/livekit/token",
-        json={"participant_attributes": {"alosm.call_id": "not-a-uuid"}},
+        json={"participant_attributes": {"olasm.call_id": "not-a-uuid"}},
         headers={"Authorization": f"Bearer {token}"},
     )
 
@@ -151,8 +151,8 @@ async def test_livekit_token_rejects_ended_application_session(client, livekit_s
     response = await client.post(
         "/api/v1/livekit/token",
         json={
-            "agent_name": "alosm-voice",
-            "participant_attributes": {"alosm.call_id": "11111111-1111-4111-8111-111111111111"},
+            "agent_name": "olasm-voice",
+            "participant_attributes": {"olasm.call_id": "11111111-1111-4111-8111-111111111111"},
         },
         headers={"Authorization": f"Bearer {token}"},
     )

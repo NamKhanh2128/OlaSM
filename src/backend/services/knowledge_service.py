@@ -68,7 +68,7 @@ def _documents(catalog: PolicyCatalog) -> tuple[KnowledgeDocument, ...]:
         KnowledgeDocument(
             document_id=f"policy-{rule.id}",
             content=f"{rule.title}. {rule.content}",
-            source=f"AloSM Policy {catalog.catalog_version} — {rule.citation}",
+            source=f"OlaSM Policy {catalog.catalog_version} — {rule.citation}",
             metadata={
                 "category": rule.category,
                 "rule_id": rule.id,

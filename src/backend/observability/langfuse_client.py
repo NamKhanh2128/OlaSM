@@ -137,7 +137,7 @@ def configure_langfuse_tracing(config: LangfuseTracingConfig) -> TracerProvider 
         return _provider
 
 
-def get_langfuse_tracer(name: str = "alosm") -> Any | None:
+def get_langfuse_tracer(name: str = "olasm") -> Any | None:
     provider = _provider
     return provider.get_tracer(name) if provider is not None else None
 
@@ -180,7 +180,7 @@ def record_langfuse_observation(
 ) -> None:
     """Export one allowlisted metric observation without any content payload."""
 
-    tracer = get_langfuse_tracer("alosm.livekit.metrics")
+    tracer = get_langfuse_tracer("olasm.livekit.metrics")
     if tracer is None:
         return
     span_attributes: dict[str, str | bool | int | float] = {
@@ -301,7 +301,7 @@ def langfuse_generation(
 ) -> Iterator[LangfuseGeneration | None]:
     """Trace the real provider-call duration and propagate safe correlations."""
 
-    tracer = get_langfuse_tracer("alosm.generations")
+    tracer = get_langfuse_tracer("olasm.generations")
     if tracer is None:
         yield None
         return

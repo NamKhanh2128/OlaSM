@@ -25,6 +25,7 @@ Không đụng `src/backend/config.py` ngoài việc dùng field `database_url` 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -107,6 +108,10 @@ def get_engine() -> AsyncEngine:
     if _engine is None:
         settings = get_settings()
         async_url = to_async_url(settings.database_url)
+        if async_url.startswith("sqlite"):
+            parsed = make_url(async_url)
+            if parsed.database and parsed.database != ":memory:":
+                Path(parsed.database).resolve().parent.mkdir(parents=True, exist_ok=True)
         _engine = create_async_engine(
             async_url,
             echo=False,

@@ -100,7 +100,7 @@ class PlaceCandidate:
 class ResolvedPlace:
     """A place that has been confirmed by the user and persisted.
 
-    ``place_id`` is the internal AloSM identifier (``plc_<uuid>``); systems MUST
+    ``place_id`` is the internal OlaSM identifier (``plc_<uuid>``); systems MUST
     NOT depend on the provider's integer ``place_id`` (e.g. Nominatim's).
     """
 

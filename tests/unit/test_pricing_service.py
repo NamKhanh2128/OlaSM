@@ -1,4 +1,4 @@
-"""Unit test cho PricingService và Vehicle Catalog của AloSM Voice AI."""
+"""Unit test cho PricingService và Vehicle Catalog của OlaSM Voice AI."""
 
 from __future__ import annotations
 

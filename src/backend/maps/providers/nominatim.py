@@ -65,7 +65,7 @@ class NominatimProvider(GeocodingProvider):
         self._language = language
         # Respect OSM usage policy (§51) — identify the application
         self._headers = {
-            "User-Agent": "AloSM/1.0 (ride-hailing; contact: ops@alosm.vn)",
+            "User-Agent": "OlaSM/1.0 (ride-hailing; contact: ops@olasm.vn)",
             "Accept-Language": language,
         }
 

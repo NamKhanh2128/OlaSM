@@ -25,7 +25,7 @@ _TOKEN_TTL_SECONDS = 3600
 # đăng nhập (`pending_2fa`) có TTL riêng, ngắn hơn access token thật — chỉ dùng đúng 1
 # lần để hoàn tất đăng nhập, không phải access token.
 _PENDING_2FA_TTL_SECONDS = 300
-_TOTP_ISSUER = "AloSM"
+_TOTP_ISSUER = "OlaSM"
 
 
 def _hash_password(password: str, salt: str | None = None) -> str:
@@ -201,7 +201,7 @@ class AuthService:
     users: dict[str, dict[str, object]] = {
         "0901234567": {
             "user_id": "usr_demo",
-            "full_name": "Khách hàng AloSM",
+            "full_name": "Khách hàng OlaSM",
             "phone": "0901234567",
             "password_hash": _hash_password("Password123!"),
             "role": "CUSTOMER",

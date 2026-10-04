@@ -1,10 +1,10 @@
-"""Service area checker — determines whether a location is within AloSM's
+"""Service area checker — determines whether a location is within OlaSM's
 operational zone.
 
 Supports GeoJSON ``Polygon`` and ``MultiPolygon`` geometries.
 
 EXTERNAL_BLOCKED: The actual service-area polygon must be provided by
-Product/Ops. AI does not decide which districts/cities AloSM operates in.
+Product/Ops. AI does not decide which districts/cities OlaSM operates in.
 Code and tests are fully implemented; only the GeoJSON data file is missing.
 """
 

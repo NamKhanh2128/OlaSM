@@ -1,7 +1,8 @@
 # Backend
 
-FastAPI application layer của AloSM Voice. Nguồn điều phối chung:
+FastAPI application layer của OlaSM Voice. Nguồn điều phối chung:
 [`docs/PROJECT_SOURCE_OF_TRUTH.md`](../../docs/PROJECT_SOURCE_OF_TRUTH.md).
+
 
 ## Trách nhiệm
 

@@ -45,7 +45,7 @@ async def create_livekit_token(
     if not app_session_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Chưa có phiên hội thoại AloSM đang hoạt động",
+            detail="Chưa có phiên hội thoại OlaSM đang hoạt động",
         )
     try:
         app_session = await SessionService().get_session_durable(app_session_id)
@@ -73,7 +73,7 @@ async def create_livekit_token(
     if any(forbidden_values):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="LiveKit room và participant được máy chủ AloSM quản lý",
+            detail="LiveKit room và participant được máy chủ OlaSM quản lý",
         )
     if request.agent_name and request.agent_name != token_service.agent_name:
         raise HTTPException(
@@ -82,17 +82,18 @@ async def create_livekit_token(
         )
 
     attributes = request.participant_attributes or {}
-    if set(attributes) != {"alosm.call_id"}:
+    call_id_val = attributes.get("olasm.call_id") or attributes.get("alosm.call_id")
+    if not call_id_val or (set(attributes) - {"olasm.call_id", "alosm.call_id"}):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Thiếu định danh cuộc gọi AloSM",
+            detail="Thiếu định danh cuộc gọi OlaSM",
         )
     try:
-        call_instance_id = str(UUID(attributes["alosm.call_id"]))
+        call_instance_id = str(UUID(call_id_val))
     except (ValueError, TypeError, AttributeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Định danh cuộc gọi AloSM không hợp lệ",
+            detail="Định danh cuộc gọi OlaSM không hợp lệ",
         ) from exc
 
     try:

@@ -19,7 +19,7 @@ from src.backend.observability.langfuse_client import (
     record_langfuse_observation,
 )
 from src.voice_agent.observability import LiveKitSessionObserver, SessionEventLog
-from src.voice_agent.session_data import AloSMSessionData
+from src.voice_agent.session_data import OlaSMSessionData
 
 
 @pytest.fixture
@@ -34,8 +34,8 @@ def span_exporter(monkeypatch: pytest.MonkeyPatch):
     provider.shutdown()
 
 
-def _userdata() -> AloSMSessionData:
-    return AloSMSessionData(
+def _userdata() -> OlaSMSessionData:
+    return OlaSMSessionData(
         app_session_id="private-session",
         call_id="private-call",
         user_id="private-user",

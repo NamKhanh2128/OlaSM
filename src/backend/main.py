@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
             secret_key=settings.langfuse_secret_key,
             host=settings.langfuse_host,
             environment=settings.langfuse_environment,
-            service_name="alosm-backend",
+            service_name="olasm-backend",
         )
     )
     print(f"Starting {settings.app_name} in {settings.app_env} mode")

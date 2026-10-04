@@ -9,10 +9,10 @@ from src.voice_agent.config import LiveKitVoiceSettings
 def _settings() -> LiveKitVoiceSettings:
     return LiveKitVoiceSettings(
         _env_file=None,
-        livekit_url="wss://alosm.test.livekit.cloud",
+        livekit_url="wss://olasm.test.livekit.cloud",
         livekit_api_key="test-api-key",
         livekit_api_secret="test-api-secret-with-enough-entropy",
-        livekit_agent_name="alosm-voice",
+        livekit_agent_name="olasm-voice",
         livekit_stt_model="deepgram/nova-3",
         livekit_llm_model="google/gemma-4-31b-it",
         livekit_tts_model="cartesia/sonic-3",
@@ -29,14 +29,14 @@ def test_token_service_uses_opaque_identity_and_server_agent_dispatch() -> None:
 
     claims = jwt.decode(details.participant_token, options={"verify_signature": False})
 
-    assert details.server_url == "wss://alosm.test.livekit.cloud"
+    assert details.server_url == "wss://olasm.test.livekit.cloud"
     assert claims["sub"].startswith("customer-")
     assert "usr_private" not in details.participant_token
-    assert claims["video"]["room"].startswith("alosm-")
+    assert claims["video"]["room"].startswith("olasm-")
     assert claims["video"]["roomJoin"] is True
     assert claims["video"]["canPublish"] is True
     assert claims["video"]["canSubscribe"] is True
-    assert claims["roomConfig"]["agents"][0]["agentName"] == "alosm-voice"
+    assert claims["roomConfig"]["agents"][0]["agentName"] == "olasm-voice"
     assert json.loads(claims["metadata"]) == {
         "schema_version": "1",
         "app_session_id": "sess_private",
@@ -95,12 +95,12 @@ def test_operator_token_is_scoped_to_accepted_handoff_room() -> None:
     details = LiveKitTokenService(_settings()).issue_for_operator(
         operator_id="operator-1",
         handoff_id="handoff-1",
-        room_name="alosm-room-1",
+        room_name="olasm-room-1",
     )
 
     claims = jwt.decode(details.participant_token, options={"verify_signature": False})
     assert claims["sub"].startswith("operator-")
-    assert claims["video"]["room"] == "alosm-room-1"
+    assert claims["video"]["room"] == "olasm-room-1"
     assert claims["video"]["roomJoin"] is True
     assert claims["video"]["canPublish"] is True
     assert claims["video"]["canSubscribe"] is True

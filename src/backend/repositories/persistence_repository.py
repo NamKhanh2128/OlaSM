@@ -159,7 +159,7 @@ class PersistenceRepository:
                     return _user_dict(existing)
                 row = User(
                     id=f"guest_{uuid4().hex[:10]}",
-                    full_name="Khách gọi AloSM",
+                    full_name="Khách gọi OlaSM",
                     phone=phone,
                     password_hash="LOGIN_DISABLED",
                     role="GUEST",

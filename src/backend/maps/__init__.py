@@ -1,7 +1,7 @@
-"""AloSM Maps subsystem — geocoding, routing, service area and place resolution.
+"""OlaSM Maps subsystem — geocoding, routing, service area and place resolution.
 
 Architecture:
-    Frontend/Agent → AloSM API → MapsService → GeocodingProvider / RoutingProvider
+    Frontend/Agent → OlaSM API → MapsService → GeocodingProvider / RoutingProvider
                                                        ↓                  ↓
                                                    Nominatim           OSRM
                                                        ↓                  ↓

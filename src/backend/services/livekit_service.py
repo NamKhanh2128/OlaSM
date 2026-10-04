@@ -7,7 +7,7 @@ from src.voice_agent.tokens import LiveKitConnectionDetails, issue_connection_de
 
 
 class LiveKitTokenService:
-    """Issue least-privilege room credentials from trusted AloSM identity data."""
+    """Issue least-privilege room credentials from trusted OlaSM identity data."""
 
     def __init__(self, settings: LiveKitVoiceSettings) -> None:
         self._settings = settings

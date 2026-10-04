@@ -16,7 +16,7 @@ source_urls:
   - "https://www.greensm.com/vn-vi/greensm-bike"
 vehicles:
   MOTORBIKE:
-    display_name: "AloSM Bike"
+    display_name: "OlaSM Bike"
     capacity: 1
     luggage_capacity: 0
     source_ref: "Green SM Bike; base rate requires Finance verification"
@@ -28,7 +28,7 @@ vehicles:
     min_fare: 13200
     surcharges: {night_22_to_2359: 10000, night_00_to_0559: 20000, holiday: 5000, change_destination: 5000, add_stop: 5000}
   CAR_4:
-    display_name: "AloSM Car 4 chỗ"
+    display_name: "OlaSM Car 4 chỗ"
     capacity: 4
     luggage_capacity: 2
     source_ref: "Green SM Car public Hanoi reference"
@@ -42,7 +42,7 @@ vehicles:
     min_fare: 30500
     surcharges: {night_22_to_0600: 20000, add_stop: 10000, change_destination: 10000, waiting_per_hour: 60000}
   CAR_7:
-    display_name: "AloSM Car 7 chỗ"
+    display_name: "OlaSM Car 7 chỗ"
     capacity: 7
     luggage_capacity: 4
     source_ref: "Inferred from Green SM Car + 15%; not an official Green SM class"
@@ -56,7 +56,7 @@ vehicles:
     min_fare: 35000
     surcharges: {night_22_to_0600: 20000, add_stop: 10000, change_destination: 10000, waiting_per_hour: 60000}
   LUXURY:
-    display_name: "AloSM Premium"
+    display_name: "OlaSM Premium"
     capacity: 4
     luggage_capacity: 3
     source_ref: "Green SM Premium public Hanoi reference"

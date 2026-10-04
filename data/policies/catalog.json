@@ -5,15 +5,15 @@
   "effective_from": "2026-08-16T00:00:00+07:00",
   "status": "APPROVED_PROJECT_POLICY",
   "approved_by": "PROJECT_OWNER_SELF_REVIEW",
-  "target_product": "AloSM Voice",
+  "target_product": "OlaSM Voice",
   "jurisdiction": "VN",
   "language": "vi-VN",
   "source_file": "approved-source-2026-08-16.txt",
   "source_sha256": "5954A5851773F70BA8E5E81AD3785EAA662B86FED5DB7FE38089BC99270F791B",
-  "source_attribution": "Green SM/GSM policy corpus supplied and approved by the AloSM project owner",
+  "source_attribution": "Green SM/GSM policy corpus supplied and approved by the OlaSM project owner",
   "source_identity_preserved": true,
   "identity_substitution_allowed": false,
-  "legal_notice": "Tên pháp nhân, hotline, email, địa chỉ và URL Green SM/GSM trong tài liệu nguồn không phải thông tin liên hệ AloSM và không được tự động thay thế hoặc trình bày như pháp nhân AloSM.",
+  "legal_notice": "Tên pháp nhân, hotline, email, địa chỉ và URL Green SM/GSM trong tài liệu nguồn không phải thông tin liên hệ OlaSM và không được tự động thay thế hoặc trình bày như pháp nhân OlaSM.",
   "documents": [
     {"slug": "terms", "title": "Điều khoản sử dụng", "source_effective_date": "2026-08-07"},
     {"slug": "privacy", "title": "Chính sách bảo vệ dữ liệu cá nhân", "source_effective_date": "2024-12-25"},
@@ -37,6 +37,6 @@
     {"id":"complaint-handoff","category":"support","title":"Khiếu nại và tranh chấp","content":"Phản ánh về an toàn, quấy rối, mất đồ, thanh toán, hoàn tiền, bồi thường hoặc tranh chấp phải được ghi nhận và chuyển đúng hàng đợi hỗ trợ. Agent không kết luận trách nhiệm hoặc tự hứa bồi thường.","citation":"Điều khoản chung vận chuyển — Mục 5-6"},
     {"id":"policy-update","category":"governance","title":"Cập nhật chính sách","content":"Thay đổi điều khoản ảnh hưởng người dùng phải được thông báo trước ít nhất 07 ngày. Người dùng có quyền chấm dứt sử dụng nếu không đồng ý trước ngày hiệu lực.","citation":"Điều khoản sử dụng — phần mở đầu; Điều khoản chung vận chuyển — Mục 2.2.14"},
     {"id":"governing-law","category":"governance","title":"Luật áp dụng","content":"Tranh chấp được ưu tiên thương lượng và chịu sự điều chỉnh của pháp luật Việt Nam; nếu không giải quyết được thì chuyển cơ quan hoặc tòa án có thẩm quyền.","citation":"Điều khoản chung vận chuyển — Mục 6"},
-    {"id":"legal-identity","category":"governance","title":"Thông tin pháp nhân và liên hệ","content":"Tài liệu nguồn chứa thông tin Green SM/GSM. Không dùng hotline, email, địa chỉ hoặc pháp nhân đó như thông tin AloSM. Khi người dùng yêu cầu liên hệ pháp lý AloSM, Agent phải nói chưa có thông tin AloSM đã xác minh và chuyển tổng đài viên.","citation":"Policy manifest — legal_notice"}
+    {"id":"legal-identity","category":"governance","title":"Thông tin pháp nhân và liên hệ","content":"Tài liệu nguồn chứa thông tin Green SM/GSM. Không dùng hotline, email, địa chỉ hoặc pháp nhân đó như thông tin OlaSM. Khi người dùng yêu cầu liên hệ pháp lý OlaSM, Agent phải nói chưa có thông tin OlaSM đã xác minh và chuyển tổng đài viên.","citation":"Policy manifest — legal_notice"}
   ]
 }

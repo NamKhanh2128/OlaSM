@@ -18,7 +18,7 @@ def test_policy_catalog_is_versioned_approved_and_source_is_immutable():
     assert catalog.identity_substitution_allowed is False
     assert hashlib.sha256(source.encode("utf-8")).hexdigest().upper() == catalog.source_sha256
     assert "Green SM" in source
-    assert "không phải thông tin liên hệ AloSM" in catalog.legal_notice
+    assert "không phải thông tin liên hệ OlaSM" in catalog.legal_notice
 
 
 def test_policy_loader_is_cached_and_has_unique_operational_rules():
@@ -55,8 +55,8 @@ async def test_policy_rag_rejects_known_topic_with_unsupported_condition():
 
 
 @pytest.mark.asyncio
-async def test_policy_rag_never_claims_green_sm_contact_is_alosm_contact():
-    documents = await KnowledgeService().retrieve("hotline pháp nhân liên hệ AloSM", top_k=3)
+async def test_policy_rag_never_claims_green_sm_contact_is_olasm_contact():
+    documents = await KnowledgeService().retrieve("hotline pháp nhân liên hệ OlaSM", top_k=3)
     legal = next(item for item in documents if item["citation_id"] == "policy-legal-identity")
     assert "Không dùng hotline" in legal["content"]
     assert "Green SM/GSM" in legal["content"]
