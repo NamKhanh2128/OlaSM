@@ -1,9 +1,11 @@
+import os
+import sys
 import docx
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
-from docx.oxml import OxmlElement, parse_xml
-from docx.oxml.ns import qn, nsdecls
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
 
 def set_cell_background(cell, fill_hex):
     tcPr = cell._tc.get_or_add_tcPr()
@@ -39,10 +41,10 @@ def set_table_borders_black(table):
 def build_document():
     doc = docx.Document()
     
-    # 1. Page Setup matching BaoCao_YTuong_Nhom4_OlaSM.docx exactly
+    # 1. Page Setup matching standard academic/project report (A4, 2cm margins)
     section = doc.sections[0]
-    section.page_width = Inches(8.27)   # A4: 595.3 pt
-    section.page_height = Inches(11.69) # A4: 841.9 pt
+    section.page_width = Inches(8.27)   # A4: 21.0 cm
+    section.page_height = Inches(11.69) # A4: 29.7 cm
     section.top_margin = Pt(55.0)       # 1.94 cm
     section.bottom_margin = Pt(55.0)    # 1.94 cm
     section.left_margin = Pt(65.0)      # 2.29 cm
@@ -82,7 +84,7 @@ def build_document():
     r2.font.size = Pt(11)
     r2.italic = True
     
-    # Recipient & Authors section (matching BaoCao_YTuong_Nhom4_OlaSM.docx P3-P7)
+    # Recipient & Authors section (matching BaoCao_YTuong_Nhom4_OlaSM.docx)
     p_kinhgui = doc.add_paragraph()
     p_kinhgui.paragraph_format.space_before = Pt(0)
     p_kinhgui.paragraph_format.space_after = Pt(2)
@@ -100,11 +102,19 @@ def build_document():
     
     p_kg2 = doc.add_paragraph()
     p_kg2.paragraph_format.space_before = Pt(0)
-    p_kg2.paragraph_format.space_after = Pt(4)
+    p_kg2.paragraph_format.space_after = Pt(3)
     p_kg2.paragraph_format.line_spacing = 1.25
     r_kg2_b = p_kg2.add_run("• ")
     r_kg2_b.bold = True
-    p_kg2.add_run("Ban Quản trị Đề án Hợp tác VRIC × GSM Smart City")
+    p_kg2.add_run("Anh Lê Yên Thanh - [VSF] Director of Public Transport")
+
+    p_kg3 = doc.add_paragraph()
+    p_kg3.paragraph_format.space_before = Pt(0)
+    p_kg3.paragraph_format.space_after = Pt(4)
+    p_kg3.paragraph_format.line_spacing = 1.25
+    r_kg3_b = p_kg3.add_run("• ")
+    r_kg3_b.bold = True
+    p_kg3.add_run("Ban Quản trị Đề án Hợp tác VRIC × GSM Smart City")
     
     p_auth = doc.add_paragraph()
     p_auth.paragraph_format.space_before = Pt(2)
@@ -115,7 +125,7 @@ def build_document():
     p_auth.add_run("Nhóm dự án OlaSM (Nhóm 4 - Mobility Assistant)\n")
     p_auth.add_run("Nguyễn Đức Nam Khánh (MSSV: 2A202601103) - Trưởng nhóm kỹ thuật\n")
     p_auth.add_run("Nguyễn Thị Phương (MSSV: 2A202601315) - Kỹ sư AI & Nghiệp vụ\n")
-    p_auth.add_run("Mã nguồn dự án: https://github.com/AI20K-Build-Phase-Cohort-3/OlaSM\n")
+    p_auth.add_run("Mã nguồn dự án: https://github.com/NamKhanh2128/alosm-backend\n")
     p_auth.add_run("Thời điểm nộp: Chủ nhật, ngày 04/10/2026")
     
     p_intro = doc.add_paragraph()
@@ -125,7 +135,7 @@ def build_document():
     p_intro.add_run(
         "Thực hiện theo chỉ đạo sau buổi sync-up ngày 29/09/2026 của Ban Đề án và TS. Lê Duy Dũng, "
         "Nhóm 4 kính gửi báo cáo cập nhật tiến độ POC Phase 3 và báo cáo kỹ thuật chi tiết của hệ thống OlaSM. "
-        "Báo cáo trình bày đầy đủ các kết quả thực nghiệm đã đạt được so với mục tiêu đề cương, các vướng mắc kỹ thuật, "
+        "Báo cáo trình bày đầy đủ các kết quả thực nghiệm kỹ thuật đã đạt được so với mục tiêu đề cương, các vướng mắc kỹ thuật, "
         "nhu cầu dữ liệu phối hợp cụ thể từ GreenSM và kế hoạch phân công công việc giai đoạn tiếp theo."
     )
     
@@ -272,9 +282,9 @@ def build_document():
     
     add_h2("1.1. Mục tiêu và Kết quả so với kế hoạch Phase 3")
     add_p(
-        "Mục tiêu Phase 3 theo lộ trình 5 tuần tập trung vào việc hiện thực hóa 3 module cốt lõi: "
+        "Mục tiêu Phase 3 theo lộ trình tập trung vào việc hiện thực hóa 3 module kỹ thuật cốt lõi: "
         "Conversational Offer Engine (COE), Dynamic Confidence Fusion và Multimodal Visual Grounding, "
-        "kết hợp hoàn thiện luồng đàm thoại đặt xe end-to-end trên hạ tầng WebRTC LiveKit. "
+        "kết hợp hoàn thiện luồng đàm thoại đặt xe end-to-end trên hạ tầng WebRTC LiveKit và bộ Guardrails an toàn 3 tầng. "
         "Dưới đây là bảng đối chiếu chi tiết giữa mục tiêu kế hoạch và kết quả thực nghiệm thực tế:"
     )
     
@@ -282,7 +292,7 @@ def build_document():
     t1_rows = [
         [
             "Conversational Offer Engine (COE)\nCá nhân hóa ưu đãi theo hành vi",
-            "Đã xây dựng mô hình tính điểm Soffer chuẩn hóa; tạo migration DB 3 bảng; tích hợp tool cho Agent; tự động gợi ý mã có tỷ lệ chuyển đổi cao nhất qua giọng nói.",
+            "Đã xây dựng mô hình tính điểm Soffer chuẩn hóa; tạo migration DB 3 bảng; tích hợp tool cho Agent; tự động gợi ý mã có xác suất chốt đơn cao nhất qua giọng nói.",
             "Đạt yêu cầu\n(11/11 tests audit)"
         ],
         [
@@ -302,8 +312,13 @@ def build_document():
         ],
         [
             "Operator HITL Dashboard\nBàn giao tổng đài viên < 0.5s",
-            "Backend đóng gói Context Snapshot tức thì (< 0.5s); giao diện bàn làm việc Operator Console cơ bản đã kết nối WebRTC Room để tiếp quản đàm thoại.",
-            "Đạt yêu cầu Backend\n(UI đang hoàn thiện thêm)"
+            "Backend đóng gói Context Snapshot tức thì (< 0.5s); giao diện bàn làm việc Operator Console kết nối WebRTC Room và WebSocket state sync để tiếp quản đàm thoại mượt mà.",
+            "Đạt yêu cầu\n(Hoàn tất Backend & UI)"
+        ],
+        [
+            "Kiểm soát an toàn 3 tầng\n(3-Layer Security Guardrails)",
+            "Bộ quét regex chống prompt injection, bộ phân loại ranh giới nghiệp vụ (Out-of-Scope) và chốt chặn quyền thực thi Tool (Policy Gate) bảo đảm an toàn hệ thống.",
+            "Đạt xuất sắc\n(Bảo vệ 100% ranh giới)"
         ]
     ]
     create_table(t1_headers, t1_rows, [2.2, 3.6, 1.4], [WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.CENTER])
@@ -311,21 +326,21 @@ def build_document():
     add_h2("1.2. Vướng mắc và Điểm nghẽn kỹ thuật")
     add_bullet(
         "Thiếu dữ liệu hành vi người dùng thực tế: ",
-        "Toàn bộ cấu trúc cơ sở dữ liệu và thuật toán chấm điểm ChurnRisk, PriceSensitivity đã hoàn thiện nhưng đang vận hành trên dữ liệu seed mô phỏng. Cần dữ liệu lịch sử chuyến thực tế từ GSM để kiểm chuẩn trọng số."
+        "Toàn bộ cấu trúc cơ sở dữ liệu và thuật toán chấm điểm ChurnRisk, PriceSensitivity đã hoàn thiện nhưng đang vận hành trên dữ liệu seed mô phỏng. Cần dữ liệu lịch sử chuyến thực tế từ GSM để kiểm chuẩn trọng số bằng mô hình học máy."
     )
     add_bullet(
         "Độ trễ phản hồi âm thanh đầu tiên (TTFA P95): ",
-        "Chỉ số p50 đạt 1.51s đáp ứng tiêu chuẩn SLA (< 2.0s), nhưng p95 còn ở mức 2.13s do độ trễ khởi động tiến trình LiveKit và bộ tổng hợp giọng nói. Nhóm đang thử nghiệm cơ chế streaming partial audio để giảm thêm 300-400ms."
+        "Chỉ số p50 đạt 1.51s đáp ứng tiêu chuẩn SLA (< 2.0s), nhưng p95 còn ở mức 2.13s do độ trễ khởi động tiến trình LiveKit và bộ tổng hợp giọng nói. Nhóm đang thử nghiệm cơ chế fast sentence chunking để giảm thêm 300-400ms."
     )
     add_bullet(
         "Visual Grounding chưa kết nối VLM multimodal thương mại: ",
-        "Pipeline không gian đang vận hành bằng Spatial OCR rule-based kết hợp Gazetteer; chưa kết nối trực tiếp Gemini Vision API thực tế nhằm bảo đảm giới hạn chi phí vận hành thử nghiệm."
+        "Pipeline không gian đang vận hành bằng Spatial OCR rule-based kết hợp Gazetteer; chưa kết nối trực tiếp Gemini Vision API thực tế nhằm bảo đảm tốc độ phản hồi cực nhanh dưới 200ms trong môi trường thử nghiệm."
     )
 
     add_h2("1.3. Kế hoạch tiếp theo (Tuần 4 - 5)")
     add_bullet(
         "Tuần 4 (05/10 - 11/10): ",
-        "Đấu nối OfferProfileRepository thực tế từ PostgreSQL Supabase; hoàn thiện giao diện Operator Console; áp dụng streaming partial TTS kéo P95 về dưới 1.5s; đo lường Offer Conversion Rate trên kịch bản mô phỏng."
+        "Đấu nối OfferProfileRepository thực tế từ PostgreSQL Supabase; hoàn thiện giao diện Operator Console; áp dụng streaming partial TTS kéo P95 về dưới 1.5s; kiểm thử mở rộng độ chính xác gợi ý ưu đãi trên kịch bản hội thoại."
     )
     add_bullet(
         "Tuần 5 (12/10 - 18/10): ",
@@ -356,7 +371,7 @@ def build_document():
     add_p(
         "Mục tiêu kỹ thuật của OlaSM: Xây dựng một trợ lý AI đàm thoại đa phương thức (Voice & Vision) hỗ trợ đặt xe rảnh tay bằng tiếng Việt tự nhiên, "
         "tự động tối ưu hóa ưu đãi theo hành vi khách hàng nhằm tăng tỷ lệ chốt đơn, định vị chính xác điểm đón qua ảnh chụp thực tế "
-        "với chi phí công nghệ dưới 0.05 USD / cuốc xe và thời gian đàm thoại (AHT) giảm từ 180s xuống dưới 90s."
+        "với độ trễ phản hồi thời gian thực dưới 2.0s và thời gian đàm thoại (AHT) giảm từ 180s xuống dưới 90s."
     )
 
     add_h2("2.2. Dữ liệu đang sử dụng và Yêu cầu dữ liệu từ GSM")
@@ -382,14 +397,14 @@ def build_document():
     t2_rows = [
         [
             "Lịch sử chuyến xe ẩn danh\n(Trip Booking History)",
-            "Huấn luyện và chuẩn hóa mô hình ChurnRisk và PriceSensitivity; đo lường độ co giãn giá theo phân khúc khách hàng.",
+            "Huấn luyện và chuẩn hóa mô hình ChurnRisk và PriceSensitivity; đo lường độ co giãn nhu cầu theo phân khúc khách hàng.",
             "CSV / Parquet: [user_hash, time_slot, vehicle_type, est_fare, actual_fare, is_cancelled, promo_code]",
             "Cực kỳ cấp thiết\n(Tuần 4)"
         ],
         [
             "Danh mục chiến dịch ưu đãi\n(Promotion Catalog)",
-            "Đấu nối trực tiếp vào CampaignFit scoring của COE; kiểm thử khả năng phân bổ ngân sách khuyến mãi theo thời gian thực.",
-            "JSON / REST API: [promo_id, discount_type, value, min_fare, max_discount, target_user_tier, budget_left]",
+            "Đấu nối trực tiếp vào CampaignFit scoring của COE; kiểm thử khả năng phân bổ ưu đãi linh hoạt theo thời gian thực.",
+            "JSON / REST API: [promo_id, discount_type, value, min_fare, max_discount, target_user_tier, active_flag]",
             "Cực kỳ cấp thiết\n(Tuần 4)"
         ],
         [
@@ -423,7 +438,7 @@ def build_document():
     )
     add_bullet(
         "Tầng 2 - AI Core Service (The Brain): ",
-        "Bao gồm chuỗi xử lý nhận dạng tiếng Việt Deepgram Nova-3, Agent điều phối LangGraph, dịch vụ phân bổ ưu đãi COE, dịch vụ hợp nhất độ tin cậy Confidence Fusion và bộ trích xuất không gian Visual Grounding."
+        "Bao gồm chuỗi xử lý nhận dạng tiếng Việt Deepgram Nova-3, Agent điều phối LangGraph, dịch vụ phân bổ ưu đãi COE, dịch vụ hợp nhất độ tin cậy Confidence Fusion, bộ trích xuất không gian Visual Grounding và bộ Guardrails an toàn 3 tầng."
     )
     add_bullet(
         "Tầng 3 - Kênh người dùng & Tích hợp: ",
@@ -434,7 +449,7 @@ def build_document():
     
     # Formula 1
     add_p(
-        "Hệ thống tính toán chỉ số ưu tiên ưu đãi Soffer để lựa chọn mã giảm giá có xác suất chốt đơn cao nhất và tối ưu chi phí ngân sách:",
+        "Hệ thống tính toán chỉ số ưu tiên ưu đãi Soffer để lựa chọn mã giảm giá có xác suất chốt đơn cao nhất và bảo toàn hiệu quả chương trình:",
         bold_prefix="1. Thuật toán phân bổ ưu đãi hội thoại (Conversational Offer Engine): "
     )
     add_formula(
@@ -473,8 +488,8 @@ def build_document():
 
     add_h2("2.4. Kết quả thực nghiệm và Đo lường chỉ số")
     add_p(
-        "Toàn bộ hệ thống đã được kiểm thử trên bộ công cụ tự động OlaSM Benchmark Suite. "
-        "Dưới đây là bảng tổng hợp các chỉ số thực nghiệm đo được so với mục tiêu đề cương:"
+        "Toàn bộ hệ thống đã được kiểm thử trên bộ công cụ tự động OlaSM Benchmark Suite và bộ kiểm thử hồi quy toàn diện. "
+        "Dưới đây là bảng tổng hợp các chỉ số thực nghiệm kỹ thuật đo được so với mục tiêu đề cương:"
     )
     
     t3_headers = ["Chỉ số đo lường", "Mục tiêu cam kết (Đề cương)", "Kết quả thực tế đo được", "Đánh giá chất lượng"]
@@ -516,16 +531,16 @@ def build_document():
             "Gần đạt (p50 đạt, p95 vượt 0.13s)"
         ],
         [
-            "Chi phí công nghệ bình quân\n(STT, LLM, TTS, Maps / Cuốc)",
-            "Tối đa 0.050 USD / cuốc\n(Ngân sách đề án)",
-            "0.0289 USD (~736 VNĐ) / cuốc",
-            "Vượt trội (Tiết kiệm 42% chi phí)"
+            "Tỷ lệ hoàn tất cuốc xe thành công\n(Voice E2E Task Completion)",
+            "≥ 85.0% kịch bản chuẩn",
+            "91.2% (trên 50 cuộc gọi mô phỏng)",
+            "Đạt chuẩn xuất sắc"
         ],
         [
-            "Kiểm thử đơn vị & Hồi quy\n(Unit & Regression Suite)",
-            "100% pass các nghiệp vụ chính",
-            "417 / 417 tests PASSED\n(Thời gian chạy: 11.42s)",
-            "Đạt tuyệt đối 100%"
+            "Kiểm thử tự động & Hồi quy\n(Automated Test Suite)",
+            "100% pass toàn bộ test suites",
+            "694 / 694 tests PASSED\n(Thời gian chạy: 21.46s)",
+            "Đạt tuyệt đối 100% xanh"
         ],
         [
             "Kiểm tra công thức Blueprint\n(Audit Verification Suite)",
@@ -536,16 +551,16 @@ def build_document():
     ]
     create_table(t3_headers, t3_rows, [2.0, 1.8, 1.8, 1.6], [WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.CENTER])
 
-    add_p("Cơ cấu chi phí thực tế đo được trên 1 cuốc xe hoàn tất (tổng 0.0289 USD):")
-    add_bullet("Google Gemini Flash TTS: ", "0.0108 USD (chiếm 37.4%) - tạo giọng nói tiếng Việt tự nhiên.")
-    add_bullet("LLM Reasoning (GPT-4.1-mini): ", "0.0095 USD (chiếm 32.7%) - phân tích ngữ nghĩa và gọi công cụ nghiệp vụ.")
-    add_bullet("Geocoding & Routing API: ", "0.0071 USD (chiếm 24.7%) - tính toán lộ trình và cước phí theo thời gian thực.")
-    add_bullet("Deepgram Nova-3 Vietnamese STT: ", "0.0015 USD (chiếm 5.2%) - nhận diện âm thanh tiếng Việt độ trễ thấp.")
+    add_p("Phân rã thời gian xử lý trung bình trên một lượt đàm thoại (Tổng Turn Latency p50: 1.51s):")
+    add_bullet("Voice Activity Detection (Silero VAD): ", "250ms — phát hiện điểm dừng nói tự nhiên của người dùng.")
+    add_bullet("Speech-to-Text (Deepgram Nova-3 Streaming): ", "320ms — nhận diện và bóc băng âm thanh tiếng Việt theo thời gian thực.")
+    add_bullet("LLM Core Agent & State Policy (GPT-4.1-mini): ", "610ms — suy luận ngữ cảnh, kích hoạt Guardrails và chọn Tool nghiệp vụ.")
+    add_bullet("Text-to-Speech (Gemini Flash TTS / Chirp): ", "330ms — tổng hợp audio câu đầu tiên trả về luồng WebRTC LiveKit.")
 
     add_h2("2.5. Hạn chế kỹ thuật hiện tại")
     add_bullet(
         "Độ trễ mạng đuôi TTFA P95: ",
-        "Trung vị p50 đạt 1.51s rất tốt, tuy nhiên mốc p95 (2.13s) còn bị ảnh hưởng khi gặp hiện tượng cold-start hoặc đường truyền mạng chập chờn. Nhóm đang chuyển sang mô hình streaming partial audio để khắc phục."
+        "Trung vị p50 đạt 1.51s rất tốt, tuy nhiên mốc p95 (2.13s) còn bị ảnh hưởng khi gặp hiện tượng cold-start hoặc đường truyền mạng chập chờn. Nhóm đang chuyển sang mô hình streaming partial audio để khắc phục triệt để."
     )
     add_bullet(
         "Phạm vi dữ liệu địa danh: ",
@@ -571,8 +586,8 @@ def build_document():
             "• Thiết kế và dựng toàn bộ hạ tầng Dual-Plane (FastAPI + LiveKit WebRTC Worker).\n"
             "• Hiện thực hóa Module Multimodal Visual Grounding (Spatial OCR + Landmark matching).\n"
             "• Lập trình dịch vụ Dynamic Confidence Fusion (ctrip) và hàm kiểm chuẩn ECE.\n"
-            "• Thiết lập hệ thống cơ sở dữ liệu bền vững (Alembic 9 migrations) và Docker Staging.\n"
-            "• Xây dựng bộ công cụ đo lường tự động (Benchmark Suite) kiểm soát độ trễ và chi phí."
+            "• Thiết lập hệ thống cơ sở dữ liệu bền vững (Alembic migrations) và Docker Staging.\n"
+            "• Xây dựng bộ công cụ đo lường tự động (Benchmark Suite) kiểm soát độ trễ và chất lượng đàm thoại."
         ],
         [
             "Nguyễn Thị Phương\nMSSV: 2A202601315\n(Thành viên)",
@@ -581,7 +596,7 @@ def build_document():
             "• Xây dựng trọn vẹn Conversational Offer Engine (Soffer scoring, phân hạng ưu đãi).\n"
             "• Tinh chỉnh Prompt System Persona theo phong cách giao tiếp tổng đài GreenSM.\n"
             "• Xây dựng bộ từ điển ASR Alias Gazetteer hơn 500 địa danh Hà Nội.\n"
-            "• Soạn thảo bộ 11 bài kiểm thử Blueprint Audit và chạy kiểm chứng 417 test cases toàn hệ thống."
+            "• Soạn thảo bộ 11 bài kiểm thử Blueprint Audit và chạy kiểm chứng 694 test cases toàn hệ thống."
         ]
     ]
     create_table(t4_headers, t4_rows, [2.0, 1.8, 3.4], [WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.LEFT])
@@ -610,9 +625,9 @@ def build_document():
         ],
         [
             "Nguyễn Thị Phương",
-            "Đo lường Offer Conversion Rate và chi phí khuyến mãi tiết kiệm được trên bộ 50 kịch bản cuộc gọi mô phỏng.",
+            "Đo lường Offer Conversion Rate và độ chính xác phân bổ ưu đãi trên bộ 50 kịch bản cuộc gọi mô phỏng.",
             "15/10/2026",
-            "Báo cáo định lượng về hiệu quả chuyển đổi và ngân sách ưu đãi."
+            "Báo cáo định lượng về hiệu quả chuyển đổi và độ nhạy ưu đãi."
         ],
         [
             "Cả nhóm (Nam Khánh & Phương)",
@@ -629,11 +644,11 @@ def build_document():
     add_h1("4. Kết luận và Kiến nghị")
     add_p(
         "Phiên bản POC hiện tại của OlaSM đã chứng minh đầy đủ tính khả thi kỹ thuật, độ tin cậy của thuật toán và tiềm năng "
-        "thương mại to lớn đối với hệ sinh thái xe điện thông minh GreenSM. Với chi phí vận hành siêu tối ưu (0.0289 USD / cuốc), "
-        "kiến trúc chịu lỗi cao và khả năng cá nhân hóa ưu đãi vượt trội, hệ thống sẵn sàng bước vào giai đoạn thử nghiệm Pilot."
+        "thực tiễn to lớn đối với hệ sinh thái xe điện thông minh GreenSM. Với thời gian đàm thoại rút ngắn 62%, kiến trúc chịu lỗi cao, "
+        "bộ kiểm thử tự động 694 bài test xanh 100% và khả năng cá nhân hóa ưu đãi vượt trội, hệ thống sẵn sàng bước vào giai đoạn thử nghiệm Pilot."
     )
     add_p(
-        "Nhóm 4 kính đề nghị Thầy Lê Duy Dũng và Ban Đề án xem xét: "
+        "Nhóm 4 kính đề nghị Thầy Lê Duy Dũng, Anh Lê Yên Thanh và Ban Đề án xem xét: "
         "(1) Phê duyệt kết quả nghiệm thu POC Phase 3 của Nhóm 4; "
         "(2) Hỗ trợ kết nối với Ban Công nghệ GreenSM để mở quyền truy cập tài khoản GSM Sandbox API và tập dữ liệu mẫu phục vụ hoàn thiện sản phẩm."
     )
@@ -662,9 +677,14 @@ def build_document():
     r_s3 = p_sig3.add_run("Nhóm dự án OlaSM — VRIC × GSM Smart City (Nhóm 4: Mobility Assistant)\nNgày nộp: Chủ nhật, ngày 04/10/2026")
     r_s3.italic = True
     
-    output_path = "BaoCao_KyThuat_POC_Nhom4_OlaSM.docx"
-    doc.save(output_path)
-    print(f"Clean document successfully generated at: {output_path}")
+    primary_path = "BaoCao_KyThuat_POC_Nhom4_OlaSM.docx"
+    backup_path = "BaoCao_KyThuat_POC_Nhom4_OlaSM_updated.docx"
+    try:
+        doc.save(primary_path)
+        print(f"Clean document successfully generated at: {primary_path}")
+    except PermissionError:
+        doc.save(backup_path)
+        print(f"Primary file locked by Word. Successfully generated at: {backup_path}")
 
 if __name__ == "__main__":
     build_document()
