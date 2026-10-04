@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from src.backend.repositories.persistence_repository import PersistenceRepository
-from src.voice_agent.session_data import AloSMSessionData
+from src.voice_agent.session_data import AloSMSessionData, OlaSMSessionData
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +19,9 @@ class VoiceStateConflictError(RuntimeError):
 
 
 class VoiceStateStore(Protocol):
-    async def restore(self, userdata: AloSMSessionData) -> bool: ...
+    async def restore(self, userdata: OlaSMSessionData) -> bool: ...
 
-    async def save(self, userdata: AloSMSessionData) -> None: ...
+    async def save(self, userdata: OlaSMSessionData) -> None: ...
 
 
 class VoiceStateRepository(Protocol):
@@ -49,7 +49,7 @@ class DatabaseVoiceStateStore:
     def __init__(self, repository: VoiceStateRepository | None = None) -> None:
         self._repository = repository or PersistenceRepository()
 
-    async def restore(self, userdata: AloSMSessionData) -> bool:
+    async def restore(self, userdata: OlaSMSessionData) -> bool:
         row = await self._repository.get_voice_agent_state(userdata.app_session_id)
         if row is None:
             userdata.persistence_enabled = False
@@ -73,7 +73,7 @@ class DatabaseVoiceStateStore:
         userdata.restore(state, userdata.persistence_revision)
         return True
 
-    async def save(self, userdata: AloSMSessionData) -> None:
+    async def save(self, userdata: OlaSMSessionData) -> None:
         if not userdata.persistence_enabled:
             return
 
@@ -126,9 +126,9 @@ class DatabaseVoiceStateStore:
 class EphemeralVoiceStateStore:
     """No-op store used only by isolated unit/synthetic worker smoke sessions."""
 
-    async def restore(self, userdata: AloSMSessionData) -> bool:
+    async def restore(self, userdata: OlaSMSessionData) -> bool:
         userdata.persistence_enabled = False
         return False
 
-    async def save(self, userdata: AloSMSessionData) -> None:
+    async def save(self, userdata: OlaSMSessionData) -> None:
         return None

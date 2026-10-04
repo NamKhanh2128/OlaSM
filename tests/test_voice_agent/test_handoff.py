@@ -1,6 +1,6 @@
 import pytest
 
-from src.voice_agent.session_data import AloSMSessionData, PlaceCandidate
+from src.voice_agent.session_data import OlaSMSessionData, PlaceCandidate
 from src.voice_agent.tools.handoffs import HandoffToolsService
 
 
@@ -19,7 +19,7 @@ class FakeHandoffService:
 
 @pytest.mark.asyncio
 async def test_handoff_summary_excludes_raw_query_and_full_address() -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session-livekit",
         call_id="call-livekit",
         user_id="user-real",

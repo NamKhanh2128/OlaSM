@@ -8,13 +8,14 @@ import time
 
 from livekit.agents import AgentSession
 
-from src.voice_agent.session_data import AloSMSessionData
+from src.voice_agent.session_data import OlaSMSessionData
 
-BOOKING_STATE_TOPIC = "alosm.booking_state.v1"
+BOOKING_STATE_TOPIC = "olasm.booking_state.v1"
+LEGACY_BOOKING_STATE_TOPIC = "alosm.booking_state.v1"
 logger = logging.getLogger(__name__)
 
 
-async def publish_booking_state(session: AgentSession[AloSMSessionData]) -> None:
+async def publish_booking_state(session: AgentSession[OlaSMSessionData]) -> None:
     payload = json.dumps(
         session.userdata.public_state(),
         ensure_ascii=False,

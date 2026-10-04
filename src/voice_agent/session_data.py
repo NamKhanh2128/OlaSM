@@ -1,4 +1,4 @@
-"""Typed per-call business state for the LiveKit-native AloSM agent."""
+"""Typed per-call business state for the LiveKit-native OlaSM agent."""
 
 from __future__ import annotations
 
@@ -562,7 +562,7 @@ class BookingDraft(BaseModel):
         return "; ".join(details) if details else "chưa có thông tin đặt xe"
 
 
-class AloSMSessionData(BaseModel):
+class OlaSMSessionData(BaseModel):
     """Business userdata owned by one LiveKit ``AgentSession``."""
 
     model_config = ConfigDict(extra="forbid")
@@ -673,3 +673,7 @@ class AloSMSessionData(BaseModel):
                 self.post_booking_support.model_dump(mode="json") if self.post_booking_support else None
             ),
         }
+
+
+# Backward-compatibility alias
+AloSMSessionData = OlaSMSessionData

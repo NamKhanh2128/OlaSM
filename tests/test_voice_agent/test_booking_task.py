@@ -7,9 +7,9 @@ from types import SimpleNamespace
 import pytest
 from livekit.agents import StopResponse, ToolError, llm
 
-from src.voice_agent.agent import AloSMAgent
+from src.voice_agent.agent import OlaSMAgent
 from src.voice_agent.persistence import EphemeralVoiceStateStore
-from src.voice_agent.session_data import AloSMSessionData, BookingDraft, HandoffState, PlaceCandidate, QuoteSnapshot
+from src.voice_agent.session_data import OlaSMSessionData, BookingDraft, HandoffState, PlaceCandidate, QuoteSnapshot
 from src.voice_agent.tasks import booking as booking_module
 from src.voice_agent.tasks.booking import (
     BookingTask,
@@ -67,7 +67,7 @@ class _QuoteService:
 
 
 def test_agent_exposes_native_booking_entrypoint_and_authoritative_status_tool() -> None:
-    assert {tool.id for tool in AloSMAgent().tools} == {
+    assert {tool.id for tool in OlaSMAgent().tools} == {
         "start_booking",
         "request_handoff",
         "cancel_booking",
@@ -101,7 +101,7 @@ class _AudioControl:
 
 
 class _HandoffSession:
-    def __init__(self, userdata: AloSMSessionData) -> None:
+    def __init__(self, userdata: OlaSMSessionData) -> None:
         self.userdata = userdata
         self.input = _AudioControl()
         self.output = _AudioControl()
@@ -114,14 +114,14 @@ class _HandoffSession:
 
 
 def test_handoff_wait_mutes_ai_after_exactly_one_acknowledgement() -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
         participant_identity="participant",
     )
     session = _HandoffSession(userdata)
-    agent = AloSMAgent(session_data=userdata)
+    agent = OlaSMAgent(session_data=userdata)
     agent._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
 
     agent._enter_handoff_wait()
@@ -138,14 +138,14 @@ def test_handoff_wait_mutes_ai_after_exactly_one_acknowledgement() -> None:
 
 @pytest.mark.asyncio
 async def test_handoff_wait_rejects_later_customer_turns_without_llm_reply() -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
         participant_identity="participant",
         handoff=HandoffState(handoff_id="handoff", status="pending", reason_code="USER_REQUEST"),
     )
-    agent = AloSMAgent(session_data=userdata)
+    agent = OlaSMAgent(session_data=userdata)
 
     with pytest.raises(StopResponse):
         await agent.on_user_turn_completed(
@@ -158,7 +158,7 @@ async def test_handoff_wait_rejects_later_customer_turns_without_llm_reply() -> 
 async def test_parent_agent_seeds_complete_first_booking_turn_before_task_handoff(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -172,7 +172,7 @@ async def test_parent_agent_seeds_complete_first_booking_turn_before_task_handof
         return True
 
     monkeypatch.setattr("src.voice_agent.agent.publish_booking_state", capture_state)
-    agent = AloSMAgent(session_data=userdata)
+    agent = OlaSMAgent(session_data=userdata)
     agent._activity = SimpleNamespace(session=session)  # type: ignore[assignment]
 
     await agent.on_user_turn_completed(
@@ -210,7 +210,7 @@ class _RequoteService:
 
 @pytest.mark.asyncio
 async def test_agent_rag_tool_returns_versioned_policy_citation() -> None:
-    result = await AloSMAgent().search_knowledge("Tôi muốn yêu cầu hoàn tiền")
+    result = await OlaSMAgent().search_knowledge("Tôi muốn yêu cầu hoàn tiền")
 
     assert '"found": true' in result
     assert '"catalog_version": "2026-08-16"' in result
@@ -219,7 +219,7 @@ async def test_agent_rag_tool_returns_versioned_policy_citation() -> None:
 
 @pytest.mark.asyncio
 async def test_agent_rag_tool_explains_when_policy_is_not_verified() -> None:
-    result = await AloSMAgent().search_knowledge("Chính sách hoàn tiền 100% khi trời mưa")
+    result = await OlaSMAgent().search_knowledge("Chính sách hoàn tiền 100% khi trời mưa")
 
     assert '"found": false' in result
     assert "chưa tìm thấy thông tin chính sách đã được xác minh" in result
@@ -238,31 +238,31 @@ async def test_livekit_faq_tool_keeps_natural_policy_questions_grounded(
     question: str,
     citation: str,
 ) -> None:
-    result = await AloSMAgent().search_knowledge(question)
+    result = await OlaSMAgent().search_knowledge(question)
 
     assert f'"citation_id": "{citation}"' in result
 
 
 @pytest.mark.asyncio
 async def test_agent_vehicle_options_tool_reads_pricing_catalog_without_quote() -> None:
-    result = await AloSMAgent().get_vehicle_options()
+    result = await OlaSMAgent().get_vehicle_options()
 
     assert '"pricing_status": "DEMO"' in result
-    assert '"display_name": "AloSM Car 4 chỗ"' in result
+    assert '"display_name": "OlaSM Car 4 chỗ"' in result
     assert '"luggage_capacity":' in result
     assert '"fare_amount"' not in result
 
 
 @pytest.mark.asyncio
 async def test_parent_booking_status_never_invents_a_booking_id() -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
         participant_identity="participant",
     )
 
-    status = await AloSMAgent(session_data=userdata).get_booking_status()
+    status = await OlaSMAgent(session_data=userdata).get_booking_status()
 
     assert '"created": false' in status
     assert '"booking_id": null' in status
@@ -271,7 +271,7 @@ async def test_parent_booking_status_never_invents_a_booking_id() -> None:
 
 @pytest.mark.asyncio
 async def test_repeated_booking_request_does_not_reenter_completed_booking() -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -284,9 +284,9 @@ async def test_repeated_booking_request_does_not_reenter_completed_booking() -> 
         currency="VND",
         eta_minutes=15,
     )
-    agent = AloSMAgent(session_data=userdata)
+    agent = OlaSMAgent(session_data=userdata)
 
-    result = await AloSMAgent.start_booking._func(agent)
+    result = await OlaSMAgent.start_booking._func(agent)
 
     assert "book-existing" in result
     assert "đã được đặt thành công" in result
@@ -299,7 +299,7 @@ async def test_repeated_booking_request_does_not_reenter_completed_booking() -> 
 async def test_cancel_booking_uses_llm_decision_before_backend_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -313,7 +313,7 @@ async def test_cancel_booking_uses_llm_decision_before_backend_call(
         eta_minutes=25,
     )
     backend = _CancellationService()
-    agent = AloSMAgent(session_data=userdata, bookings=booking_module.BookingToolsService(backend))
+    agent = OlaSMAgent(session_data=userdata, bookings=booking_module.BookingToolsService(backend))
     agent._activity = SimpleNamespace(session=SimpleNamespace(userdata=userdata))  # type: ignore[assignment]
     monkeypatch.setattr("src.voice_agent.agent.publish_booking_state", _noop_publish)
 
@@ -367,7 +367,7 @@ async def test_cancel_booking_uses_llm_decision_before_backend_call(
 async def test_post_booking_tools_persist_driver_request_tracking_and_rating(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -382,7 +382,7 @@ async def test_post_booking_tools_persist_driver_request_tracking_and_rating(
     )
     userdata.booking_draft.booking = booking
     userdata.post_booking_support = booking_module.PostBookingSupportState.for_booking(booking)
-    agent = AloSMAgent(session_data=userdata)
+    agent = OlaSMAgent(session_data=userdata)
     agent._activity = SimpleNamespace(session=SimpleNamespace(userdata=userdata))  # type: ignore[assignment]
     monkeypatch.setattr("src.voice_agent.agent.publish_booking_state", _noop_publish)
 
@@ -403,7 +403,7 @@ async def _noop_publish(*_: object) -> None:
 
 
 def test_recovered_booking_is_available_to_the_parent_agent_without_full_history() -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -419,7 +419,7 @@ def test_recovered_booking_is_available_to_the_parent_agent_without_full_history
     userdata.booking_draft.set_candidates("pickup", "Mỹ Đình", [pickup])
     userdata.booking_draft.select_place("pickup", pickup.place_id)
 
-    instructions = AloSMAgent(session_data=userdata).instructions
+    instructions = OlaSMAgent(session_data=userdata).instructions
 
     assert "điểm đón Bến xe Mỹ Đình" in instructions
     assert "không có lịch sử" in instructions
@@ -450,7 +450,7 @@ async def test_booking_task_uses_native_function_tools() -> None:
 async def test_estimate_fare_atomically_starts_confirmation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -497,7 +497,7 @@ async def test_estimate_fare_atomically_starts_confirmation(
 async def test_duplicate_confirmation_is_idempotent_before_booking_creation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -575,7 +575,7 @@ async def test_duplicate_confirmation_is_idempotent_before_booking_creation(
 async def test_location_change_refreshes_existing_quote_and_interrupts_stale_preamble(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -679,7 +679,7 @@ def test_additional_driver_request_is_separated_from_booking_confirmation() -> N
 
 @pytest.mark.asyncio
 async def test_confirm_booking_rejects_combined_driver_request() -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -715,7 +715,7 @@ def test_booking_abandonment_requires_an_explicit_request() -> None:
 
 
 def test_complete_turn_seeds_both_ambiguous_places_and_resolved_vehicle() -> None:
-    draft = AloSMSessionData(
+    draft = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -890,7 +890,7 @@ def test_explicit_booking_change_rejects_oversized_unbounded_remark() -> None:
     ],
 )
 def test_contextual_correction_grounds_old_value_to_destination_slot(message: str) -> None:
-    draft = AloSMSessionData(
+    draft = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -908,7 +908,7 @@ def test_contextual_correction_grounds_old_value_to_destination_slot(message: st
 
 
 def test_contextual_change_does_not_guess_unknown_previous_value() -> None:
-    draft = AloSMSessionData(
+    draft = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -937,7 +937,7 @@ def test_contextual_change_does_not_guess_unknown_previous_value() -> None:
     ],
 )
 def test_contextual_change_rejects_non_place_single_word_replacement(message: str) -> None:
-    draft = AloSMSessionData(
+    draft = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -956,7 +956,7 @@ def test_contextual_change_rejects_non_place_single_word_replacement(message: st
 async def test_booking_change_handler_rejects_invalid_place_before_mutating_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -984,7 +984,7 @@ async def test_booking_change_handler_rejects_invalid_place_before_mutating_stat
 async def test_destination_barge_in_updates_destination_but_keeps_pickup_clarification_first(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1048,7 +1048,7 @@ async def test_destination_barge_in_updates_destination_but_keeps_pickup_clarifi
 async def test_newer_barge_in_wins_while_async_place_search_is_pending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1132,7 +1132,7 @@ async def test_same_field_generation_tokens_are_unique_under_concurrency() -> No
 async def test_different_field_changes_serialize_lookup_and_commit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1215,7 +1215,7 @@ async def test_different_field_changes_serialize_lookup_and_commit(
 async def test_stale_vehicle_change_cannot_mutate_or_speak_after_newer_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1265,7 +1265,7 @@ async def test_stale_vehicle_change_cannot_mutate_or_speak_after_newer_change(
 async def test_unknown_destination_barge_in_still_clarifies_pickup_first(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1319,7 +1319,7 @@ async def test_unknown_destination_barge_in_still_clarifies_pickup_first(
 async def test_contextual_destination_barge_in_replaces_only_destination(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1379,7 +1379,7 @@ async def test_contextual_destination_barge_in_replaces_only_destination(
 async def test_vehicle_barge_in_changes_vehicle_then_returns_to_pending_place(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1444,7 +1444,7 @@ def test_native_transcript_confidence_only_blocks_low_confidence_audio() -> None
 async def test_known_place_candidates_bypass_low_confidence_transcript_guard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1479,7 +1479,7 @@ async def test_known_place_candidates_bypass_low_confidence_transcript_guard(
 async def test_exact_place_tool_requires_acknowledgement_before_next_question(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1509,7 +1509,7 @@ async def test_exact_place_tool_requires_acknowledgement_before_next_question(
 
 @pytest.mark.asyncio
 async def test_task_entry_uses_seeded_query_label_instead_of_unclear_placeholder() -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1540,7 +1540,7 @@ async def test_task_entry_uses_seeded_query_label_instead_of_unclear_placeholder
 async def test_pickup_ordinal_moves_directly_to_saved_destination_candidates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1584,7 +1584,7 @@ async def test_pickup_ordinal_moves_directly_to_saved_destination_candidates(
 
 
 def test_short_ordinal_selects_from_active_candidate_list() -> None:
-    draft = AloSMSessionData(
+    draft = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1600,7 +1600,7 @@ def test_short_ordinal_selects_from_active_candidate_list() -> None:
 
 
 def test_named_correction_selects_new_candidate_and_respects_negation() -> None:
-    draft = AloSMSessionData(
+    draft = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1621,7 +1621,7 @@ def test_named_correction_selects_new_candidate_and_respects_negation() -> None:
 def test_vehicle_selection_supports_catalog_number_and_explicit_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    draft = AloSMSessionData(
+    draft = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1675,7 +1675,7 @@ def test_vehicle_selection_supports_catalog_number_and_explicit_change(
 async def test_short_ordinal_updates_slot_once_and_moves_to_next_field(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1725,7 +1725,7 @@ async def test_short_ordinal_updates_slot_once_and_moves_to_next_field(
 async def test_named_location_correction_acknowledges_change_before_next_question(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1788,7 +1788,7 @@ def test_only_unique_exact_or_alias_place_can_skip_clarification() -> None:
 
 @pytest.mark.asyncio
 async def test_booking_task_handoff_tool_delegates_llm_reason_to_call_level_handler() -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1814,7 +1814,7 @@ async def test_booking_task_handoff_tool_delegates_llm_reason_to_call_level_hand
 
 
 class _DeterministicBookingSession:
-    def __init__(self, userdata: AloSMSessionData) -> None:
+    def __init__(self, userdata: OlaSMSessionData) -> None:
         self.userdata = userdata
         self.replies: list[str] = []
         self.interruptions = 0
@@ -1843,7 +1843,7 @@ def test_labeled_place_parser_extracts_all_slots_independent_of_current_prompt()
 async def test_ordinal_pickup_and_destination_correction_update_draft_in_same_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1896,7 +1896,7 @@ async def test_ordinal_pickup_and_destination_correction_update_draft_in_same_tu
 async def test_labeled_pickup_and_destination_are_saved_in_one_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1934,7 +1934,7 @@ async def test_labeled_pickup_and_destination_are_saved_in_one_turn(
 
 
 def _draft_with_third_destination_selected() -> tuple[BookingDraft, list[PlaceCandidate]]:
-    draft = AloSMSessionData(
+    draft = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -1972,7 +1972,7 @@ async def test_single_new_ordinal_is_staged_until_user_confirms(
     monkeypatch: pytest.MonkeyPatch,
     confirmation: str,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",

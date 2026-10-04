@@ -1,4 +1,4 @@
-"""LiveKit-native AloSM voice-agent runtime.
+"""LiveKit-native OlaSM voice-agent runtime.
 
 This package owns the production realtime voice runtime.
 Migration phases must not route LiveKit sessions through the old orchestration

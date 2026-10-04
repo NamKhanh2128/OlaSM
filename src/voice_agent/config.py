@@ -22,7 +22,7 @@ class LiveKitVoiceSettings(BaseSettings):
     livekit_url: str = ""
     livekit_api_key: SecretStr = SecretStr("")
     livekit_api_secret: SecretStr = SecretStr("")
-    livekit_agent_name: str = "alosm-voice"
+    livekit_agent_name: str = "olasm-voice"
 
     # Default to LiveKit Inference so the voice worker does not require a
     # separate ElevenLabs account/API key. Deepgram Nova-3's multilingual mode

@@ -6,7 +6,7 @@ import pytest
 from livekit.agents import llm
 
 import src.voice_agent.transcript_rewrite as rewrite_module
-from src.voice_agent.session_data import AloSMSessionData
+from src.voice_agent.session_data import OlaSMSessionData
 from src.voice_agent.transcript_rewrite import (
     OpenAITranscriptRewriter,
     RewriteOutput,
@@ -17,8 +17,8 @@ from src.voice_agent.transcript_rewrite import (
 )
 
 
-def _userdata() -> AloSMSessionData:
-    return AloSMSessionData(
+def _userdata() -> OlaSMSessionData:
+    return OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",

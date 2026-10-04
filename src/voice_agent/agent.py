@@ -1,4 +1,4 @@
-"""The single AloSM agent used by the LiveKit-native runtime."""
+"""The single OlaSM agent used by the LiveKit-native runtime."""
 
 import json
 import logging
@@ -13,6 +13,7 @@ from src.voice_agent.safety import SafetyClassifier
 from src.voice_agent.session_data import (
     AloSMSessionData,
     HandoffState,
+    OlaSMSessionData,
     PostBookingSupportState,
     post_booking_menu_message,
 )
@@ -27,14 +28,14 @@ from src.voice_agent.transcript_rewrite import TranscriptRewriter, rewrite_livek
 logger = logging.getLogger(__name__)
 
 
-class AloSMAgent(Agent):
+class OlaSMAgent(Agent):
     """Single call-level persona; scoped business flows run as AgentTasks."""
 
     def __init__(
         self,
         *,
         state_store: VoiceStateStore | None = None,
-        session_data: AloSMSessionData | None = None,
+        session_data: OlaSMSessionData | None = None,
         knowledge_service: KnowledgeService | None = None,
         pricing_service: PricingService | None = None,
         bookings: BookingToolsService | None = None,
@@ -65,7 +66,7 @@ class AloSMAgent(Agent):
             )
         super().__init__(
             instructions=(
-                "Bạn là tổng đài viên giọng nói AloSM nói tiếng Việt. "
+                "Bạn là tổng đài viên giọng nói OlaSM nói tiếng Việt. "
                 "Trả lời tự nhiên, lịch sự và ngắn gọn, thường không quá hai câu. "
                 "Luôn dùng từ ngữ phù hợp để đọc thành tiếng: gọi khách là bạn hoặc quý khách; "
                 "không dùng dấu gạch chéo, chữ viết tắt hay mã enum trong câu trả lời. "
@@ -284,7 +285,7 @@ class AloSMAgent(Agent):
 
         Chỉ gọi khi khách yêu cầu rõ ràng gặp người thật, tổng đài viên, nhân
         viên hỗ trợ, operator hoặc yêu cầu chuyển máy. Đây là capability của
-        AloSMAgent; BookingTask chỉ trả về needs_handoff để Supervisor xử lý.
+        OlaSMAgent; BookingTask chỉ trả về needs_handoff để Supervisor xử lý.
 
         Không gọi cho câu hỏi mà tool khác có thể xử lý và không dùng để thay
         thế việc hỏi lại booking còn thiếu nếu khách chưa yêu cầu người thật.
@@ -606,7 +607,7 @@ class AloSMAgent(Agent):
     async def search_knowledge(self, query: str, top_k: int = 3) -> str:
         """Tra cứu chính sách và câu hỏi thường gặp đã được phê duyệt.
 
-        Gọi khi khách hỏi về chính sách AloSM, hành lý, phụ phí, điều kiện sử
+        Gọi khi khách hỏi về chính sách OlaSM, hành lý, phụ phí, điều kiện sử
         dụng hoặc thông tin dịch vụ không gắn với một lộ trình cụ thể. Đây là
         tra cứu cục bộ, chỉ đọc, trên policy catalog có phiên bản. Chỉ trả lời
         dựa trên results mà tool cung cấp và nói rõ khi không có kết quả phù
@@ -671,7 +672,7 @@ class AloSMAgent(Agent):
     async def get_vehicle_options(self) -> str:
         """Liệt kê các loại xe và sức chứa hành lý trong pricing catalog.
 
-        Gọi khi khách hỏi AloSM có những loại xe nào, mỗi loại chở được bao
+        Gọi khi khách hỏi OlaSM có những loại xe nào, mỗi loại chở được bao
         nhiêu người hoặc bao nhiêu hành lý. Đây là tra cứu catalog chỉ đọc; đọc
         tên hiển thị, sức chứa và hành lý từ kết quả, không tự bổ sung thông tin
         ngoài catalog.
@@ -709,3 +710,8 @@ class AloSMAgent(Agent):
             },
             ensure_ascii=False,
         )
+
+
+# Backward-compatibility alias
+AloSMAgent = OlaSMAgent
+

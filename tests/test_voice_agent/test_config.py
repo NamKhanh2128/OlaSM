@@ -25,7 +25,7 @@ def test_livekit_configuration_fails_closed_when_required_values_are_missing() -
 
 def test_livekit_accepts_complete_native_pipeline_configuration() -> None:
     config = settings(
-        livekit_url="wss://alosm.example.livekit.cloud",
+        livekit_url="wss://olasm.example.livekit.cloud",
         livekit_api_key="api-key",
         livekit_api_secret="api-secret",
         livekit_llm_model="provider/llm-model",
@@ -58,13 +58,13 @@ def test_livekit_accepts_complete_native_pipeline_configuration() -> None:
     assert config.voice_transcript_rewrite_timeout_seconds == 2.0
     assert config.voice_transcript_rewrite_reasoning_effort == "low"
     assert config.voice_transcript_rewrite_context_window_turns == 3
-    assert str(config.livekit_debug_log_dir) == "logs/livekit"
+    assert str(config.livekit_debug_log_dir).replace("\\", "/") == "logs/livekit"
     config.require_configured()
 
 
 def test_livekit_url_must_use_websocket_scheme() -> None:
     config = settings(
-        livekit_url="https://alosm.example.livekit.cloud",
+        livekit_url="https://olasm.example.livekit.cloud",
         livekit_api_key="api-key",
         livekit_api_secret="api-secret",
         livekit_llm_model="llm",

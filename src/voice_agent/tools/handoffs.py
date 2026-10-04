@@ -6,7 +6,7 @@ from typing import Protocol
 
 from src.backend.services.handoff_service import HandoffService
 from src.voice_agent.safety import SafetyClassifier, normalize_user_text
-from src.voice_agent.session_data import AloSMSessionData
+from src.voice_agent.session_data import OlaSMSessionData
 
 
 class DurableHandoffService(Protocol):
@@ -45,7 +45,7 @@ class HandoffToolsService:
 
     async def create(
         self,
-        userdata: AloSMSessionData,
+        userdata: OlaSMSessionData,
         *,
         reason: str,
         room_name: str | None = None,

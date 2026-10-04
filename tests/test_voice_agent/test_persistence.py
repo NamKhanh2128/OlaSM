@@ -3,7 +3,7 @@ from collections.abc import Mapping
 import pytest
 
 from src.voice_agent.persistence import DatabaseVoiceStateStore, VoiceStateConflictError
-from src.voice_agent.session_data import AloSMSessionData, BookingResult, PlaceCandidate, QuoteSnapshot
+from src.voice_agent.session_data import BookingResult, OlaSMSessionData, PlaceCandidate, QuoteSnapshot
 
 
 class FakePersistenceRepository:
@@ -51,8 +51,8 @@ class FakePersistenceRepository:
         return {"session_id": session_id, **updates}
 
 
-def _userdata() -> AloSMSessionData:
-    return AloSMSessionData(
+def _userdata() -> OlaSMSessionData:
+    return OlaSMSessionData(
         app_session_id="session-livekit",
         call_id="call-livekit",
         user_id="untrusted-participant",

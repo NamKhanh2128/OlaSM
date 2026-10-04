@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from livekit.agents import StopResponse, llm
 
-from src.voice_agent.agent import AloSMAgent
+from src.voice_agent.agent import OlaSMAgent
 from src.voice_agent.safety import (
     DEFAULT_SAFETY_POLICY_PATH,
     SafetyClassifier,
@@ -12,7 +12,7 @@ from src.voice_agent.safety import (
     assess_user_safety,
     load_safety_policy,
 )
-from src.voice_agent.session_data import AloSMSessionData
+from src.voice_agent.session_data import OlaSMSessionData
 from src.voice_agent.tools.handoffs import HandoffToolsService
 
 
@@ -54,7 +54,7 @@ class _DurableHandoff:
 async def test_emergency_question_gets_immediate_safety_guidance_before_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -62,7 +62,7 @@ async def test_emergency_question_gets_immediate_safety_guidance_before_llm(
     )
     session = _SafetySession()
     durable_handoff = _DurableHandoff(session)
-    agent = AloSMAgent(
+    agent = OlaSMAgent(
         session_data=userdata,
         handoffs=HandoffToolsService(durable_handoff),
     )
@@ -113,14 +113,14 @@ class _FailingDurableHandoff:
 async def test_emergency_keeps_safety_guidance_when_handoff_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
         participant_identity="participant",
     )
     session = _SafetySession()
-    agent = AloSMAgent(
+    agent = OlaSMAgent(
         session_data=userdata,
         handoffs=HandoffToolsService(_FailingDurableHandoff()),
     )

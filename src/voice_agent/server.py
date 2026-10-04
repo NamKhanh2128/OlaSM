@@ -1,4 +1,4 @@
-"""LiveKit AgentServer worker for the AloSM voice runtime."""
+"""LiveKit AgentServer worker for the OlaSM voice runtime."""
 
 from __future__ import annotations
 
@@ -29,12 +29,12 @@ from livekit.agents.voice.room_io import AudioInputOptions, RoomOptions, TextInp
 from src.backend.services.handoff_service import HandoffService
 from src.backend.services.knowledge_service import KnowledgeService
 from src.backend.services.pricing_service import PricingService
-from src.voice_agent.agent import AloSMAgent
+from src.voice_agent.agent import AloSMAgent, OlaSMAgent
 from src.voice_agent.config import LiveKitVoiceSettings, get_livekit_voice_settings
 from src.voice_agent.model_factory import build_llm, build_stt, build_tts, tts_voice_map
 from src.voice_agent.observability import LiveKitSessionObserver, SessionEventLog
 from src.voice_agent.persistence import DatabaseVoiceStateStore, VoiceStateStore
-from src.voice_agent.session_data import AloSMSessionData, FailureCode, FallbackAction, HandoffState
+from src.voice_agent.session_data import AloSMSessionData, FailureCode, FallbackAction, HandoffState, OlaSMSessionData
 from src.voice_agent.state_sync import publish_booking_state
 from src.voice_agent.transcript_rewrite import build_transcript_rewriter
 from src.voice_agent.tts_text import vietnamese_currency_tts_transform
@@ -53,12 +53,12 @@ async def _handle_text_input(session: AgentSession, event: TextInputEvent) -> No
         session.generate_reply(user_input=event.text)
 
 
-_STATE_STORE_KEY = "alosm_voice_state_store"
-_PROCESS_STORE_READY_KEY = "alosm_process_store_ready"
-_PREWARMED_VAD_KEY = "alosm_prewarmed_vad"
-_PREWARMED_STT_KEY = "alosm_prewarmed_stt"
-_PREWARMED_KNOWLEDGE_KEY = "alosm_prewarmed_knowledge"
-_PREWARMED_PRICING_KEY = "alosm_prewarmed_pricing"
+_STATE_STORE_KEY = "olasm_voice_state_store"
+_PROCESS_STORE_READY_KEY = "olasm_process_store_ready"
+_PREWARMED_VAD_KEY = "olasm_prewarmed_vad"
+_PREWARMED_STT_KEY = "olasm_prewarmed_stt"
+_PREWARMED_KNOWLEDGE_KEY = "olasm_prewarmed_knowledge"
+_PREWARMED_PRICING_KEY = "olasm_prewarmed_pricing"
 _NOISY_WORKER_LOGGERS = ("grpc", "grpc._cython.cygrpc", "livekit.agents")
 
 
@@ -123,14 +123,14 @@ def register_room_audio_track_logging(ctx: JobContext, event_log: SessionEventLo
 def build_agent_session(
     settings: LiveKitVoiceSettings,
     *,
-    userdata: AloSMSessionData | None = None,
+    userdata: OlaSMSessionData | None = None,
     vad_model: vad.VAD | None = None,
     stt_model: stt.STT | None = None,
-) -> AgentSession[AloSMSessionData]:
+) -> AgentSession[OlaSMSessionData]:
     """Build the native cascaded pipeline without legacy orchestration adapters."""
 
     settings.require_configured()
-    userdata = userdata or AloSMSessionData(
+    userdata = userdata or OlaSMSessionData(
         app_session_id="local-smoke-session",
         call_id="local-smoke-call",
         user_id="local-smoke-user",
@@ -183,7 +183,7 @@ def build_agent_session(
     )
 
 
-def build_session_data(ctx: JobContext, settings: LiveKitVoiceSettings) -> AloSMSessionData:
+def build_session_data(ctx: JobContext, settings: LiveKitVoiceSettings) -> OlaSMSessionData:
     """Build privacy-safe business userdata from trusted dispatch metadata."""
 
     try:
@@ -193,7 +193,7 @@ def build_session_data(ctx: JobContext, settings: LiveKitVoiceSettings) -> AloSM
     participant = getattr(ctx.job, "participant", None)
     participant_identity = str(getattr(participant, "identity", "") or "unknown-participant")
     app_session_id = str(metadata.get("app_session_id") or ctx.job.id)
-    return AloSMSessionData(
+    return OlaSMSessionData(
         app_session_id=app_session_id,
         call_id=str(ctx.job.id),
         user_id=participant_identity,
@@ -205,7 +205,7 @@ def build_session_data(ctx: JobContext, settings: LiveKitVoiceSettings) -> AloSM
 
 
 async def restore_session_data(
-    userdata: AloSMSessionData,
+    userdata: OlaSMSessionData,
     state_store: VoiceStateStore,
     *,
     timeout_seconds: float | None = None,
@@ -239,7 +239,7 @@ def _provider_failure(event: ErrorEvent) -> tuple[FailureCode, str, FallbackActi
 
 
 def register_provider_failure_sync(
-    session: AgentSession[AloSMSessionData],
+    session: AgentSession[OlaSMSessionData],
     state_store: VoiceStateStore,
 ) -> Callable[[], Awaitable[None]]:
     """Map native LiveKit provider errors to the public recovery contract."""
@@ -312,23 +312,29 @@ def prepare_process(proc: JobProcess) -> None:
             secret_key=_server_settings.langfuse_secret_key.get_secret_value(),
             host=_server_settings.langfuse_host,
             environment=_server_settings.langfuse_environment,
-            service_name="alosm-livekit-worker",
+            service_name="olasm-livekit-worker",
         )
     )
 
     proc.userdata[_STATE_STORE_KEY] = DatabaseVoiceStateStore()
+    proc.userdata["alosm_voice_state_store"] = proc.userdata[_STATE_STORE_KEY]
     # LiveKit keeps idle job processes warm specifically so model/plugin setup is
     # not paid after a participant is waiting. The ElevenLabs plugin validates
     # its direct API credentials synchronously; its streaming client is still
     # opened later on the RTC job's event loop.
     proc.userdata[_PREWARMED_VAD_KEY] = inference.VAD(model="silero")
+    proc.userdata["alosm_prewarmed_vad"] = proc.userdata[_PREWARMED_VAD_KEY]
     proc.userdata[_PREWARMED_STT_KEY] = build_stt(_server_settings)
+    proc.userdata["alosm_prewarmed_stt"] = proc.userdata[_PREWARMED_STT_KEY]
     # Policy and pricing catalogs are local, validated and static for the
     # process lifetime. Load them during LiveKit prewarm so a FAQ turn never
     # adds file I/O or catalog validation latency to the first user request.
     proc.userdata[_PREWARMED_KNOWLEDGE_KEY] = KnowledgeService()
+    proc.userdata["alosm_prewarmed_knowledge"] = proc.userdata[_PREWARMED_KNOWLEDGE_KEY]
     proc.userdata[_PREWARMED_PRICING_KEY] = PricingService()
+    proc.userdata["alosm_prewarmed_pricing"] = proc.userdata[_PREWARMED_PRICING_KEY]
     proc.userdata[_PROCESS_STORE_READY_KEY] = True
+    proc.userdata["alosm_process_store_ready"] = True
 
 
 server.setup_fnc = prepare_process
@@ -368,7 +374,7 @@ def _process_pricing(ctx: JobContext) -> PricingService | None:
 
 
 async def _timed_restore(
-    userdata: AloSMSessionData,
+    userdata: OlaSMSessionData,
     state_store: VoiceStateStore,
     timeout_seconds: float,
 ) -> tuple[bool, float]:
@@ -382,7 +388,7 @@ async def _timed_restore(
 
 
 def request_initial_greeting(
-    session: AgentSession[AloSMSessionData],
+    session: AgentSession[OlaSMSessionData],
     *,
     recovered: bool,
 ) -> None:
@@ -400,13 +406,13 @@ def request_initial_greeting(
         return
 
     session.say(
-        "Chào bạn, tôi là tổng đài viên AloSM. Bạn vui lòng cho biết yêu cầu đặt xe của mình nhé?",
+        "Chào bạn, tôi là tổng đài viên OlaSM. Bạn vui lòng cho biết yêu cầu đặt xe của mình nhé?",
         allow_interruptions=True,
     )
 
 
 def register_operator_takeover(
-    session: AgentSession[AloSMSessionData],
+    session: AgentSession[OlaSMSessionData],
     state_store: VoiceStateStore,
 ) -> Callable[[], Awaitable[None]]:
     """Stop the AI when an authenticated operator joins the active Room.
@@ -478,7 +484,7 @@ def register_operator_takeover(
 
 
 @server.rtc_session(agent_name=get_livekit_voice_settings().livekit_agent_name)
-async def alosm_voice_session(ctx: JobContext) -> None:
+async def olasm_voice_session(ctx: JobContext) -> None:
     """Run one LiveKit AgentSession for one Room call."""
 
     job_entry_at = time.time()
@@ -630,7 +636,7 @@ async def alosm_voice_session(ctx: JobContext) -> None:
     event_log.emit("worker_milestone", milestone="session_start_called")
     await session.start(
         room=ctx.room,
-        agent=AloSMAgent(
+        agent=OlaSMAgent(
             state_store=state_store,
             session_data=userdata,
             knowledge_service=knowledge_service,
@@ -661,6 +667,10 @@ async def alosm_voice_session(ctx: JobContext) -> None:
     event_log.emit("worker_milestone", milestone="initial_state_published")
     request_initial_greeting(session, recovered=recovered)
     event_log.emit("worker_milestone", milestone="greeting_requested")
+
+
+# Backward compatibility alias
+alosm_voice_session = olasm_voice_session
 
 
 if __name__ == "__main__":

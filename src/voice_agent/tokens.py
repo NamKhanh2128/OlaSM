@@ -31,7 +31,7 @@ def issue_connection_details(
 
     room_digest = hashlib.sha256(f"{user_id}:{app_session_id}:{call_instance_id}".encode()).hexdigest()[:24]
     identity_digest = hashlib.sha256(user_id.encode()).hexdigest()[:20]
-    room_name = f"alosm-{room_digest}"
+    room_name = f"olasm-{room_digest}"
     participant_identity = f"customer-{identity_digest}"
     metadata = json.dumps(
         {
@@ -47,7 +47,7 @@ def issue_connection_details(
             settings.livekit_api_secret.get_secret_value(),
         )
         .with_identity(participant_identity)
-        .with_name("Khách hàng AloSM")
+        .with_name("Khách hàng OlaSM")
         .with_metadata(metadata)
         .with_grants(
             api.VideoGrants(
@@ -102,7 +102,7 @@ def issue_operator_connection_details(
             settings.livekit_api_secret.get_secret_value(),
         )
         .with_identity(f"operator-{hashlib.sha256(operator_id.encode()).hexdigest()[:20]}")
-        .with_name("Tổng đài viên AloSM")
+        .with_name("Tổng đài viên OlaSM")
         .with_metadata(metadata)
         .with_grants(
             api.VideoGrants(

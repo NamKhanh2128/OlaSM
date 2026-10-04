@@ -14,12 +14,13 @@ from src.voice_agent.server import (
     request_initial_greeting,
     restore_session_data,
 )
-from src.voice_agent.session_data import AloSMSessionData
+from src.voice_agent.session_data import OlaSMSessionData
+
 
 
 def _settings(**overrides: object) -> LiveKitVoiceSettings:
     values: dict[str, object] = {
-        "livekit_url": "wss://alosm.test.livekit.cloud",
+        "livekit_url": "wss://olasm.test.livekit.cloud",
         "livekit_api_key": "api-key",
         "livekit_api_secret": "test-api-secret-with-at-least-32-bytes",
         "livekit_stt_provider": "livekit",
@@ -225,17 +226,19 @@ def test_livekit_process_setup_prewarms_native_models_and_state_store(
 
     prepare_process(Process())  # type: ignore[arg-type]
 
+    assert Process.userdata["olasm_process_store_ready"] is True
+    assert Process.userdata["olasm_voice_state_store"] is not None
+    assert Process.userdata["olasm_prewarmed_vad"] is warmed_vad
+    assert Process.userdata["olasm_prewarmed_stt"] is warmed_stt
+    assert Process.userdata["olasm_prewarmed_knowledge"] is not None
+    assert Process.userdata["olasm_prewarmed_pricing"] is not None
+    # Backward compatibility
     assert Process.userdata["alosm_process_store_ready"] is True
     assert Process.userdata["alosm_voice_state_store"] is not None
-    assert Process.userdata["alosm_prewarmed_vad"] is warmed_vad
-    assert Process.userdata["alosm_prewarmed_stt"] is warmed_stt
-    assert Process.userdata["alosm_prewarmed_knowledge"] is not None
-    assert Process.userdata["alosm_prewarmed_pricing"] is not None
-
 
 def test_new_call_greeting_uses_native_say_without_llm() -> None:
     class Session:
-        userdata = AloSMSessionData(
+        userdata = OlaSMSessionData(
             app_session_id="session",
             call_id="call",
             user_id="user",
@@ -258,7 +261,7 @@ def test_new_call_greeting_uses_native_say_without_llm() -> None:
 
     assert session.said == [
         (
-            "Chào bạn, tôi là tổng đài viên AloSM. Bạn vui lòng cho biết yêu cầu đặt xe của mình nhé?",
+            "Chào bạn, tôi là tổng đài viên OlaSM. Bạn vui lòng cho biết yêu cầu đặt xe của mình nhé?",
             True,
         )
     ]
@@ -274,7 +277,7 @@ async def test_new_session_restore_does_not_write_empty_state_on_startup() -> No
         async def save(self, userdata) -> None:  # type: ignore[no-untyped-def]
             raise AssertionError("empty state must not add a second startup round-trip")
 
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",
@@ -297,7 +300,7 @@ async def test_state_restore_timeout_falls_back_without_blocking_voice_session()
         async def save(self, userdata) -> None:  # type: ignore[no-untyped-def]
             raise AssertionError("save must not run after restore timeout")
 
-    userdata = AloSMSessionData(
+    userdata = OlaSMSessionData(
         app_session_id="session",
         call_id="call",
         user_id="user",

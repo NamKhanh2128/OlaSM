@@ -17,7 +17,7 @@ from livekit.agents import AgentSession, llm
 from livekit.agents.metrics import LLMMetrics, RealtimeModelMetrics, STTMetrics, TTSMetrics, VADMetrics
 from pydantic import BaseModel
 
-from src.voice_agent.session_data import AloSMSessionData
+from src.voice_agent.session_data import AloSMSessionData, OlaSMSessionData
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ def _console_message(event_name: str, payload: dict[str, Any]) -> str:
         elif argument_keys := payload.get("argument_keys"):
             argument_names = ",".join(str(key) for key in argument_keys)
             parts.append(f"args={argument_names}")
-        if duration_ms := payload.get("duration_ms"):
+        if (duration_ms := payload.get("duration_ms")) is not None:
             parts.append(f"duration_ms={duration_ms}")
         if result := payload.get("result"):
             parts.append(f"result={result!r}")
@@ -219,7 +219,7 @@ class SessionEventLog:
         enabled: bool,
         include_transcripts: bool,
         directory: Path,
-        userdata: AloSMSessionData,
+        userdata: OlaSMSessionData,
         room_name: str,
     ) -> None:
         self.enabled = enabled
@@ -325,7 +325,7 @@ class LiveKitSessionObserver:
         self._tool_names: dict[str, str] = {}
         self._last_user_transcript: str | None = None
 
-    def register(self, session: AgentSession[AloSMSessionData]) -> None:
+    def register(self, session: AgentSession[OlaSMSessionData]) -> None:
         for event_name in _EVENT_NAMES:
             session.on(event_name, self.record)
         for model in (session.stt, session.llm, session.tts, session.vad):

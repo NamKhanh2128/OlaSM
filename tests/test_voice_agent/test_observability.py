@@ -16,11 +16,11 @@ from livekit.agents.metrics import TTSMetrics
 from livekit.agents.metrics.base import Metadata
 
 from src.voice_agent.observability import LiveKitSessionObserver, SessionEventLog
-from src.voice_agent.session_data import AloSMSessionData
+from src.voice_agent.session_data import OlaSMSessionData
 
 
-def _userdata(call_id: str = "call/livekit:1") -> AloSMSessionData:
-    return AloSMSessionData(
+def _userdata(call_id: str = "call/livekit:1") -> OlaSMSessionData:
+    return OlaSMSessionData(
         app_session_id="session-livekit",
         call_id=call_id,
         user_id="user",

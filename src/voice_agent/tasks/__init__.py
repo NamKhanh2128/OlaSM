@@ -1,4 +1,4 @@
-"""LiveKit AgentTask workflows for AloSM."""
+"""LiveKit AgentTask workflows for OlaSM."""
 
 from src.voice_agent.tasks.booking import BookingOutcome, BookingTask
 

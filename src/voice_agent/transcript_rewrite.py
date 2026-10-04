@@ -17,7 +17,7 @@ from openai import AsyncOpenAI, OpenAIError
 from pydantic import BaseModel, Field
 
 from src.voice_agent.config import LiveKitVoiceSettings
-from src.voice_agent.session_data import AloSMSessionData
+from src.voice_agent.session_data import AloSMSessionData, OlaSMSessionData
 
 logger = logging.getLogger(__name__)
 MAX_REWRITE_BARRIER_SECONDS = 2.0
@@ -34,7 +34,7 @@ _REPEATED_SHORT_ORDINAL = re.compile(
 )
 _TRACKING_FIVE_MINUTES_ASR = re.compile(r"^(?:so\s+)?(?:nam|5)(?:\s+(?:phuc|phut))?$")
 
-REWRITE_INSTRUCTIONS = """Bạn sửa transcript ASR tiếng Việt cho tổng đài đặt xe AloSM.
+REWRITE_INSTRUCTIONS = """Bạn sửa transcript ASR tiếng Việt cho tổng đài đặt xe OlaSM.
 
 Thực hiện nội bộ theo đúng thứ tự:
 1. Suy luận intent của câu hiện tại từ tối đa ba cặp assistant-user gần nhất và BookingDraft.
@@ -160,7 +160,7 @@ def _recent_dialogue_pairs(
 
 
 def build_rewrite_context(
-    userdata: AloSMSessionData,
+    userdata: OlaSMSessionData,
     turn_ctx: llm.ChatContext,
     current_text: str,
     *,
@@ -398,7 +398,7 @@ def build_transcript_rewriter(settings: LiveKitVoiceSettings) -> OpenAITranscrip
 async def _rewrite_finalized_text(
     *,
     rewriter: TranscriptRewriter | None,
-    userdata: AloSMSessionData,
+    userdata: OlaSMSessionData,
     turn_ctx: llm.ChatContext,
     item_id: str,
     text: str,
@@ -479,7 +479,7 @@ async def _rewrite_finalized_text(
 async def rewrite_livekit_user_turn(
     *,
     rewriter: TranscriptRewriter | None,
-    userdata: AloSMSessionData,
+    userdata: OlaSMSessionData,
     turn_ctx: llm.ChatContext,
     new_message: llm.ChatMessage,
 ) -> TranscriptRewriteResult | None:

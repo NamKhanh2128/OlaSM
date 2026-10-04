@@ -1,4 +1,4 @@
-"""LiveKit ``AgentTask`` implementing AloSM's native booking happy path."""
+"""LiveKit ``AgentTask`` implementing OlaSM's native booking happy path."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ from src.voice_agent.session_data import (
     VEHICLE_TYPE_ORDER,
     AloSMSessionData,
     BookingDraft,
+    OlaSMSessionData,
     BookingField,
     BookingResult,
     BookingTarget,
@@ -1011,7 +1012,7 @@ def _booking_confirmation_prompt(draft: BookingDraft) -> str:
 
 
 class BookingTask(AgentTask[BookingOutcome]):
-    """Collect and validate one booking while preserving the single AloSM persona."""
+    """Collect and validate one booking while preserving the single OlaSM persona."""
 
     def __init__(
         self,
@@ -1022,7 +1023,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         bookings: BookingToolsService | None = None,
         state_store: VoiceStateStore | None = None,
         handoff_handler: HandoffHandler | None = None,
-        session_data: AloSMSessionData | None = None,
+        session_data: OlaSMSessionData | None = None,
         transcript_rewriter: TranscriptRewriter | None = None,
     ) -> None:
         self._places = places or PlaceToolsService()
@@ -1046,7 +1047,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         super().__init__(
             chat_ctx=chat_ctx,
             instructions=(
-                "Bạn vẫn là tổng đài viên AloSM, đang thực hiện đúng một yêu cầu đặt xe. "
+                "Bạn vẫn là tổng đài viên OlaSM, đang thực hiện đúng một yêu cầu đặt xe. "
                 "Nói tiếng Việt tự nhiên, ngắn gọn và mỗi lượt chỉ hỏi một thông tin. "
                 "Đây là nội dung đọc thành tiếng: gọi khách là bạn hoặc quý khách; không dùng dấu "
                 "gạch chéo, chữ viết tắt, mã enum hoặc ký hiệu tiền tệ trong câu trả lời. "
@@ -1106,7 +1107,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         )
 
     @staticmethod
-    def _draft(context: RunContext[AloSMSessionData]):
+    def _draft(context: RunContext[OlaSMSessionData]):
         return context.userdata.booking_draft
 
     def _latest_user_message(self) -> llm.ChatMessage | None:
@@ -1117,7 +1118,7 @@ class BookingTask(AgentTask[BookingOutcome]):
 
     async def _respond_after_grounded_change(
         self,
-        userdata: AloSMSessionData,
+        userdata: OlaSMSessionData,
         *,
         acknowledgement: str,
         followup: str | None,
@@ -1158,13 +1159,13 @@ class BookingTask(AgentTask[BookingOutcome]):
             await self._state_store.save(userdata)
         except VoiceStateConflictError:
             self._raise_if_stale_booking_change(change_token)
-        userdata.record_failure(
+            userdata.record_failure(
                 "STATE_CONFLICT",
                 "Phiên này vừa được cập nhật ở kết nối khác.",
-            retryable=False,
-            fallback_action="handoff",
-        )
-        await publish_booking_state(self.session)
+                retryable=False,
+                fallback_action="handoff",
+            )
+            await publish_booking_state(self.session)
             raise StopResponse() from None
         self._raise_if_stale_booking_change(change_token)
         await publish_booking_state(self.session)
@@ -1205,7 +1206,7 @@ class BookingTask(AgentTask[BookingOutcome]):
 
     async def _handle_explicit_booking_change(
         self,
-        userdata: AloSMSessionData,
+        userdata: OlaSMSessionData,
         user_text: str,
     ) -> None:
         explicit_change = extract_explicit_booking_change(user_text)
@@ -1240,7 +1241,7 @@ class BookingTask(AgentTask[BookingOutcome]):
                 self._raise_if_stale_booking_change(change_token)
                 draft = userdata.booking_draft
                 if previous_value is not None and _current_booking_surface_field(draft, previous_value) != field:
-                raise StopResponse()
+                    raise StopResponse()
                 vehicle_type = extract_vehicle_type(replacement)
                 if vehicle_type is None:
                     draft.mark_vehicle_needs_clarification(replacement)
@@ -1313,7 +1314,7 @@ class BookingTask(AgentTask[BookingOutcome]):
 
     async def _handle_labeled_booking_places(
         self,
-        userdata: AloSMSessionData,
+        userdata: OlaSMSessionData,
         user_text: str,
     ) -> None:
         labelled = extract_labeled_booking_places(user_text)
@@ -1370,7 +1371,7 @@ class BookingTask(AgentTask[BookingOutcome]):
 
     async def _handle_candidate_reselection(
         self,
-        userdata: AloSMSessionData,
+        userdata: OlaSMSessionData,
         user_text: str,
     ) -> None:
         draft = userdata.booking_draft
@@ -1494,7 +1495,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             raise StopResponse()
 
     @function_tool()
-    async def request_handoff(self, context: RunContext[AloSMSessionData], reason: str) -> str:
+    async def request_handoff(self, context: RunContext[OlaSMSessionData], reason: str) -> str:
         """Chuyển yêu cầu gặp người thật lên bộ điều phối của cuộc gọi.
 
         Args:
@@ -1522,7 +1523,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             raise StopResponse()
         return result
 
-    async def _interrupt_stale_speech(self, context: RunContext[AloSMSessionData]) -> None:
+    async def _interrupt_stale_speech(self, context: RunContext[OlaSMSessionData]) -> None:
         """Cancel pre-tool speech so stale quote/location text is never played."""
 
         try:
@@ -1531,7 +1532,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             # A tool can run after speech has already completed or during startup.
             return
 
-    async def _refresh_quote_after_change(self, context: RunContext[AloSMSessionData]) -> QuoteSnapshot | None:
+    async def _refresh_quote_after_change(self, context: RunContext[OlaSMSessionData]) -> QuoteSnapshot | None:
         """Re-issue a quote after a correction when all booking fields remain present."""
 
         draft = self._draft(context)
@@ -1561,7 +1562,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             await self._commit(context)
             return quote
 
-    async def _commit(self, context: RunContext[AloSMSessionData]) -> None:
+    async def _commit(self, context: RunContext[OlaSMSessionData]) -> None:
         commit_started = time.perf_counter()
         state_started = time.perf_counter()
         try:
@@ -1595,7 +1596,7 @@ class BookingTask(AgentTask[BookingOutcome]):
     @function_tool()
     async def search_place(
         self,
-        context: RunContext[AloSMSessionData],
+        context: RunContext[OlaSMSessionData],
         target: BookingTarget,
         query: str,
     ) -> str:
@@ -1688,7 +1689,7 @@ class BookingTask(AgentTask[BookingOutcome]):
                 return "Đã cập nhật địa điểm nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
             context.userdata.clear_failure()
             if refreshed_quote is None:
-            await self._commit(context)
+                await self._commit(context)
             acknowledgement = f"Đã chọn {_target_label(target)} là {selected.display_name}."
             spoken_prompt = (
                 _booking_confirmation_prompt(draft)
@@ -1728,7 +1729,7 @@ class BookingTask(AgentTask[BookingOutcome]):
     @function_tool()
     async def select_place(
         self,
-        context: RunContext[AloSMSessionData],
+        context: RunContext[OlaSMSessionData],
         target: BookingTarget,
         place_id: str,
     ) -> str:
@@ -1775,7 +1776,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             return "Đã xác nhận địa điểm nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
         context.userdata.clear_failure()
         if refreshed_quote is None:
-        await self._commit(context)
+            await self._commit(context)
         acknowledgement = f"Đã chọn {_target_label(target)} là {selected.display_name}."
         if refreshed_quote is not None:
             return _booking_confirmation_prompt(draft)
@@ -1784,7 +1785,7 @@ class BookingTask(AgentTask[BookingOutcome]):
     @function_tool()
     async def set_vehicle_type(
         self,
-        context: RunContext[AloSMSessionData],
+        context: RunContext[OlaSMSessionData],
         vehicle_type: VehicleType,
     ) -> str:
         """Cập nhật loại xe mà khách đã chọn trong booking draft.
@@ -1825,7 +1826,7 @@ class BookingTask(AgentTask[BookingOutcome]):
             return "Đã cập nhật loại xe nhưng chưa thể tính lại giá; hãy gọi estimate_fare trước khi xác nhận."
         context.userdata.clear_failure()
         if refreshed_quote is None:
-        await self._commit(context)
+            await self._commit(context)
         acknowledgement = f"Đã chọn loại xe là {vehicle_spoken_label(vehicle_type)}."
         if refreshed_quote is not None:
             return _booking_confirmation_prompt(draft)
@@ -1834,7 +1835,7 @@ class BookingTask(AgentTask[BookingOutcome]):
     @function_tool()
     async def mark_vehicle_needs_clarification(
         self,
-        context: RunContext[AloSMSessionData],
+        context: RunContext[OlaSMSessionData],
         query: str,
     ) -> str:
         """Đánh dấu mô tả loại xe đã được nói nhưng chưa ánh xạ chắc chắn.
@@ -1863,7 +1864,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         )
 
     @function_tool()
-    async def estimate_fare(self, context: RunContext[AloSMSessionData]) -> str:
+    async def estimate_fare(self, context: RunContext[OlaSMSessionData]) -> str:
         """Tính báo giá cho booking draft đủ thông tin và yêu cầu xác nhận.
 
         Chỉ gọi khi draft có pickup, destination và vehicle_type hợp lệ. Tool
@@ -1913,7 +1914,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         return _booking_confirmation_prompt(draft)
 
     @function_tool()
-    async def confirm_booking(self, context: RunContext[AloSMSessionData]) -> str:
+    async def confirm_booking(self, context: RunContext[OlaSMSessionData]) -> str:
         """Ghi nhận xác nhận đặt chuyến rõ ràng từ câu mới nhất của khách.
 
         Chỉ gọi sau khi khách đã được báo đầy đủ thông tin và câu mới nhất có
@@ -1958,7 +1959,7 @@ class BookingTask(AgentTask[BookingOutcome]):
         return "Khách đã xác nhận rõ ràng; có thể gọi create_booking."
 
     @function_tool(on_duplicate="confirm")
-    async def create_booking(self, context: RunContext[AloSMSessionData]) -> None:
+    async def create_booking(self, context: RunContext[OlaSMSessionData]) -> None:
         """Tạo booking demo sau khi draft đã được xác nhận hợp lệ.
 
         Chỉ gọi sau khi confirm_booking thành công trong cùng quy trình và
@@ -1983,29 +1984,29 @@ class BookingTask(AgentTask[BookingOutcome]):
             "Đang hoàn tất đặt chuyến, bạn chờ một chút nhé.",
             delay=0.8,
         ):
-        try:
-            booking = await self._bookings.create(
-                user_id=context.userdata.user_id,
-                app_session_id=context.userdata.app_session_id,
-                draft=draft,
-            )
-            draft.set_booking(booking)
-            context.userdata.lifecycle_status = "completed"
-        except ValueError as exc:
-            raise ToolError(str(exc)) from exc
-        except Exception as exc:
-            logger.exception("failed to create booking handoff session=%s", context.userdata.app_session_id)
-            context.userdata.record_failure(
-                "BOOKING_RESULT_UNKNOWN",
-                "Chưa xác định được kết quả tạo chuyến; không tự động tạo lại.",
-                retryable=False,
-                fallback_action="handoff",
-            )
-            await self._commit(context)
-            raise ToolError("BOOKING_RESULT_UNKNOWN") from exc
-        context.userdata.clear_failure()
+            try:
+                booking = await self._bookings.create(
+                    user_id=context.userdata.user_id,
+                    app_session_id=context.userdata.app_session_id,
+                    draft=draft,
+                )
+                draft.set_booking(booking)
+                context.userdata.lifecycle_status = "completed"
+            except ValueError as exc:
+                raise ToolError(str(exc)) from exc
+            except Exception as exc:
+                logger.exception("failed to create booking handoff session=%s", context.userdata.app_session_id)
+                context.userdata.record_failure(
+                    "BOOKING_RESULT_UNKNOWN",
+                    "Chưa xác định được kết quả tạo chuyến; không tự động tạo lại.",
+                    retryable=False,
+                    fallback_action="handoff",
+                )
+                await self._commit(context)
+                raise ToolError("BOOKING_RESULT_UNKNOWN") from exc
+            context.userdata.clear_failure()
             context.userdata.post_booking_support = PostBookingSupportState.for_booking(booking)
-        await self._commit(context)
+            await self._commit(context)
         outcome = BookingOutcome(
             status="created",
             booking=booking,
