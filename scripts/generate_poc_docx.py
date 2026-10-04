@@ -286,106 +286,102 @@ def build_document():
         return table
 
     # =========================================================================
-    # PHẦN 1: TIẾN TRÌNH THỰC HIỆN POC VÀ CẬP NHẬT MỐC TUẦN 1
+    # PHẦN 1: CẬP NHẬT TIẾN ĐỘ PHASE 3 (NỬA CHẶNG ĐƯỜNG: TUẦN 1 - 3 / 6 TUẦN)
     # =========================================================================
-    add_h1("1. Tiến trình thực hiện POC: Đối soát Kế hoạch và Kết quả vượt mức Mốc Tuần 1")
+    add_h1("1. Cập nhật tiến độ Phase 3: Đối soát Kế hoạch 6 Tuần và Kết quả Nửa chặng đường (Tuần 1 - 3)")
     
-    add_h2("1.1. Khung thời gian và Lộ trình 5 Tuần POC (Theo Đề cương Báo cáo Ý tưởng)")
+    add_h2("1.1. Khung thời gian và Mục tiêu Kỹ thuật Phase 3 (Tổng 6 Tuần: 14/09 – 25/10/2026)")
     add_p(
-        "Bám sát đề cương đã được TS. Lê Duy Dũng và Ban Đề án VRIC × GSM phê duyệt tại Báo cáo Ý tưởng, "
-        "tiến trình POC của dự án OlaSM được thiết kế thành lộ trình 5 tuần chặt chẽ (28/09/2026 – 01/11/2026). "
-        "Mỗi tuần đều có tiêu chí hoàn thành cụ thể (Definition of Done) làm căn cứ nghiệm thu từng bước trước khi "
-        "bước vào giai đoạn thử nghiệm thực địa Pilot với 50 xe điện GreenSM tại Hà Nội:"
+        "Theo đề cương chương trình VRIC × GSM Smart City, giai đoạn Phase 3 (Phát triển Kỹ thuật & Thực nghiệm POC) "
+        "kéo dài đúng 6 tuần (từ ngày 14/09/2026 đến ngày 25/10/2026). Tính đến hôm nay (Chủ nhật, ngày 04/10/2026), "
+        "dự án đã đi qua đúng 3 tuần (50% chặng đường Phase 3). Nửa đầu giai đoạn tập trung vào việc kiến tạo hạ tầng thoại "
+        "thời gian thực và hiện thực hóa các thuật toán lõi phức tạp; nửa sau giai đoạn (Tuần 4 – Tuần 6) sẽ tập trung vào "
+        "bàn làm việc điều phối tổng đài viên (HITL), kiểm thử tải lớn, đấu nối GSM Sandbox và nghiệm thu toàn diện Phase 3:"
     )
-    add_bullet("Tuần 1 (28/09 – 04/10/2026) — Voice Pipeline Streaming Baseline: ", "Xây dựng hạ tầng WebRTC LiveKit hai chiều; tích hợp Silero VAD; phát triển VietnameseAudioChunker tối ưu ngắt cụm ngữ pháp tiếng Việt; đo lường latency baseline từng tầng.")
-    add_bullet("Tuần 2 (05/10 – 11/10/2026) — LangGraph State Machine, Bản đồ Việt Nam & Tối ưu Siêu Rẻ: ", "Hoàn thiện State Machine 6 bước hội thoại khép kín; tích hợp bản đồ Việt Nam Goong Geocoding và OSRM thay thế hoàn toàn Mapbox; triển khai bộ nhớ đệm Tiered Cache đưa chi phí cuộc gọi về mức tối thiểu.")
-    add_bullet("Tuần 3 (12/10 – 18/10/2026) — Multimodal Visual Grounding & Operator Console (HITL): ", "Mở rộng danh mục điểm đón phức tạp (sảnh chung cư, tầng hầm TTTM, cột ga sân bay); tích hợp Spatial OCR + Gemini VLM; xây dựng bàn làm việc Operator Console cho tổng đài viên tiếp nhận ca chuyển giao < 0.5s kèm ảnh và ngữ cảnh.")
-    add_bullet("Tuần 4 (19/10 – 25/10/2026) — Đánh giá Chuyên sâu (Comprehensive Eval) & Stress-Test: ", "Chạy bộ 50+ kịch bản mô phỏng E2E toàn diện; hiệu chuẩn độ tin cậy ECEService (Temperature Scaling ECE <= 0.02); kiểm thử Guardrails 3 lớp chống Prompt Injection; stress-test tải 50-100 cuộc gọi đồng thời.")
-    add_bullet("Tuần 5 (26/10 – 01/11/2026) — Tích hợp GSM Sandbox API, Mô phỏng Đội xe & Nghiệm thu POC: ", "Đấu nối GSM Sandbox API (Booking, Fare, Dispatching, Promotion); mô phỏng đội xe điện VinFast (VF e34, VF 5, VF 8) theo mức pin SoC% và trạm sạc V-GREEN; chốt bảng KPI và báo cáo Go/No-go.")
-    add_bullet("Giai đoạn Mở rộng (Tuần 6 – 8: 02/11 – 08/11/2026) — Thử nghiệm Thực địa Pilot 50 Xe GreenSM: ", "Triển khai thử nghiệm có kiểm soát với 50 tài xế xe điện GreenSM tại Quận Hoàn Kiếm và Cầu Giấy (Hà Nội); đo lường CSAT thực tế; chuẩn bị hồ sơ và slide bảo vệ chung kết.")
+    add_bullet("Tuần 1 (14/09 – 20/09/2026 — Đã hoàn thành): ", "Khởi tạo kiến trúc Dual-Plane (FastAPI + LiveKit Worker); phân tích 3 điểm nghẽn nghiệp vụ tổng đài GreenSM; chuẩn hóa cơ sở dữ liệu bền vững (PostgreSQL / SQLite).")
+    add_bullet("Tuần 2 (21/09 – 27/09/2026 — Đã hoàn thành): ", "Xây dựng luồng đàm thoại WebRTC LiveKit hai chiều; tích hợp Silero VAD (220ms); lập trình VietnameseAudioChunker ngắt ngữ pháp tiếng Việt (TTFA P95 đạt 1.41s); dựng LangGraph State Machine 6 bước và Guardrails an toàn 3 lớp.")
+    add_bullet("Tuần 3 (28/09 – 04/10/2026 — Đã hoàn thành, Mốc báo cáo hiện tại): ", "Hoàn thành các thuật toán lõi then chốt: COE Soffer scoring; Dynamic Confidence Fusion ctrip (ECE = 0.0127); Multimodal Vision Grounding (Spatial OCR + Gemini VLM đạt 93% accuracy); tích hợp Goong Maps Việt Nam; Kiến trúc Ultra-Low-Cost siêu rẻ cho GreenSM mobile (~75 - 125 VNĐ/cuộc gọi); toàn bộ test suite đạt 720 / 720 tests xanh 100%.")
+    add_bullet("Tuần 4 (05/10 – 11/10/2026 — Tuần tiếp theo): ", "Hoàn thiện bàn làm việc Web Operator Console (bàn giao HITL < 0.5s live WebRTC); mở rộng catalog 50+ điểm đón phức tạp Hà Nội; triển khai Tiered Cache 1.000 địa danh phổ biến.")
+    add_bullet("Tuần 5 (12/10 – 18/10/2026 — 2 tuần tới): ", "Đánh giá chuyên sâu 100 kịch bản đàm thoại thực tế giọng 3 miền; stress-testing tải 50-100 cuộc gọi đồng thời; audit biên độ tiết kiệm ngân sách khuyến mãi của thuật toán COE.")
+    add_bullet("Tuần 6 (19/10 – 25/10/2026 — Tuần về đích Phase 3): ", "Đấu nối GSM Sandbox API Live; mô phỏng điều phối đội xe điện VinFast (VF e34, VF 8) theo mức pin SoC%; đóng gói toàn diện sản phẩm POC; lập Báo cáo Nghiệm thu Tổng kết Phase 3 (Go/No-go).")
+    add_bullet("Giai đoạn Hậu Phase 3 (Tuần 7 – 8: 26/10 – 08/11/2026 — Pilot Thực địa): ", "Thử nghiệm thực địa có kiểm soát với 50 tài xế xe điện GreenSM tại Quận Hoàn Kiếm và Cầu Giấy (Hà Nội); đo lường CSAT thực tế và bảo vệ chung kết.")
 
-    add_h2("1.2. Kết quả đột phá tại Mốc Nghiệm thu Tuần 1 (Chủ nhật, ngày 04/10/2026)")
+    add_h2("1.2. Kết quả đối soát kỹ thuật sau 3 tuần (Nửa chặng đường Phase 3)")
     add_p(
-        "Tại mốc kiểm tra kết thúc Tuần 1 (04/10/2026), Nhóm 4 đã hoàn thành xuất sắc 100% mục tiêu ban đầu "
-        "(WebRTC LiveKit hai chiều, VAD, VietnameseAudioChunker với độ trễ phản hồi TTFA P95 đạt 1.41s). "
-        "Đồng thời, với tinh thần chủ động đẩy mạnh nghiên cứu nhằm triệt tiêu rủi ro cho các tuần sau, "
-        "nhóm đã lập trình sớm (Fast-track) và kiểm chứng độc lập toàn bộ các thuật toán cốt lõi dự kiến cho Tuần 2, 3 và 4. "
-        "Hệ thống hiện sở hữu bộ kiểm thử tự động toàn diện đạt 720 / 720 tests xanh 100%:"
+        "Nhờ phương pháp làm việc quyết liệt và khoa học, trong 3 tuần vừa qua, Nhóm 4 không chỉ hoàn thành 100% mục tiêu "
+        "hạ tầng và streaming âm thanh mà còn hoàn thành sớm toàn bộ các bài toán thuật toán then chốt (COE, Confidence Fusion, "
+        "Gemini Vision Grounding, Kiến trúc Siêu Rẻ). Hệ thống hiện vận hành mượt mà trên môi trường thử nghiệm với 720 / 720 tests xanh tuyệt đối:"
     )
     
-    t1_headers = ["Phân hệ kỹ thuật", "Kế hoạch đề cương & Thực tế đạt được tại Mốc Tuần 1", "Đánh giá nghiệm thu"]
+    t1_headers = ["Phân hệ kỹ thuật", "Kết quả thực nghiệm kỹ thuật sau 3 tuần (14/09 – 04/10/2026)", "Đánh giá nghiệm thu"]
     t1_rows = [
         [
-            "Voice Streaming Pipeline\n(Trọng tâm Tuần 1)",
-            "Kế hoạch: Web call latency p95 <= 1.5s.\nThực tế: Dựng xong WebRTC LiveKit, Silero VAD (220ms), lập trình VietnameseAudioChunker ngắt ngữ pháp tiếng Việt; đo đạc thực tế TTFA p50: 1.26s, TTFA p95: 1.41s.",
-            "Hoàn thành xuất sắc\n(Vượt chỉ tiêu Tuần 1)"
+            "Voice Streaming Pipeline\n(Hoàn thành Tuần 2)",
+            "WebRTC LiveKit hai chiều, Silero VAD (220ms), lập trình VietnameseAudioChunker ngắt ngữ pháp tiếng Việt; đo đạc thực tế TTFA p50: 1.26s, TTFA p95: 1.41s (vượt chỉ tiêu <= 1.5s).",
+            "Hoàn thành xuất sắc\n(TTFA P95 <= 1.41s)"
         ],
         [
-            "Conversational Offer Engine (COE)\n(Lập trình sớm Tuần 2 & 4)",
-            "Kế hoạch: Chấm điểm Soffer và phân bổ ưu đãi.\nThực tế: Lập trình xong công thức Soffer (alpha=0.35, beta=0.25, gamma=0.40); xây dựng OfferProfileRepository kết nối PostgreSQL Supabase; tích hợp giải thuật Cold-start cho khách mới.",
-            "Hoàn thành sớm\n(11/11 audit tests)"
+            "Conversational Offer Engine (COE)\n(Hoàn thành Tuần 3)",
+            "Hoàn thành thuật toán tính điểm Soffer = 0.35 ChurnRisk + 0.25 PriceSensitivity + 0.40 CampaignFit; OfferProfileRepository kết nối PostgreSQL; giải thuật Cold-start giải quyết triệt để khách gọi lần đầu.",
+            "Hoàn thành 100%\n(11/11 audit tests)"
         ],
         [
-            "Dynamic Confidence Fusion (ctrip)\n(Lập trình sớm Tuần 3 & 4)",
-            "Kế hoạch: Hợp nhất độ tin cậy và rẽ nhánh HITL.\nThực tế: Lập trình công thức ctrip tái chuẩn hóa trọng số động khi thiếu ảnh; phân luồng 3 nhánh (Auto-book / Clarify / HITL); ECEService đạt ECE = 0.0127 (chỉ tiêu <= 0.10).",
-            "Hoàn thành sớm\n(Calibrated ECE <= 0.02)"
+            "Dynamic Confidence Fusion (ctrip)\n(Hoàn thành Tuần 3)",
+            "Lập trình công thức ctrip tái chuẩn hóa trọng số động khi thiếu ảnh; phân luồng 3 nhánh (Auto-book / Clarify / HITL); ECEService tối ưu Temperature Scaling đạt ECE = 0.0127 (chỉ tiêu <= 0.10).",
+            "Hoàn thành xuất sắc\n(Calibrated ECE <= 0.02)"
         ],
         [
-            "Multimodal Visual Grounding\n(Lập trình sớm Tuần 3)",
-            "Kế hoạch: Nhận diện ảnh điểm đón phức tạp.\nThực tế: Kết hợp Spatial OCR và Gemini 2.5 Flash Multimodal Vision; nhận diện chính xác cột hầm TTTM, sảnh chung cư và cửa đón sân bay, đạt độ chính xác 93.0% trên 5 cụm landmark.",
-            "Hoàn thành sớm\n(5 cụm landmark lớn)"
+            "Multimodal Visual Grounding\n(Hoàn thành Tuần 3)",
+            "Kết hợp Spatial OCR và Gemini 2.5 Flash Multimodal Vision; nhận diện chính xác cột hầm TTTM, sảnh chung cư và cửa đón sân bay, đạt độ chính xác 93.0% trên 5 cụm landmark phức tạp.",
+            "Vượt chỉ tiêu 8.0%\n(Đạt 93.0% accuracy)"
         ],
         [
-            "Bản đồ & Định vị Địa chỉ Việt Nam\n(Lập trình sớm Tuần 2)",
-            "Kế hoạch: Chuẩn hóa địa chỉ và lấy tọa độ.\nThực tế: Xây dựng Gazetteer > 500 địa danh Hà Nội; tích hợp GoongMapsProvider và OSRM thay thế Mapbox, chuẩn hóa địa chỉ theo mô hình 2 cấp hành chính mới, đạt độ khớp 93.3%.",
-            "Hoàn thành sớm\n(Tiết kiệm 80% phí API)"
+            "Bản đồ & Chuẩn hóa Địa danh VN\n(Hoàn thành Tuần 3)",
+            "Xây dựng Gazetteer > 500 địa danh Hà Nội; tích hợp GoongMapsProvider và OSRM thay thế Mapbox, chuẩn hóa địa chỉ theo mô hình 2 cấp hành chính mới, đạt độ khớp 93.3%, tiết kiệm 80% chi phí.",
+            "Hoàn thành 100%\n(Độ khớp 93.3%)"
         ],
         [
-            "Kiến trúc Tối ưu Chi phí Siêu Rẻ\n(Ultra-Low-Cost Architecture)",
-            "Kế hoạch: Duy trì lâu dài cho GreenSM mobile.\nThực tế: Triển khai phân tầng 4 lớp (Edge VAD -> Goong/OSRM -> GPT-4o-mini + Prompt Caching -> Streaming Chunker TTS); chi phí chỉ ~75 - 125 VNĐ / cuộc gọi (~0.003 - 0.005 USD).",
-            "Đột phá kinh tế\n(Tiết kiệm ~92% chi phí)"
+            "Kiến trúc Tối ưu Chi phí Siêu Rẻ\n(Hoàn thành Tuần 3)",
+            "Triển khai phân tầng 4 lớp (Client Edge VAD -> Goong/OSRM -> GPT-4o-mini + Prompt Caching -> Streaming Chunker TTS); chi phí chỉ ~75 - 125 VNĐ / cuộc gọi (~0.003 - 0.005 USD), tiết kiệm ~92% chi phí.",
+            "Đột phá kinh tế\n(Duy trì bền vững)"
         ],
         [
-            "Kiểm thử Tự động & Guardrails\n(Toàn bộ hệ thống)",
-            "Kế hoạch: Kiểm thử hồi quy toàn diện.\nThực tế: Chạy mô phỏng 50 kịch bản E2E; kiểm thử an toàn 3 lớp chặn 100% Prompt Injection; test suite toàn dự án đạt 720 / 720 tests xanh 100% trong 15.4s.",
+            "Kiểm thử Tự động & Guardrails\n(Xuyên suốt 3 tuần)",
+            "Chạy mô phỏng 50 kịch bản E2E; kiểm thử an toàn 3 lớp chặn 100% Prompt Injection; test suite toàn dự án đạt 720 / 720 tests xanh 100% trong ~15.4 giây.",
             "Đạt chuẩn tuyệt đối\n(720 / 720 tests PASSED)"
         ]
     ]
     create_table(t1_headers, t1_rows, [2.2, 3.6, 1.4], [WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.CENTER])
     
-    add_h2("1.3. Vướng mắc và Điểm nghẽn kỹ thuật cần GSM & Hội đồng hỗ trợ")
+    add_h2("1.3. Vướng mắc và Điểm nghẽn kỹ thuật cần GSM & Hội đồng hỗ trợ trong 3 tuần còn lại")
     add_bullet(
         "Tài khoản GSM Sandbox API Live: ",
-        "Hệ thống đã có client GSMSandboxClient chuẩn OpenAPI nhưng đang kết nối qua Mock Gateway. Nhóm cần Ban Công nghệ GSM cấp API Endpoint, API Key môi trường Staging/Sandbox để kiểm thử luồng giao dịch thật khép kín."
+        "Hệ thống đã có client GSMSandboxClient chuẩn OpenAPI nhưng đang kết nối qua Mock Gateway. Để chuẩn bị nghiệm thu tại Tuần 6, nhóm cần Ban Công nghệ GSM cấp API Endpoint, API Key môi trường Sandbox/Staging để kiểm thử luồng giao dịch thật khép kín."
     )
     add_bullet(
         "Dữ liệu Telemetry thực tế từ đội xe điện VinFast: ",
-        "Mô hình phân bổ xe theo mức pin (SoC %) và vị trí GPS hiện đang chạy trên mô phỏng. Cần kết nối luồng telemetry thực tế từ GSM/VinFast để tối ưu hóa quãng đường đón khách và gợi ý trạm sạc V-GREEN trên lộ trình."
+        "Mô hình phân bổ xe theo mức pin (SoC %) và vị trí GPS hiện đang chạy trên mô phỏng. Cần kết nối luồng telemetry thực tế từ GSM/VinFast để chuẩn hóa thuật toán điều phối xe theo trạm sạc V-GREEN trong Tuần 6."
     )
     add_bullet(
         "Ngữ liệu cuộc gọi mẫu viễn thông ẩn danh: ",
-        "Cần 30-50 đoạn ghi âm cuộc gọi tổng đài 1900 thực tế (đã che thông tin định danh cá nhân PII) kèm bóc băng chuẩn để đo lường Word Error Rate (WER) thực tế trên đường truyền viễn thông và tinh chỉnh nhận dạng ngữ điệu."
+        "Cần 30-50 đoạn ghi âm cuộc gọi tổng đài 1900 thực tế (đã che thông tin định danh cá nhân PII) kèm bóc băng chuẩn để đo lường Word Error Rate (WER) thực tế trên đường truyền viễn thông trong Tuần 5."
     )
 
-    add_h2("1.4. Lộ trình triển khai chi tiết Tuần 2 đến Tuần 5 và Giai đoạn Thử nghiệm Pilot Thực địa")
+    add_h2("1.4. Lộ trình triển khai chi tiết 3 Tuần còn lại của Phase 3 (Tuần 4 – Tuần 6: 05/10 – 25/10/2026)")
     add_bullet(
-        "Tuần 2 (05/10 - 11/10/2026) — Bản đồ Việt Nam, Caching & Routing Siêu Rẻ: ",
-        "Triển khai bộ nhớ đệm Tiered Cache lưu trữ 1.000 điểm đón phổ biến; tối ưu hóa GoongMapsProvider và OSRM; hoàn thiện tích hợp mã ưu đãi vào giải thuật Cold-start của OfferProfileRepository."
+        "Tuần 4 (05/10 – 11/10/2026) — Operator Console Live WebRTC, Tiered Cache & Mở rộng Vision: ",
+        "Hoàn thiện bàn làm việc Web Operator Console với độ trễ bàn giao cuộc gọi < 0.5s live WebRTC; mở rộng catalog điểm đón phức tạp lên 50+ địa điểm Hà Nội; triển khai bộ nhớ đệm Tiered Cache lưu 1.000 địa danh phổ biến."
     )
     add_bullet(
-        "Tuần 3 (12/10 - 18/10/2026) — Mở rộng Vision Grounding & Operator Console Live: ",
-        "Mở rộng danh mục điểm đón phức tạp lên 50+ địa điểm tại Hà Nội; hoàn thiện bàn làm việc Web Operator Console hỗ trợ tổng đài viên nhận cuộc gọi chuyển giao LiveKit WebRTC và duyệt cuốc xe trong một cú click."
+        "Tuần 5 (12/10 – 18/10/2026) — Đánh giá Chuyên sâu, Stress-Testing & Audit Chi phí Khuyến mại: ",
+        "Chạy bộ kiểm thử 100 kịch bản thu âm thực tế (giọng Bắc, Trung, Nam có tạp âm); stress-test tải 50-100 cuộc gọi LiveKit WebRTC đồng thời; audit biên độ tiết kiệm ngân sách khuyến mãi của thuật toán COE."
     )
     add_bullet(
-        "Tuần 4 (19/10 - 25/10/2026) — Đánh giá Chuyên sâu, Stress-Test & Hiệu chuẩn Toàn diện: ",
-        "Chạy bộ kiểm thử 100 kịch bản thu âm thực tế (giọng Bắc, Trung, Nam có tạp âm); stress-test tải 50-100 cuộc gọi LiveKit WebRTC đồng thời; audit biên độ tiết kiệm chi phí khuyến mại của thuật toán COE."
+        "Tuần 6 (19/10 – 25/10/2026) — Đấu nối GSM Sandbox API, Mô phỏng Đội xe & Nghiệm thu Tổng kết Phase 3: ",
+        "Đấu nối client GSMSandboxClient với Sandbox API của GSM; mô phỏng điều phối đội xe VinFast VF e34 và VF 8 theo mức pin SoC%; đóng gói toàn diện sản phẩm POC; lập Báo cáo Nghiệm thu Tổng kết Phase 3 (Go/No-go)."
     )
     add_bullet(
-        "Tuần 5 (26/10 - 01/11/2026) — Đấu nối Sandbox GSM, Nghiệm thu POC & Quyết định Go/No-go: ",
-        "Đấu nối client GSMSandboxClient với Staging API của GSM; mô phỏng điều phối đội xe VinFast VF e34 và VF 8 theo mức pin; lập Báo cáo Nghiệm thu POC chính thức và quay video demo hoàn chỉnh."
-    )
-    add_bullet(
-        "Giai đoạn Mở rộng (Tuần 6 – 8: 02/11 - 08/11/2026) — Thử nghiệm Thực địa Pilot 50 Xe GreenSM tại Hà Nội: ",
+        "Giai đoạn Hậu Phase 3 (Tuần 7 – 8: 26/10 – 08/11/2026) — Thử nghiệm Thực địa Pilot 50 Xe GreenSM tại Hà Nội: ",
         "Triển khai thử nghiệm có kiểm soát với 50 tài xế xe điện GreenSM tại Quận Hoàn Kiếm và Cầu Giấy; đo lường tỷ lệ giảm cuộc gọi nhỡ (Lost calls), mức độ hài lòng khách hàng (CSAT) và bảo vệ chung kết."
     )
 
@@ -656,38 +652,38 @@ def build_document():
     ]
     create_table(t4_headers, t4_rows, [2.0, 1.8, 3.4], [WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.LEFT])
 
-    add_h2("3.2. Phân công nhiệm vụ chi tiết các giai đoạn tiếp theo (Tuần 2 – Tuần 5 & Pilot)")
+    add_h2("3.2. Phân công nhiệm vụ chi tiết 3 Tuần còn lại của Phase 3 (Tuần 4 – Tuần 6) và Pilot")
     
     t5_headers = ["Thành viên phụ trách", "Nội dung công việc trọng tâm", "Thời hạn hoàn thành", "Kết quả bàn giao"]
     t5_rows = [
         [
             "Nguyễn Thị Phương",
             "Hoàn thiện Goong Maps Provider, triển khai Tiered Cache 1.000 địa danh và tích hợp chính sách ưu đãi vào COE.",
-            "11/10/2026 (Tuần 2)",
+            "11/10/2026 (Tuần 4)",
             "Module định vị Việt Nam siêu rẻ và bộ phân bổ ưu đãi theo phân khúc khách hàng."
         ],
         [
             "Nguyễn Đức Nam Khánh",
-            "Mở rộng Vision Grounding lên 50+ điểm phức tạp; hoàn thiện bàn làm việc Web Operator Console tiếp nhận ca HITL.",
-            "18/10/2026 (Tuần 3)",
+            "Mở rộng Vision Grounding lên 50+ điểm phức tạp; hoàn thiện bàn làm việc Web Operator Console tiếp nhận ca HITL qua WebRTC (< 0.5s).",
+            "11/10/2026 (Tuần 4)",
             "Giao diện Operator Console Live WebRTC và catalog landmark chi tiết Hà Nội."
         ],
         [
             "Cả nhóm (Nam Khánh & Phương)",
             "Chạy stress-test 100 cuộc gọi thoại đồng thời, đánh giá toàn diện 100 kịch bản thực tế và kiểm chuẩn ECE.",
-            "25/10/2026 (Tuần 4)",
+            "18/10/2026 (Tuần 5)",
             "Báo cáo Comprehensive Evaluation, biểu đồ ECE và phân tích ROI chi phí."
         ],
         [
-            "Nguyễn Đức Nam Khánh",
-            "Đấu nối GSM Sandbox API Live, hoàn thiện điều phối đội xe điện VinFast (VF e34, VF 8) theo mức pin SoC%.",
-            "01/11/2026 (Tuần 5)",
-            "Bản demo hoàn chỉnh end-to-end kết nối Sandbox GSM và Báo cáo Nghiệm thu POC."
+            "Cả nhóm (Nam Khánh & Phương)",
+            "Đấu nối GSM Sandbox API Live, hoàn thiện điều phối đội xe điện VinFast (VF e34, VF 8) theo mức pin SoC% và lập Báo cáo Nghiệm thu Tổng kết Phase 3.",
+            "25/10/2026 (Tuần 6)",
+            "Bản demo hoàn chỉnh end-to-end kết nối Sandbox GSM và Báo cáo Nghiệm thu Tổng kết Phase 3 (Go/No-go)."
         ],
         [
             "Cả nhóm (Nam Khánh & Phương)",
-            "Triển khai thử nghiệm Pilot 50 xe GreenSM thực địa tại Hà Nội (Quận Hoàn Kiếm & Cầu Giấy), đo lường CSAT.",
-            "08/11/2026 (Tuần 6-8)",
+            "Triển khai thử nghiệm Pilot 50 xe GreenSM thực địa tại Hà Nội (Quận Hoàn Kiếm & Cầu Giấy), đo lường CSAT và bảo vệ chung kết.",
+            "08/11/2026 (Tuần 7-8: Pilot)",
             "Báo cáo nghiệm thu Pilot thực địa, dữ liệu đo lường CSAT và Slide bảo vệ chung kết."
         ]
     ]
@@ -698,17 +694,17 @@ def build_document():
     # =========================================================================
     add_h1("4. Kết luận và Kiến nghị")
     add_p(
-        "Phiên bản POC hiện tại của OlaSM đã chứng minh trọn vẹn tính khả thi kỹ thuật vượt trội, độ tin cậy của thuật toán "
+        "Phiên bản hiện tại của OlaSM đã chứng minh trọn vẹn tính khả thi kỹ thuật vượt trội, độ tin cậy của thuật toán "
         "và tiềm năng ứng dụng thực tiễn to lớn đối với hệ sinh thái xe điện thông minh GreenSM. Bằng việc hoàn thành xuất sắc "
-        "toàn bộ các mục tiêu của Tuần 1 và lập trình sớm các thuật toán cốt lõi then chốt, hệ thống đã sở hữu độ trễ phản hồi ấn tượng "
+        "toàn bộ các mục tiêu của Nửa đầu Phase 3 (Tuần 1 - 3), hệ thống đã sở hữu độ trễ phản hồi ấn tượng "
         "(TTFA P95 đạt 1.41s), thời gian đàm thoại rút ngắn 72%, độ hiệu chuẩn ECE đạt 0.0127, kiến trúc kỹ thuật siêu rẻ "
         "(~75 - 125 VNĐ / cuộc gọi) và bộ kiểm thử tự động 720 / 720 tests xanh tuyệt đối."
     )
     add_p(
         "Nhóm 4 kính đề nghị TS. Lê Duy Dũng, Anh Lê Yên Thanh và Ban Đề án xem xét: "
-        "(1) Phê duyệt kết quả nghiệm thu Mốc Tuần 1 của Nhóm 4; "
+        "(1) Phê duyệt kết quả nghiệm thu Nửa đầu Phase 3 (Tuần 1 - 3) của Nhóm 4; "
         "(2) Hỗ trợ kết nối chính thức với Ban Công nghệ GreenSM để mở quyền truy cập tài khoản GSM Sandbox API Live "
-        "và chia sẻ dữ liệu thực tế nhằm chuẩn bị cho việc nghiệm thu hoàn thiện tại Tuần 5 và giai đoạn thử nghiệm Pilot thực địa tại Hà Nội."
+        "và chia sẻ dữ liệu thực tế nhằm chuẩn bị cho việc nghiệm thu hoàn thiện tại Tuần 6 và giai đoạn thử nghiệm Pilot thực địa tại Hà Nội."
     )
     
     # Signatures
