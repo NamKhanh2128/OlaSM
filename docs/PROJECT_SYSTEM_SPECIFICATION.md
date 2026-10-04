@@ -1,7 +1,7 @@
-# ALOSM (P-160) — SYSTEM ARCHITECTURE & TECHNICAL MASTER SPECIFICATION
+# OLASM — SYSTEM ARCHITECTURE & TECHNICAL MASTER SPECIFICATION
 
 > **Tài liệu đặc tả toàn diện kiến trúc hệ thống, mô hình AI, tính năng, luồng nghiệp vụ, công cụ và bộ chỉ số kiểm định chất lượng (Demo Day Ready)**  
-> **Mã dự án:** P-160 (AloSM)  
+> **Mã dự án:** OlaSM  
 > **Trạng thái:** Hoàn thiện benchmark & Kiểm nghiệm thực tế (Production-Ready Architecture)  
 > **Ngày cập nhật:** 04/09/2026  
 
@@ -52,7 +52,7 @@
 
 ## 1. TỔNG QUAN HỆ THỐNG (EXECUTIVE SUMMARY)
 
-**AloSM** là nền tảng trợ lý Voice AI thông minh chuyên phục vụ nhu cầu đặt xe taxi, xe ôm công nghệ thông qua giọng nói tự nhiên bằng tiếng Việt trên nền tảng Web/WebRTC. Hệ thống hướng đến giải quyết bài toán đặt xe rảnh tay cho người dùng đang di chuyển, người lớn tuổi không quen thao tác ứng dụng phức tạp, hoặc khách hàng muốn sự nhanh chóng như gọi tổng đài truyền thống nhưng với chi phí vận hành chỉ bằng một phần nhỏ.
+**OlaSM** là nền tảng trợ lý Voice AI thông minh chuyên phục vụ nhu cầu đặt xe taxi, xe ôm công nghệ thông qua giọng nói tự nhiên bằng tiếng Việt trên nền tảng Web/WebRTC. Hệ thống hướng đến giải quyết bài toán đặt xe rảnh tay cho người dùng đang di chuyển, người lớn tuổi không quen thao tác ứng dụng phức tạp, hoặc khách hàng muốn sự nhanh chóng như gọi tổng đài truyền thống nhưng với chi phí vận hành chỉ bằng một phần nhỏ.
 
 ### Các nguyên tắc kỹ thuật cốt lõi:
 1. **Source of Truth tại Backend**: Toàn bộ dữ liệu về địa điểm, giá cước, trạng thái chuyến, người dùng và xe thuộc quyền sở hữu của cơ sở dữ liệu và Backend API. AI Agent chỉ đóng vai trò giao tiếp, thu thập thông tin và thực thi các công cụ có kiểu dữ liệu chặt chẽ (Strict Typed Tools); **tuyệt đối không để AI tự ý suy đoán giá tiền hay mã chuyến**.
@@ -67,14 +67,14 @@
 
 ### 2.1. Hai mặt phẳng phối hợp (Dual-Plane Architecture)
 
-Hệ thống AloSM được phân chia mạch lạc thành hai mặt phẳng kiến trúc độc lập nhưng liên kết chặt chẽ qua cơ sở dữ liệu và hàng đợi sự kiện:
+Hệ thống OlaSM được phân chia mạch lạc thành hai mặt phẳng kiến trúc độc lập nhưng liên kết chặt chẽ qua cơ sở dữ liệu và hàng đợi sự kiện:
 
 1. **Application Plane (Mặt phẳng ứng dụng nghiệp vụ)**:
    - Được xây dựng trên **FastAPI (Python 3.12)** chuẩn RESTful API.
    - Đảm nhiệm: Xác thực người dùng (JWT/Auth), Quản lý người dùng, Dịch vụ tính giá cước (Pricing Engine), Dịch vụ bản đồ/tọa độ (Geocoding/Maps), Quản lý vòng đời chuyến xe (Booking & Trip Lifecycle), Hàng đợi chuyển giao nhân viên (Handoff Queue) và Lưu trữ bền vững (PostgreSQL trên Supabase hoặc SQLite cho môi trường Local).
 2. **Realtime Voice Plane (Mặt phẳng xử lý giọng nói thời gian thực)**:
    - Sử dụng hạ tầng phòng họp âm thanh **LiveKit Cloud / Self-hosted Server**.
-   - Worker chạy độc lập bằng **LiveKit Agent Framework (Python)**, kết nối trực tiếp vào Room dưới dạng một Participant chuyên biệt (`AloSMAgent`).
+   - Worker chạy độc lập bằng **LiveKit Agent Framework (Python)**, kết nối trực tiếp vào Room dưới dạng một Participant chuyên biệt (`OlaSMAgent`).
    - Đảm nhiệm: Thu nhận luồng âm thanh WebRTC từ Microphone trình duyệt, phát hiện tiếng nói (Silero VAD), chuyển giọng nói thành văn bản (Deepgram STT), suy luận nghiệp vụ (LLM), tổng hợp giọng nói tự nhiên (Google Gemini Flash TTS) và đẩy trực tiếp luồng audio ngược lại loa người dùng với độ trễ cực thấp.
 
 ---
@@ -163,7 +163,7 @@ flowchart TB
 
 ### 2.3. Cơ chế đồng bộ trạng thái & Khôi phục phiên (State Sync & Persistence)
 
-Để chống lại tình trạng mất dữ liệu khi rớt mạng 4G hoặc worker khởi động lại, AloSM cài đặt lớp trừu tượng `VoiceStateStore` với triển khai mặc định là `DatabaseVoiceStateStore`:
+Để chống lại tình trạng mất dữ liệu khi rớt mạng 4G hoặc worker khởi động lại, OlaSM cài đặt lớp trừu tượng `VoiceStateStore` với triển khai mặc định là `DatabaseVoiceStateStore`:
 
 ```mermaid
 stateDiagram-v2
@@ -185,7 +185,7 @@ stateDiagram-v2
 ```
 
 - **Optimistic Locking (`revision_id`)**: Mỗi lần cập nhật trạng thái (chọn điểm đón, chọn xe, nhận quote, xác nhận), trường `revision_id` tự động tăng lên 1. Nếu có cập nhật cạnh tranh hoặc xung đột phiên, hệ thống từ chối cập nhật cũ và nạp lại trạng thái mới nhất từ cơ sở dữ liệu.
-- **Snapshot Context phục vụ Handoff**: Khi chuyển giao sang nhân viên tổng đài, toàn bộ cấu trúc `AloSMSessionData` (gồm điểm đón, điểm đến, loại xe, mã quote, lịch sử hội thoại gần nhất, lý do chuyển) được đóng gói thành một `Context Snapshot` lưu vào cơ sở dữ liệu, giúp nhân viên nắm bắt ngay bối cảnh mà không cần hỏi lại khách.
+- **Snapshot Context phục vụ Handoff**: Khi chuyển giao sang nhân viên tổng đài, toàn bộ cấu trúc `OlaSMSessionData` (gồm điểm đón, điểm đến, loại xe, mã quote, lịch sử hội thoại gần nhất, lý do chuyển) được đóng gói thành một `Context Snapshot` lưu vào cơ sở dữ liệu, giúp nhân viên nắm bắt ngay bối cảnh mà không cần hỏi lại khách.
 
 ---
 
@@ -235,7 +235,7 @@ Hệ thống cho phép chuyển đổi mượt mà giữa Voice và Text trong c
 ### 3.4. LLM Reasoning & Prompt Persona
 Hệ thống sử dụng mô hình ngôn ngữ thế hệ mới với System Prompt được tinh chỉnh khắt khe theo phong cách tổng đài viên chuyên nghiệp:
 
-> **Nguyên tắc trả lời của AloSM:**
+> **Nguyên tắc trả lời của OlaSM:**
 > 1. Trả lời tự nhiên, lịch sự, chuẩn mực tiếng Việt, độ dài **không quá 2 câu** cho mỗi lượt thoại.
 > 2. Gọi khách hàng là *"bạn"* hoặc *"quý khách"*; tuyệt đối không đọc các ký tự kỹ thuật, enum, ID hệ thống.
 > 3. Tuyệt đối không tự bịa địa chỉ, giá cước, thời gian đón hoặc mã đặt xe. Mọi thông tin phải đến từ Function Tools.
@@ -345,7 +345,7 @@ sequenceDiagram
     participant FE as React WebRTC Client
     participant VAD as Silero VAD (250ms)
     participant STT as Deepgram Nova-3 (ASR)
-    participant Agent as AloSM LLM Reasoning
+    participant Agent as OlaSM LLM Reasoning
     participant Tools as Backend Services / DB
     participant TTS as Google Gemini Flash TTS
     actor Speaker as Loa thiết bị (Speaker)
@@ -444,7 +444,7 @@ sequenceDiagram
 sequenceDiagram
     actor Customer as Khách hàng (Trình duyệt)
     participant LK as LiveKit Room
-    participant Worker as AloSM Voice AI Worker
+    participant Worker as OlaSM Voice AI Worker
     participant Backend as FastAPI Handoff Service
     actor Operator as Nhân viên hỗ trợ (Console)
 

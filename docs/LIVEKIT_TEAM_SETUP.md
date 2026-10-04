@@ -1,4 +1,4 @@
-# AloSM LiveKit baseline — hướng dẫn setup cho team
+# OlaSM LiveKit baseline — hướng dẫn setup cho team
 
 Cập nhật: **2026-08-27** · Branch làm việc: `feature/agentic-ai`.
 
@@ -25,7 +25,7 @@ React Login/Homepage/VoiceCallPanel hiện có
 ```
 
 LiveKit quản lý media realtime, room/call lifecycle, VAD/endpointing,
-interruption, transcript, tool loop và audio output. Code AloSM chỉ bổ sung nghiệp
+interruption, transcript, tool loop và audio output. Code OlaSM chỉ bổ sung nghiệp
 vụ tại các extension point chính thức: `Agent`, `AgentTask`, `function_tool`, typed
 `userdata`, application service và repository.
 
@@ -67,7 +67,7 @@ Máy phát triển cần:
 - trình duyệt cho phép microphone;
 - quyền đọc repository;
 - một LiveKit Cloud project và bộ credential dev, hoặc credential của project
-  AloSM được owner chuyển qua secret manager;
+  OlaSM được owner chuyển qua secret manager;
 - database dev đã migrate nếu muốn test persistence thật.
 
 Baseline hiện dùng LiveKit Cloud cho Room và LiveKit Inference. Worker vẫn chạy trên
@@ -80,15 +80,15 @@ interruption.
 Nếu chưa clone:
 
 ```bash
-git clone https://github.com/AI20K-Build-Phase-Cohort-3/P-160.git
-cd P-160
+git clone https://github.com/AI20K-Build-Phase-Cohort-3/OlaSM.git
+cd OlaSM
 git switch feature/agentic-ai
 ```
 
 Nếu đã có repository:
 
 ```bash
-cd /duong-dan-den/P-160
+cd /duong-dan-den/OlaSM
 git fetch origin
 git switch feature/agentic-ai
 git pull --ff-only origin feature/agentic-ai
@@ -284,7 +284,7 @@ worker.
 make livekit-frontend
 ```
 
-Mở `http://localhost:5173`, đăng nhập hoặc đăng ký, mở AloSM Assistant rồi bắt đầu
+Mở `http://localhost:5173`, đăng nhập hoặc đăng ký, mở OlaSM Assistant rồi bắt đầu
 cuộc gọi. Cho phép microphone khi trình duyệt hỏi.
 
 Backend hoặc worker đã thay đổi Python thì nên restart tiến trình tương ứng. Vite tự
@@ -431,7 +431,7 @@ Nguồn dữ liệu runtime là `data/gazetteer/place_names.json`, alias nằm t
 - Thay audio path custom bằng LiveKit Room/WebRTC và AgentSession.
 - Dùng pipeline streaming STT → LLM/tools → TTS.
 - Dùng LiveKit-native VAD, endpointing và barge-in.
-- Một `AloSMAgent` và một `BookingTask`, không dựng framework/multi-agent riêng.
+- Một `OlaSMAgent` và một `BookingTask`, không dựng framework/multi-agent riêng.
 - Function tools cho tìm/chọn địa điểm, chọn loại xe, báo giá, xác nhận, tạo booking,
   hủy flow và handoff.
 - Chặn tạo chuyến nếu chưa có xác nhận rõ ràng.
@@ -446,7 +446,7 @@ Nguồn dữ liệu runtime là `data/gazetteer/place_names.json`, alias nằm t
 
 ### Vòng đời session khi test
 
-- `ride_session` là phiên nghiệp vụ AloSM; LiveKit room/call chỉ là một lần kết nối
+- `ride_session` là phiên nghiệp vụ OlaSM; LiveKit room/call chỉ là một lần kết nối
   realtime thuộc phiên đó.
 - Đóng cuộc gọi không tự xóa draft. Khi mở lại một phiên còn thông tin chưa hoàn tất,
   UI hỏi **Tiếp tục phiên trước** hoặc **Bắt đầu cuộc gọi mới** trước khi nối room.
@@ -462,7 +462,7 @@ Nguồn dữ liệu runtime là `data/gazetteer/place_names.json`, alias nằm t
 - Giảm mạnh code tự quản lý audio transport, session và tool loop.
 - Streaming realtime có latency tốt hơn kiểu upload cả utterance.
 - Barge-in, room lifecycle, transcript và data channel dùng API chuẩn của framework.
-- Nghiệp vụ AloSM tách khỏi media core, dễ test và thay provider.
+- Nghiệp vụ OlaSM tách khỏi media core, dễ test và thay provider.
 - Có typed state và optimistic revision để tránh hai room ghi đè state.
 - FE/BE cũ được tái sử dụng; migration có feature flag, không cần xóa legacy ngay.
 - Log debug đủ phân biệt VAD, STT, LLM, TTS và tool mà không mặc định lưu audio/PII.

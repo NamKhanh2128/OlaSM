@@ -1,6 +1,6 @@
 # Tài liệu User Story — Tính năng AI Agent Tổng Đài Giọng Nói
 
-**Dự án:** AloSM — Hệ thống đặt xe bằng giọng nói  
+**Dự án:** OlaSM — Hệ thống đặt xe bằng giọng nói  
 **Ngày cập nhật:** 2026-08-19  
 **Trạng thái:** Sẵn sàng demo
 

@@ -2,7 +2,8 @@
 
 ## Source issue
 
-GitHub issue: [#34 — Hệ thống không phản hồi khi người dùng thay đổi đồng thời điểm đón, điểm đến và loại xe](https://github.com/AI20K-Build-Phase-Cohort-3/P-160/issues/34)
+GitHub issue: [#34 — Hệ thống không phản hồi khi người dùng thay đổi đồng thời điểm đón, điểm đến và loại xe](https://github.com/AI20K-Build-Phase-Cohort-3/OlaSM/issues/34)
+
 
 The issue was closed after the simultaneous-change flow was verified on local and staging. Its reported scenario was:
 

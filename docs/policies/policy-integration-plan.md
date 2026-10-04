@@ -1,13 +1,13 @@
-# Kế hoạch tích hợp Điều khoản và Chính sách AloSM
+# Kế hoạch tích hợp Điều khoản và Chính sách OlaSM
 
 Cập nhật: **2026-08-16** · Policy version: **2026-08-16** · Owner approval: **PROJECT_OWNER_SELF_REVIEW**
 
 ## Nguyên tắc
 
 - Bản nguồn do chủ dự án cung cấp được giữ nguyên byte, SHA-256 và attribution; không âm thầm đổi
-  Green SM/GSM thành AloSM.
+  Green SM/GSM thành OlaSM.
 - Runtime chỉ dùng operational rules đã được chủ dự án phê duyệt, có citation/version/effective time.
-- Thông tin pháp nhân, hotline, email và địa chỉ Green SM/GSM không phải thông tin AloSM.
+- Thông tin pháp nhân, hotline, email và địa chỉ Green SM/GSM không phải thông tin OlaSM.
 - Consent đăng ký, cookie không thiết yếu và giọng nói là ba lựa chọn riêng.
 - Agent không tự hứa hoàn tiền/bồi thường, không tự áp phí và không trả lời policy từ trí nhớ model.
 
@@ -36,7 +36,7 @@ Cập nhật: **2026-08-16** · Policy version: **2026-08-16** · Owner approval
 
 ## Gate production còn lại
 
-- Pháp nhân, hotline, email support/DPO và địa chỉ AloSM được xác minh.
+- Pháp nhân, hotline, email support/DPO và địa chỉ OlaSM được xác minh.
 - Acceptance/withdrawal/export/delete được lưu bền vững trong Postgres, có audit và retention.
 - Bộ eval policy thật pass groundedness, citation correctness, stale-policy và prompt injection.
 - Policy rollback/canary, thông báo trước 07 ngày và operator queue privacy/legal hoạt động thật.

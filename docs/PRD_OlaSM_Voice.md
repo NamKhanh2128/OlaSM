@@ -1,4 +1,4 @@
-# PRD — AloSM Voice AI Agent
+# PRD — OlaSM Voice AI Agent
 
 > **PRODUCT · CANONICAL** — Yêu cầu sản phẩm mới nhất. Trạng thái triển khai thực tế được đối chiếu với code hiện tại, [mustdo.md](../mustdo.md) và [system design](architecture_diagram.md).
 
@@ -213,7 +213,7 @@ Các mục tiêu emergency ≤30 giây, payment/refund ticket capture và giảm
 
 > **Trạng thái hiện tại:** Chưa có payment gateway hoặc payment/refund integration trong runtime. Các user stories và AC dưới đây vẫn là yêu cầu sản phẩm mục tiêu; khi chưa tích hợp, agent phải chuyển các yêu cầu thanh toán sang operator thay vì giả lập giao dịch.
 
-> **Lưu ý:** AI thực hiện giao dịch qua payment gateway tích hợp. AI không lưu thông tin thẻ và không xử lý thông tin thanh toán nhạy cảm — mọi dữ liệu thẻ đi qua payment gateway được chứng nhận bảo mật. Cần xác nhận payment gateway cụ thể của AloSM trước khi phát triển (xem Open Questions).
+> **Lưu ý:** AI thực hiện giao dịch qua payment gateway tích hợp. AI không lưu thông tin thẻ và không xử lý thông tin thanh toán nhạy cảm — mọi dữ liệu thẻ đi qua payment gateway được chứng nhận bảo mật. Cần xác nhận payment gateway cụ thể của OlaSM trước khi phát triển (xem Open Questions).
 
 **User stories**
 
@@ -249,7 +249,7 @@ Các mục tiêu emergency ≤30 giây, payment/refund ticket capture và giảm
 - Given khách muốn khiếu nại về tài xế hoặc dịch vụ, when AI nhận yêu cầu, then AI hỏi: loại sự cố (thái độ / lộ trình / an toàn / khác), mã chuyến liên quan, mô tả sự cố; sau khi thu thập đủ, tạo ticket với mức ưu tiên phù hợp.
 - Given sự cố liên quan đến **an toàn** (tai nạn, hành vi đe dọa), when AI nhận dạng được loại sự cố, then **ưu tiên cao nhất — chuyển ngay sang F9 (Emergency Response)** thay vì tạo ticket thông thường.
 - Given khách hỏi trạng thái ticket đã tạo, when AI truy vấn hệ thống theo mã ticket hoặc số điện thoại, then AI đọc trạng thái hiện tại và bước tiếp theo dự kiến.
-- Given ticket đã được tạo, then **AI không tự phê duyệt hoàn tiền** — quyết định phê duyệt thuộc về tổng đài viên hoặc hệ thống nội bộ theo quy trình của AloSM.
+- Given ticket đã được tạo, then **AI không tự phê duyệt hoàn tiền** — quyết định phê duyệt thuộc về tổng đài viên hoặc hệ thống nội bộ theo quy trình của OlaSM.
 
 ---
 
@@ -331,7 +331,7 @@ MVP được xem là hoàn thành khi:
 | Ai có quyền xuất bản tài liệu lên kho tri thức? | PO, AI Ops | Trước grooming F5 | Không xây được luồng phê duyệt tài liệu |
 | Giá ước tính lấy từ hệ thống nào và cập nhật theo chu kỳ nào? | PO, Business | Trước grooming F1 | Không xác định được nguồn dữ liệu giá cho F1 và F3 |
 | MVP phục vụ khu vực địa lý nào? | PO, Business | Trước R1 | Không xác định phạm vi dữ liệu địa chỉ cần chuẩn bị |
-| AloSM dùng payment gateway nào? API có sẵn chưa? Yêu cầu PCI-DSS cụ thể ra sao? | PO, Engineering, Finance | Trước grooming F6 | Không thiết kế được luồng thanh toán và chọn phương thức |
+| OlaSM dùng payment gateway nào? API có sẵn chưa? Yêu cầu PCI-DSS cụ thể ra sao? | PO, Engineering, Finance | Trước grooming F6 | Không thiết kế được luồng thanh toán và chọn phương thức |
 | Quy trình phê duyệt hoàn tiền: ai phê duyệt, thời gian xử lý, điều kiện tự động hoàn? | PO, CS Manager, Finance | Trước grooming F7 | Không thiết kế được luồng tạo ticket và thông báo kết quả |
 | Khiếu nại đi vào hệ thống CRM nào? Tiêu chí phân loại mức ưu tiên là gì? | PO, CS Manager | Trước grooming F7 | Không thiết kế được luồng tạo ticket và điều phối |
 | Tài xế: API endpoint nào cho xác nhận chuyến và cập nhật trạng thái? | Engineering | Trước grooming F8 | Không tích hợp được hành động của tài xế vào hệ thống |
@@ -352,4 +352,4 @@ PRD được đánh dấu **APPROVED ở cấp tài liệu/baseline** theo yêu 
 
 ---
 
-*Toàn bộ số liệu mục tiêu trong tài liệu này là **đề xuất cho giai đoạn pilot, chưa được xác minh bằng dữ liệu production**. Các con số sẽ được hiệu chỉnh sau khi có baseline vận hành thực tế từ AloSM.*
+*Toàn bộ số liệu mục tiêu trong tài liệu này là **đề xuất cho giai đoạn pilot, chưa được xác minh bằng dữ liệu production**. Các con số sẽ được hiệu chỉnh sau khi có baseline vận hành thực tế từ OlaSM.*

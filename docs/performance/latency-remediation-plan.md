@@ -1,4 +1,5 @@
-# Kế hoạch giảm latency AloSM Voice
+# Kế hoạch giảm latency OlaSM Voice
+
 
 > **Trạng thái: LEGACY_REFERENCE.** Tài liệu này phân tích REST voice pipeline cũ,
 > không mô tả LiveKit runtime hiện tại. Kế hoạch đo và tối ưu hiện hành nằm tại

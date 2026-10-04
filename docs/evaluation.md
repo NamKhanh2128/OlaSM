@@ -1,4 +1,4 @@
-# AloSM — Evaluation evidence
+# OlaSM — Evaluation evidence
 
 Cập nhật: **2026-08-27** · Branch: `feature/agentic-ai`.
 
@@ -64,7 +64,7 @@ LiveKit Room/WebRTC
   -> AgentServer + AgentSession
   -> Silero VAD / endpointing
   -> LiveKit Inference STT (Deepgram Nova-3, multi)
-  -> AloSM Agent + typed booking tools
+  -> OlaSM Agent + typed booking tools
   -> OpenAI LLM / function tools
   -> Google Gemini Flash TTS (Kore, vi-VN)
   -> Google Chirp 3 HD fallback
@@ -80,5 +80,5 @@ reconnect, device matrix và human listening vẫn là release gates; xem
 Source of truth: [PROJECT_SOURCE_OF_TRUTH.md](PROJECT_SOURCE_OF_TRUTH.md).
 System design: [architecture_diagram.md](architecture_diagram.md).
 Product requirements vẫn giữ format và feature roadmap ban đầu tại
-[PRD_AloSM_Voice.md](PRD_AloSM_Voice.md), đồng thời đánh dấu rõ những thay đổi đã
+[PRD_OlaSM_Voice.md](PRD_OlaSM_Voice.md), đồng thời đánh dấu rõ những thay đổi đã
 triển khai và phần chưa có provider thật.

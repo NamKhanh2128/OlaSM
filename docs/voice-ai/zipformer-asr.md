@@ -62,8 +62,8 @@ Docker image cài FFmpeg, tải artifact đã ghim trong build và kiểm checks
 để volume `/app/data` của Compose không che mất artifact.
 
 ```powershell
-docker build -t alosm-zipformer .
-docker run --rm -p 8000:8000 --env-file .env alosm-zipformer
+docker build -t olasm-zipformer .
+docker run --rm -p 8000:8000 --env-file .env olasm-zipformer
 ```
 
 Kubernetes/ECS nên dùng `/health/live` cho liveness, `/health/ready` cho readiness, giới hạn CPU/RAM,

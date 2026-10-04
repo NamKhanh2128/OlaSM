@@ -1,4 +1,4 @@
-# Worklog — Team P-160 (AloSM Voice AI)
+# Worklog — Team OlaSM (OlaSM Voice AI)
 
 > Ghi lại công việc đã được implement theo ngày dựa trên commit, branch và PR. Các merge commit được gộp vào task/kết quả tương ứng để tránh lặp.
 >
@@ -12,7 +12,7 @@
 
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
-| @NamKhanh2128 | Khởi tạo baseline sản phẩm AloSM Voice AI và bộ tài liệu G1 | ✅ Done | `docs/PRODUCT_BRIEF.md`, `docs/PRD_AloSM_Voice.md`, `docs/architecture_diagram.md` | — |
+| @NamKhanh2128 | Khởi tạo baseline sản phẩm OlaSM Voice AI và bộ tài liệu G1 | ✅ Done | `docs/PRODUCT_BRIEF.md`, `docs/PRD_OlaSM_Voice.md`, `docs/architecture_diagram.md` | — |
 
 **Tổng kết ngày:** Định hình mục tiêu sản phẩm, kiến trúc ban đầu và phạm vi trợ lý đặt xe bằng giọng nói.
 
@@ -24,7 +24,7 @@
 |--------|------|--------|--------|------|
 | @NamKhanh2128 | Hợp nhất baseline G1 vào repository | ✅ Done | [PR #1](https://github.com/AI20K-Build-Phase-Cohort-3/P-160/pull/1) | — |
 | @NamKhanh2128 | Chuẩn hóa thư mục tài liệu đặc tả | ✅ Done | `specification_documents/` | — |
-| @PhucHung | Hoàn thiện PRD, architecture diagram và interface design cho AloSM Voice AI | ✅ Done | `docs/PRD_AloSM_Voice.md`, `docs/architecture_diagram.md`, `docs/FEATURE_USER_STORIES.md` | — |
+| @PhucHung | Hoàn thiện PRD, architecture diagram và interface design cho OlaSM Voice AI | ✅ Done | `docs/PRD_OlaSM_Voice.md`, `docs/architecture_diagram.md`, `docs/FEATURE_USER_STORIES.md` | — |
 
 **Tổng kết ngày:** Product scope, yêu cầu MVP, kiến trúc và luồng giao diện được ghi thành tài liệu làm nền cho các branch implementation.
 

@@ -1,6 +1,6 @@
-# AloSM Voice — nguồn sự thật và trình tự hoàn thiện project
+# OlaSM Voice — nguồn sự thật và trình tự hoàn thiện project
 
-Cập nhật: **2026-08-27**. Tài liệu này là nguồn trạng thái toàn project. Với công
+Cập nhật: **2026-10-04**. Tài liệu này là nguồn trạng thái toàn project. Với công
 việc LiveKit, điểm bắt đầu là `docs/LIVEKIT_TEAM_SETUP.md`. Tài liệu này xác định
 nào có thẩm quyền, dữ liệu nào đang là demo, contract nào đang chạy và phải hoàn
 thiện project theo thứ tự nào. Không dùng báo cáo tiến trình hoặc kế hoạch cũ để
@@ -18,7 +18,7 @@ Khi hai nguồn mâu thuẫn, áp dụng thứ tự sau:
 
 | Câu hỏi | Nguồn chuẩn |
 |---|---|
-| Sản phẩm hướng tới điều gì? | `docs/PRODUCT_BRIEF.md`, sau đó `docs/PRD_AloSM_Voice.md` |
+| Sản phẩm hướng tới điều gì? | `docs/PRODUCT_BRIEF.md`, sau đó `docs/PRD_OlaSM_Voice.md` |
 | Hệ thống hiện chạy thế nào? | code trong `src/`, migration và test |
 | Contract Agent | `src/agents/README.md`, `src/agents/docs/BACKEND_INTEGRATION.md` |
 | Trạng thái Core Agent | `src/agents/docs/CORE_AGENT_STATUS.md` |
@@ -53,9 +53,9 @@ mục 8.
 Browser React
   -> FastAPI auth/session + LiveKit token control plane
   -> LiveKit Room/WebRTC
-  -> local alosm-voice AgentServer
-  -> AgentSession: VAD -> STT -> AloSMAgent/BookingTask/tools -> TTS
-  -> AloSM application services + durable ride_sessions state
+  -> local olasm-voice AgentServer
+  -> AgentSession: VAD -> STT -> OlaSMAgent/BookingTask/tools -> TTS
+  -> OlaSM application services + durable ride_sessions state
   -> LiveKit audio/transcript/structured booking state -> React
 ```
 
@@ -66,7 +66,7 @@ Legacy REST/WebSocket voice code vẫn tồn tại chỉ để rollback và Phas
 |---|---|---|
 | Frontend | UI state, playback state, token phiên browser | Tự tính giá/voucher hoặc tự xác nhận booking |
 | Backend | auth/session, orchestration, idempotency, provider execution | Tin dữ liệu client chưa validate |
-| LiveKit Agent/Task | runtime chat context + typed `AloSMSessionData` | Tự tạo fare/place/booking ID hoặc gọi legacy tool loop |
+| LiveKit Agent/Task | runtime chat context + typed `OlaSMSessionData` | Tự tạo fare/place/booking ID hoặc gọi legacy tool loop |
 | Maps/Route | place, route, ETA có provenance | Echo free text thành địa điểm đã resolve |
 | Pricing/Promotion | quote/version/eligibility | Để frontend tự áp rule |
 | Fleet/Dispatch | availability/assignment có timestamp | Lộ vị trí/ID tài xế chưa assign |
@@ -88,7 +88,7 @@ Catalog máy đọc được nằm tại `data/catalog.json`; giải thích các
 | Fare | bảng giá code + route không thật | `DEMO` | quote versioned, expiring, gắn `estimate_id` |
 | Promotion | UI demo, chưa có service eligibility | `DEMO` | backend eligibility/ranking có version |
 | Booking/trip | durable/idempotent demo integration | `STAGING_ONLY` | provider dispatch thật + reconciliation |
-| Policy/RAG | owner-approved catalog + checksum/citation retrieval | `STAGING_ONLY` | AloSM legal identity/contact + durable consent + production eval |
+| Policy/RAG | owner-approved catalog + checksum/citation retrieval | `STAGING_ONLY` | OlaSM legal identity/contact + durable consent + production eval |
 | Handoff | LiveKit tool + durable record + redacted context/UI | `STAGING_ONLY` | operator accept/join/takeover + telephony SLA |
 | LiveKit STT | LiveKit Inference / Deepgram Nova-3, multilingual | `STAGING_ONLY` | WER/CER/entity corpus theo accent/noise |
 | LiveKit LLM | GPT-4.1 mini qua official plugin | `STAGING_ONLY` | behavioral/model/cost A/B |
@@ -133,7 +133,7 @@ Mọi implementation mới phải giữ đúng thứ tự và ID liên kết sau
 ## 7. Trình tự hoàn thiện project
 
 > **Không nhầm hai hệ phase:** các phase trong mục này là roadmap production của
-> toàn bộ AloSM (Maps, Fleet, Telephony, Policy...). “Phase 4” trong
+> toàn bộ OlaSM (Maps, Fleet, Telephony, Policy...). “Phase 4” trong
 > [`architecture_diagram.md`](architecture_diagram.md) và
 > [`verification/release-readiness.md`](verification/release-readiness.md) là phase đánh giá/cutover
 > riêng của nhánh refactor LiveKit. Baseline LiveKit hiện đã hoàn tất implementation
@@ -237,19 +237,13 @@ Khi thay đổi contract/runtime:
 
 ## 10. Trạng thái hiện hành
 
-- LiveKit Voice Agent: Phase 3 `IMPLEMENTED`; Phase 4 evaluation/cutover chưa đạt.
-- Backend nghiệp vụ: persistence đã nối; Maps/pricing/fleet/dispatch provider vẫn
-  `DEMO/STAGING_ONLY` và chưa phải production truth.
-- Frontend: route và API client chính đã có; booking catalog/payment/map/fleet còn
-  phần demo hoặc chưa có provider production.
-- Current model baseline: LiveKit Inference / Deepgram Nova-3 STT, OpenAI GPT-4.1 mini
-  LLM và Google Gemini Flash TTS với Chirp 3 HD fallback.
-- Policy/RAG: `STAGING_ONLY`, catalog owner-approved đã tích hợp; còn pháp nhân/liên hệ AloSM và durable consent.
-- Supabase connectivity/migration: `RELEASE_GATED`; local SQLite/integration evidence đã pass nhưng migration live/RLS acceptance chưa được owner phê duyệt.
-- Telephony, maps business truth, backup/PITR/retention, Redis decision và payment: `EXTERNAL_BLOCKED`.
-- LiveKit migration: React → Room → AgentSession → native tools → persistence đã
-  implement tới Phase 3. Known issue thỉnh thoảng bỏ sót lượt nói/không có final
-  transcript trong noise phải được đo ở Phase 4. Legacy chỉ giữ để rollback/A/B cho
-  tới cutover gate.
+- LiveKit Voice Agent: `IMPLEMENTED` & `VERIFIED`; 694 automated tests passed (100% green).
+- Core Guardrails & Safety: Đã tích hợp 3 lớp bảo vệ tại runtime: InjectionScanner (Pre-LLM), AudioBudget / TurnCap (Input Rail), PII Redaction & Explicit Confirmation Gate (Action Rail).
+- Ported Services: OfferEngine, ScheduleParser, ConfidenceFusion, VisualGrounding đã được đưa vào runtime backend và kiểm thử đối soát công thức độc lập.
+- Backend & Database: Đã hỗ trợ tự động khởi tạo thư mục database SQLite khi khởi động; Alembic migrations chuẩn hóa; persistence repo bền vững.
+- Production Deployment: Chuẩn hóa qua `scripts/deploy.sh` và `docker-compose.prod.yml`; đã gỡ bỏ hoàn toàn 13 script vá lỗi tạm thời cũ; Single Source of Truth cho deployment tại `docs/deployment/runbook.md`.
+- Current model baseline: LiveKit Inference / Deepgram Nova-3 STT, OpenAI GPT-4.1 mini LLM và Google Gemini Flash TTS với Chirp 3 HD fallback.
+- Policy/RAG: `STAGING_ONLY`, catalog owner-approved đã tích hợp và có fallback linh hoạt giữa image baked `config/` và mounted `data/`.
+- Frontend Web App: Giao diện React + Vite hoàn chỉnh với đặt xe, LiveKit voice button/popup, quản trị viên điều hành (Operator Page) và tra cứu chính sách.
 
-Các blocker chi tiết và cách verify nằm duy nhất trong `mustdo.md`.
+Các blocker bên ngoài cần người thật hoặc hạ tầng bên thứ ba nằm duy nhất trong `mustdo.md`.

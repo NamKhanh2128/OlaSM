@@ -1,1 +1,1 @@
-"""Top-level package for the AloSM application."""
+"""Top-level package for the OlaSM application."""

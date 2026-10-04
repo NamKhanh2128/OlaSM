@@ -1,4 +1,4 @@
-# AloSM
+# OlaSM
 
 ## Đề bài
 
@@ -293,15 +293,15 @@ Mục tiêu kiến trúc:
 React LiveKit client
 → LiveKit Room/WebRTC
 → AgentServer/AgentSession
-→ AloSM Agent/AgentTask
+→ OlaSM Agent/AgentTask
 → LiveKit function tools
-→ AloSM application services
+→ OlaSM application services
 → PostgreSQL hoặc fake integration
 ```
 
 LiveKit sẽ sở hữu media transport, RoomIO, session lifecycle, VAD/endpointing,
 interruption, STT–LLM–TTS orchestration, chat context, tool loop, events và metrics.
-AloSM chỉ bổ sung code đặc thù tại extension point chính thức của framework:
+OlaSM chỉ bổ sung code đặc thù tại extension point chính thức của framework:
 
 - typed booking state và typed task result;
 - search place, quote, booking, trip và handoff tools;
@@ -320,5 +320,5 @@ thái hiện tại và đường đọc cho coding agent nằm tại
 
 Quyết định cuối cùng và thứ tự dành cho coding agent nằm tại
 [`architecture_diagram.md`](./architecture_diagram.md). Kiến
-trúc đã chốt là **một `AloSMAgent` + `BookingTask` + LiveKit function tools**, không
+trúc đã chốt là **một `OlaSMAgent` + `BookingTask` + LiveKit function tools**, không
 dùng multi-agent cho scope hiện tại.

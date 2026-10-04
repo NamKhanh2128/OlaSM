@@ -1,11 +1,11 @@
-# System design — AloSM Voice AI
+# System design — OlaSM Voice AI
 
 Cập nhật: 2026-08-27
 Trạng thái: MVP demo-ready; các phần tích hợp production được đánh dấu rõ bên dưới.
 
 ## 1. Mục đích và phạm vi
 
-AloSM là trợ lý đặt xe bằng tiếng Việt trên web. Người dùng có thể nói hoặc nhập tin nhắn để:
+OlaSM là trợ lý đặt xe bằng tiếng Việt trên web. Người dùng có thể nói hoặc nhập tin nhắn để:
 
 - tìm và chọn điểm đón, điểm đến;
 - chọn loại xe;
@@ -101,7 +101,7 @@ Luồng text và luồng voice là hai transport khác nhau nhưng dùng chung q
 2. Worker nhận job từ LiveKit, join room sớm để không bỏ lỡ participant/audio event.
 3. Worker đọc dispatch metadata, tạo trusted user/session context và restore state nếu có.
 4. Worker tạo một AgentSession cho cuộc hội thoại đó.
-5. AloSMAgent được khởi tạo với persona tiếng Việt, tool set và context của session.
+5. OlaSMAgent được khởi tạo với persona tiếng Việt, tool set và context của session.
 6. Worker publish state để frontend cập nhật tiến trình booking và trạng thái voice.
 
 ### 4.2 Audio pipeline hiện tại
@@ -182,7 +182,7 @@ Loại xe hiện hỗ trợ:
 
 ## 7. Agent tools hiện tại
 
-LiveKit AloSMAgent dùng các tool chính:
+LiveKit OlaSMAgent dùng các tool chính:
 
 - start_booking: bắt đầu booking flow;
 - get_vehicle_options: lấy danh sách loại xe;

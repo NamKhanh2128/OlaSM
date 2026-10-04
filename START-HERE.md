@@ -1,155 +1,67 @@
-# 🚀 BẮT ĐẦU TỪ ĐÂY
+# 🚀 BẮT ĐẦU VỚI OLASM
 
-## 📄 TÀI LIỆU QUAN TRỌNG
-
-Tôi đã tạo sẵn 4 files hướng dẫn chi tiết:
-
-1. **📋 [CHECKLIST.md](./CHECKLIST.md)** ⭐ **BẮT ĐẦU TỪ ĐÂY**
-   - Checklist từng bước để deploy
-   - Đơn giản, dễ follow
-   - **ĐỌC FILE NÀY TRƯỚC**
-
-2. **📖 [FINAL-DEPLOY.md](./FINAL-DEPLOY.md)**
-   - Hướng dẫn deploy chi tiết đầy đủ
-   - Giải thích từng bước
-   - Troubleshooting guide
-
-3. **📚 [DEPLOYMENT-SUMMARY.md](./DEPLOYMENT-SUMMARY.md)**
-   - Tổng hợp kỹ thuật về tất cả fixes
-   - Giải thích tại sao cần fix
-   - Chi tiết các thay đổi trong code
-
-4. **🤖 [DEPLOY-VPS-FINAL.sh](./DEPLOY-VPS-FINAL.sh)**
-   - Script tự động deploy
-   - Upload lên VPS và chạy
+Hướng dẫn khởi động nhanh và triển khai hệ thống **OlaSM (Voice AI Ride-Hailing Agent)**.
 
 ---
 
-## ⚡ DEPLOY NHANH (TL;DR)
+## 📄 TÀI LIỆU CHÍNH THỨC
 
-### Bước 1: Upload code lên VPS
+1. **📖 [docs/deployment/runbook.md](./docs/deployment/runbook.md)** ⭐ **QUY TRÌNH DEPLOY CHUẨN HOÁ**
+   - Hướng dẫn cấu hình Docker Compose cho toàn bộ cụm: `backend`, `voice-worker`, `frontend`
+   - Cấu hình biến môi trường `.env.production` và LiveKit WebRTC
+   - Healthcheck & troubleshooting
 
-**Option A: Dùng Git (Khuyên dùng)**
-```bash
-# Trên Windows
-git add .
-git commit -m "Fix deployment"
-git push
+2. **📋 [docs/PRD_OlaSM_Voice.md](./docs/PRD_OlaSM_Voice.md)**
+   - Đặc tả yêu cầu kỹ thuật & nghiệp vụ của hệ thống tổng đài giọng nói đặt xe
 
-# Trên VPS
-ssh root@149.28.131.104
-cd /root/P-160
-git pull
-```
+3. **🛡️ [docs/OlaSM_SECURITY_AND_GUARDRAILS_SPEC.md](./docs/OlaSM_SECURITY_AND_GUARDRAILS_SPEC.md)**
+   - Đặc tả 3 lớp bảo vệ: Prompt Injection, Out-of-Scope, PII Redaction & Xác nhận đặt xe
 
-**Option B: Dùng SCP**
+---
+
+## ⚡ KHỞI ĐỘNG VÀ TRIỂN KHAI
+
+### Cách 1: Chạy Local Development
+
 ```powershell
-# Trên Windows PowerShell
-cd C:\Users\Admin\Desktop\P-160
-scp Dockerfile root@149.28.131.104:/root/P-160/
-scp docker-compose.prod.yml root@149.28.131.104:/root/P-160/
-scp .env.production root@149.28.131.104:/root/P-160/
-scp src/backend/services/policy_service.py root@149.28.131.104:/root/P-160/src/backend/services/
-scp src/backend/services/pricing_catalog.py root@149.28.131.104:/root/P-160/src/backend/services/
-scp src/backend/services/place_search_service.py root@149.28.131.104:/root/P-160/src/backend/services/
+# Chạy script khởi động toàn bộ môi trường dev (Backend + Worker + Frontend)
+.\start-dev.bat
 ```
 
-### Bước 2: Deploy trên VPS
-
+Hoặc qua `Makefile`:
 ```bash
-# SSH vào VPS
-ssh root@149.28.131.104
-
-# Deploy
-cd /root/P-160
-docker compose -f docker-compose.prod.yml down -v
-rm -rf ./data
-docker compose -f docker-compose.prod.yml build --no-cache backend
-docker compose -f docker-compose.prod.yml up -d
-
-# Đợi và check
-sleep 20
-docker compose -f docker-compose.prod.yml logs --tail=50 backend
+make livekit-backend   # Khởi động FastAPI Backend (:8000)
+make livekit-worker    # Khởi động LiveKit Voice Agent Worker
+make livekit-frontend  # Khởi động React Web UI (:5173)
 ```
 
-### Bước 3: Kiểm tra
+### Cách 2: Triển khai Production / VPS bằng Docker Compose
 
+Toàn bộ các bản vá lỗi về quyền ghi cơ sở dữ liệu SQLite, định tuyến nạp catalog chính sách, và entrypoint container đã được tích hợp trực tiếp vào mã nguồn chính.
+
+Triển khai tự động bằng script chuẩn duy nhất:
 ```bash
-# Test API
-curl http://localhost:8000/health
-curl http://localhost:8000/api/v1/bookings
-
-# Test frontend
-# Mở browser: http://149.28.131.104
+# Cấp quyền và chạy deploy tự động
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
 ```
 
----
-
-## ✅ CÁC VẤN ĐỀ ĐÃ FIX
-
-1. ✅ **Uvicorn permission denied** → Fixed Dockerfile
-2. ✅ **Database unable to open** → Fixed volume mount + DATABASE_URL
-3. ✅ **Policy catalog not found** → Tách config ra khỏi data/
-
----
-
-## 📦 FILES ĐÃ THAY ĐỔI
-
-### Quan trọng (phải upload lên VPS):
-- `Dockerfile` ✅
-- `docker-compose.prod.yml` ✅
-- `.env.production` ✅
-- `src/backend/services/policy_service.py` ✅
-- `src/backend/services/pricing_catalog.py` ✅
-- `src/backend/services/place_search_service.py` ✅
-
-### Documentation (tham khảo):
-- `CHECKLIST.md`
-- `FINAL-DEPLOY.md`
-- `DEPLOYMENT-SUMMARY.md`
-- `DEPLOY-VPS-FINAL.sh`
-- `START-HERE.md` (file này)
-
----
-
-## 🎯 NEXT STEPS
-
-1. **Upload files** lên VPS (dùng Git hoặc SCP)
-2. **Đọc CHECKLIST.md** và làm theo từng bước
-3. **Deploy** theo hướng dẫn
-4. **Test** endpoints và frontend
-5. **Nếu có lỗi**, xem troubleshooting trong FINAL-DEPLOY.md
-
----
-
-## 🆘 CẦN TRỢ GIÚP?
-
-Nếu gặp lỗi sau khi deploy, gửi output của:
-
+Hoặc chạy trực tiếp bằng Docker Compose:
 ```bash
-# Logs
-docker compose -f docker-compose.prod.yml logs --tail=100 backend
+docker compose -f docker-compose.prod.yml up -d --build
+```
 
-# File structure
-docker compose -f docker-compose.prod.yml exec backend ls -la /app/config/
-docker compose -f docker-compose.prod.yml exec backend ls -la /app/data/
-
-# Services status
+Kiểm tra trạng thái container và health endpoint:
+```bash
 docker compose -f docker-compose.prod.yml ps
+curl http://localhost:8000/health
 ```
 
 ---
 
-## 📞 VPS INFO
+## 🧪 KIỂM THỬ HỆ THỐNG
 
-- **IP:** 149.28.131.104
-- **User:** root
-- **Project Path:** /root/P-160
-- **Frontend URL:** http://149.28.131.104
-- **Backend URL:** http://149.28.131.104:8000
-
----
-
-## 🎉 CHÚC BẠN DEPLOY THÀNH CÔNG!
-
-Hãy bắt đầu từ **[CHECKLIST.md](./CHECKLIST.md)** nhé! 🚀
+Chạy toàn bộ 694 automated tests:
+```powershell
+pytest tests/ -q
+```

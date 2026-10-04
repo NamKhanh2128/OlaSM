@@ -1,4 +1,4 @@
-# Journal — Team P-160 (AloSM Voice AI)
+# Journal — Team OlaSM (OlaSM Voice AI)
 
 > Nhật ký kỹ thuật thực tế của project, tổng hợp từ commit, branch, PR, test và evaluation artifact. Cập nhật đến **2026-08-31**. **Trạng thái tài liệu: APPROVED.** Worklog ghi “ai làm gì”; journal ghi “vì sao làm, kết quả, vấn đề và bài học”.
 
@@ -12,7 +12,7 @@
 
 ### Bối cảnh và quyết định
 
-Team bắt đầu bằng việc chốt bài toán AloSM Voice AI: trợ lý đặt xe có thể nhận yêu cầu bằng text hoặc voice. Product brief, PRD và architecture được dùng làm nền để tách product scope khỏi implementation.
+Team bắt đầu bằng việc chốt bài toán OlaSM Voice AI: trợ lý đặt xe có thể nhận yêu cầu bằng text hoặc voice. Product brief, PRD và architecture được dùng làm nền để tách product scope khỏi implementation.
 
 ### Kết quả
 
@@ -43,7 +43,7 @@ Product documents được sắp xếp lại thành khu vực đặc tả riêng
 ### Kết quả
 
 - PR #1 được merge vào develop.
-- Hoàn thiện docs/PRD_AloSM_Voice.md, docs/architecture_diagram.md và docs/architecture_diagram.md.
+- Hoàn thiện docs/PRD_OlaSM_Voice.md, docs/architecture_diagram.md và docs/architecture_diagram.md.
 
 ### Kiểm chứng và vấn đề
 

@@ -1,8 +1,8 @@
-# Kế hoạch và prompt hoàn thiện Pricing Platform AloSM
+# Kế hoạch và prompt hoàn thiện Pricing Platform OlaSM
 
 Cập nhật: **2026-08-16**
 Branch đích: **`feature/voice-ai`**
-Trạng thái dữ liệu hiện tại: **DEMO — không được công bố là bảng giá AloSM chính thức**
+Trạng thái dữ liệu hiện tại: **DEMO — không được công bố là bảng giá OlaSM chính thức**
 
 ## 1. Mục tiêu và trạng thái đã hoàn thành
 
@@ -61,7 +61,7 @@ Bạn là Principal Backend Engineer + Pricing Platform Engineer + Data Governan
 trong repository C:\Users\KHANH\Documents\GitHub\P-160, branch feature/voice-ai.
 
 # OBJECTIVE
-Hoàn thiện Pricing Platform AloSM production-safe dựa trên catalog version hóa hiện có. Không được biến
+Hoàn thiện Pricing Platform OlaSM production-safe dựa trên catalog version hóa hiện có. Không được biến
 bảng giá DEMO thành dữ liệu APPROVED, không mock/fake/simulate acceptance evidence, không tự bịa rule
 kinh doanh. Tự làm mọi việc có thể hoàn thành thực tế trong repository; việc cần credential, hạ tầng,
 dữ liệu chính thức hoặc phê duyệt con người phải ghi đầy đủ vào mustdo.md.
@@ -85,7 +85,7 @@ dữ liệu chính thức hoặc phê duyệt con người phải ghi đầy đ�
 - Base fare bao phủ base_km. Tiers progressive, boundary rõ, monetary arithmetic dùng integer VND hoặc
   Decimal; không dùng float cho tiền.
 - Không áp per_minute/surcharge/cancellation nếu chưa có facts và rule APPROVED. Không lấy giá đối thủ
-  làm giá AloSM production.
+  làm giá OlaSM production.
 - Booking chỉ được tạo với quote chưa hết hạn, khớp pickup/destination/vehicle/passenger/promotion và
   được consume/lock nguyên tử. Retry idempotent không được tạo giá/booking khác.
 - Frontend chỉ hiển thị backend quote; mọi giá/voucher tự tính ở browser phải được thay bằng dữ liệu

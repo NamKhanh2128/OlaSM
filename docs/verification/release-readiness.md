@@ -7,7 +7,8 @@ Date: **2026-08-27** · Branch: `feature/agentic-ai`.
 | PostgreSQL persistence | ORM, repositories, runtime wiring, 459-pass test suite và real-SQL integration pass | apply migration live, PostgreSQL acceptance, least-privilege role, backup/restore | `RELEASE_GATED` |
 | Quote integrity/snapshot | stored HMAC quote, TTL, ownership, single-use, idempotency, immutable snapshots | approved production pricing/route/promotion và live PG acceptance | `STAGING_ONLY` |
 | Maps/Route | fail-closed provider contract | provider, credential, service area, license | `EXTERNAL_BLOCKED` |
-| Pricing | versioned catalog và deterministic engine | Finance/Product-approved AloSM catalog | `DEMO` |
+| Pricing | versioned catalog và deterministic engine | Finance/Product-approved OlaSM catalog | `DEMO` |
+
 | Promotion/Voucher | snapshot contract có sẵn | eligibility/ranking provider và approved budget/rules | `EXTERNAL_BLOCKED` |
 | Fleet/Dispatch | booking/trip contract có sẵn | provider thật, reconciliation và SLA | `EXTERNAL_BLOCKED` |
 | Auth/Consent | DB-backed auth/token/2FA/policy acceptance, encrypted sensitive field support | live migration, retention/export/delete approval | `RELEASE_GATED` |

@@ -112,7 +112,7 @@ Cần chủ dự án quyết định một nhà cung cấp production và cấp 
 - Google Maps Platform, Mapbox, Goong hoặc VietMap; hoặc hạ tầng tự host Nominatim + OSRM.
 - Xác nhận quyền lưu `place_id`, địa chỉ, tọa độ và polyline theo điều khoản của nhà cung cấp.
 - Cấp API key theo từng môi trường, giới hạn domain/IP/quota và bật cảnh báo chi phí.
-- Cung cấp polygon vùng phục vụ thật của AloSM.
+- Cung cấp polygon vùng phục vụ thật của OlaSM.
 
 Biến môi trường dự kiến (chỉ điền provider được chọn):
 
@@ -126,7 +126,7 @@ MAPS_SERVICE_AREA_ID=
 Tiêu chí nghiệm thu bên ngoài: tìm kiếm và reverse-geocode địa chỉ Việt Nam thật; route trả
 `distance_meters`, `duration_seconds`, polyline; key bị giới hạn đúng môi trường; có quota alert.
 
-## 2. Cung cấp dữ liệu nghiệp vụ AloSM đã phê duyệt
+## 2. Cung cấp dữ liệu nghiệp vụ OlaSM đã phê duyệt
 
 Business/Product/Ops phải cung cấp phiên bản có hiệu lực, owner và ngày hiệu lực cho:
 
@@ -134,10 +134,10 @@ Business/Product/Ops phải cung cấp phiên bản có hiệu lực, owner và 
 - bảng giá mở cửa, giá/km, giá/phút, phí chờ, phí hủy, giá tối thiểu và surge;
 - voucher/promotion: điều kiện, ngân sách, phạm vi, stackability, thời hạn và thứ tự tối ưu;
 - vùng phục vụ, fleet/driver availability và quy tắc dispatch;
-- pháp nhân, hotline, email, địa chỉ liên hệ AloSM; retention/xóa/export và đầu mối xử lý quyền dữ liệu;
+- pháp nhân, hotline, email, địa chỉ liên hệ OlaSM; retention/xóa/export và đầu mối xử lý quyền dữ liệu;
 - SLA/giờ hoạt động cho từng hàng đợi tổng đài.
 
-Không được lấy giá/voucher của GreenSM/Grab/Be làm dữ liệu AloSM production nếu chưa có phê
+Không được lấy giá/voucher của GreenSM/Grab/Be làm dữ liệu OlaSM production nếu chưa có phê
 duyệt bằng văn bản. Dữ liệu mẫu hiện tại chỉ dùng demo và được liệt kê trong
 `src/agents/DATAFINDING.md`.
 
@@ -147,7 +147,7 @@ và một bộ case đối soát do business ký duyệt.
 ### 2.1 Phê duyệt catalog giá DEMO được nhập ngày 2026-08-16
 
 Catalog `data/pricing/hanoi_demo_2026-08-16.yaml` đã được code hóa, validate và test nhưng chưa được
-phép dùng như giá AloSM production. Finance/Product/Legal phải:
+phép dùng như giá OlaSM production. Finance/Product/Legal phải:
 
 1. Xác nhận hoặc thay thế giá Bike `13.200đ/2 km`, `4.200đ/km` và ý nghĩa `275đ/phút`.
 2. Phê duyệt bảng giá riêng cho `CAR_7`; mức hiện tại là suy diễn Car 4 + khoảng 15%, không phải loại xe
@@ -165,12 +165,12 @@ Verify: Finance đối soát golden cases qua API, kiểm tra quote/booking audi
 kiểm thử timezone/rounding/boundary và ký biên bản release. Risk nếu bỏ qua: báo sai giá, thu sai phí,
 khiếu nại và vi phạm nghĩa vụ công bố giá.
 
-### 2.2 Xác minh pháp nhân và đầu mối liên hệ AloSM
+### 2.2 Xác minh pháp nhân và đầu mối liên hệ OlaSM
 
 Chủ dự án đã tự phê duyệt policy catalog phiên bản `2026-08-16`; phần nội dung vận hành, RAG,
 registration consent, cookie choice và voice consent đã được tích hợp. Tuy nhiên bản nguồn giữ nguyên
-415 lần tham chiếu Green SM/GSM và không chứa AloSM. Trước public production, owner phải cung cấp và
-xác minh: tên pháp nhân AloSM, mã đăng ký, địa chỉ, hotline, email hỗ trợ, email/DPO xử lý quyền dữ liệu
+415 lần tham chiếu Green SM/GSM và không chứa OlaSM. Trước public production, owner phải cung cấp và
+xác minh: tên pháp nhân OlaSM, mã đăng ký, địa chỉ, hotline, email hỗ trợ, email/DPO xử lý quyền dữ liệu
 và kênh khiếu nại. Không được dùng thông tin Green SM/GSM thay thế.
 
 Expected artifact: legal contact sheet có owner/approver/effective date. Verify qua cuộc gọi/email test

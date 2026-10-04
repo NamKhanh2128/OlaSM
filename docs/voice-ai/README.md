@@ -18,7 +18,7 @@ Cập nhật: **2026-08-20**. Đây là chỉ mục cho legacy rollback path và
 | [`zipformer-benchmark.json`](zipformer-benchmark.json) | Benchmark máy đọc được | `EVIDENCE` |
 | [`tts-output-live-report.json`](tts-output-live-report.json) | TTS→ASR live report | `EVIDENCE` |
 
-Product scope nằm tại [`../PRD_AloSM_Voice.md`](../PRD_AloSM_Voice.md). Trạng thái
+Product scope nằm tại [`../PRD_OlaSM_Voice.md`](../PRD_OlaSM_Voice.md). Trạng thái
 toàn hệ thống nằm tại [`../PROJECT_SOURCE_OF_TRUTH.md`](../PROJECT_SOURCE_OF_TRUTH.md).
 Các phần cần credential, consent, license, người nghe hoặc hạ tầng thật chỉ nằm tại
 [`../../mustdo.md`](../../mustdo.md).

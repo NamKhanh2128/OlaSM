@@ -1,13 +1,14 @@
-# AloSM AI Booking Assistant
+# OlaSM AI Booking Assistant
 
-Web app đặt xe bằng **text hoặc voice**. Phạm vi chính gồm Login/Auth, Homepage với AloSM Assistant, booking/trip status demo và operator handoff; chưa gồm live tracking realtime, payment hoặc wallet.
+Web app đặt xe bằng **text hoặc voice**. Phạm vi chính gồm Login/Auth, Homepage với OlaSM Assistant, booking/trip status demo và operator handoff; chưa gồm live tracking realtime, payment hoặc wallet.
 
 Bắt đầu đọc [docs/README.md](docs/README.md), sau đó xem
 [docs/LIVEKIT_TEAM_SETUP.md](docs/LIVEKIT_TEAM_SETUP.md) và
 [docs/PROJECT_SOURCE_OF_TRUTH.md](docs/PROJECT_SOURCE_OF_TRUTH.md).
 
 Kiến trúc tổng thể: [docs/PROJECT_SYSTEM_SPECIFICATION.md](docs/PROJECT_SYSTEM_SPECIFICATION.md) · [docs/architecture_diagram.md](docs/architecture_diagram.md) ·
-Product requirements: [docs/PRD_AloSM_Voice.md](docs/PRD_AloSM_Voice.md)
+Product requirements: [docs/PRD_OlaSM_Voice.md](docs/PRD_OlaSM_Voice.md)
+
 
 Setup LiveKit chi tiết cho thành viên mới:
 [docs/LIVEKIT_TEAM_SETUP.md](docs/LIVEKIT_TEAM_SETUP.md).
@@ -33,7 +34,7 @@ Chạy hai terminal:
 
 ```bash
 # Terminal 1 — backend: http://localhost:8000
-uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn src.backend.main:app --reload --host 0.0.0.0 --port 8000
 
 # Terminal 2 — frontend: http://localhost:5173
 cd src/frontend
@@ -51,7 +52,7 @@ Password: Password123!
 ### Chạy LiveKit Voice Agent
 
 LiveKit runtime cần ba tiến trình; mỗi lệnh chạy trong một terminal riêng. Chỉ
-chạy một worker `alosm-voice` để tránh nhiều job test cùng tồn tại:
+chạy một worker `olasm-voice` để tránh nhiều job test cùng tồn tại:
 
 ```bash
 # Terminal 1 — FastAPI control/business plane

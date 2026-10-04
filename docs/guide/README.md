@@ -3,7 +3,7 @@
 Phân loại: `REFERENCE`.
 
 Thư mục này là guidebook/template của chương trình AI20K, không phải kiến trúc,
-API contract, roadmap hoặc trạng thái runtime của AloSM Voice. Khi nội dung guide
+API contract, roadmap hoặc trạng thái runtime của OlaSM Voice. Khi nội dung guide
 mâu thuẫn với repository, ưu tiên code/test và
 [`../PROJECT_SOURCE_OF_TRUTH.md`](../PROJECT_SOURCE_OF_TRUTH.md).
 
@@ -13,5 +13,6 @@ mâu thuẫn với repository, ưu tiên code/test và
   thể thay đổi theo thời gian; phải kiểm tra lại trước quyết định production.
 - `anti-patterns/`, `patterns/`, `code-style/`: thực hành tham khảo.
 
-Không thêm project status, credential, provider acceptance hoặc TODO AloSM vào
+Không thêm project status, credential, provider acceptance hoặc TODO OlaSM vào
 thư mục này.
+

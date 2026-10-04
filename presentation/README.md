@@ -5,9 +5,10 @@
 Hiện repository chưa có pitch deck hoặc video demo đã nghiệm thu. Khi tạo artifact, lấy thông tin từ:
 
 - [Product Brief](../docs/PRODUCT_BRIEF.md)
-- [PRD v1.2](../docs/PRD_AloSM_Voice.md)
+- [PRD v1.2](../docs/PRD_OlaSM_Voice.md)
 - [Project Source of Truth](../docs/PROJECT_SOURCE_OF_TRUTH.md)
 - [Architecture](../docs/architecture_diagram.md)
+
 
 ## Checklist đề xuất
 

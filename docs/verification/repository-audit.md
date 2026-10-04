@@ -15,7 +15,8 @@ Date: **2026-08-27** · Branch: `feature/agentic-ai`.
 | Pricing thay đổi làm lịch sử đổi | `RESOLVED_IN_CODE` | immutable catalog + booking pricing/route/promotion snapshot |
 | Production bật trước nghiệm thu DB | `FAIL_CLOSED` | `DURABLE_SERVICE_PERSISTENCE_REQUIRED` vẫn bật |
 | Maps/Promotion/Fleet/Dispatch production | `EXTERNAL_BLOCKED` | provider/credential/business approval chưa có |
-| Giá hiện hành | `DEMO` | không được coi là AloSM production pricing |
+| Giá hiện hành | `DEMO` | không được coi là OlaSM production pricing |
+
 
 Test double trong `APP_ENV=test` vẫn được giữ để không phá unit test lịch sử; nó không phải bằng chứng nghiệm thu persistence. Bằng chứng mới là real SQL integration và script `scripts/verify_postgres_persistence.py`.
 
