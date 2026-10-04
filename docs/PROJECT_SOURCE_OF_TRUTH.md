@@ -27,6 +27,7 @@ Khi hai nguồn mâu thuẫn, áp dụng thứ tự sau:
 | LiveKit architecture/history | `docs/architecture_diagram.md` |
 | Voice evaluation/cutover | `docs/verification/release-readiness.md` |
 | Legacy voice rollback/evidence | `docs/voice-ai/README.md` |
+| Tiến trình & kế hoạch 5 tuần POC | `docs/TIEN_TRINH_POC_CHUAN.md`, `scripts/generate_poc_docx.py` |
 | Việc AI/code không thể tự hoàn tất | `mustdo.md` |
 | Cần truy vết tài liệu đã thay thế | Git history; không giữ duplicate trong cây hiện hành |
 
@@ -237,7 +238,7 @@ Khi thay đổi contract/runtime:
 
 ## 10. Trạng thái hiện hành
 
-- LiveKit Voice Agent: `IMPLEMENTED` & `VERIFIED`; 694 automated tests passed (100% green).
+- LiveKit Voice Agent: `IMPLEMENTED` & `VERIFIED`; 720 automated tests passed (100% green).
 - Core Guardrails & Safety: Đã tích hợp 3 lớp bảo vệ tại runtime: InjectionScanner (Pre-LLM), AudioBudget / TurnCap (Input Rail), PII Redaction & Explicit Confirmation Gate (Action Rail).
 - Ported Services: OfferEngine, ScheduleParser, ConfidenceFusion, VisualGrounding đã được đưa vào runtime backend và kiểm thử đối soát công thức độc lập.
 - Backend & Database: Đã hỗ trợ tự động khởi tạo thư mục database SQLite khi khởi động; Alembic migrations chuẩn hóa; persistence repo bền vững.
