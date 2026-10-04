@@ -50,7 +50,7 @@ class LiveKitVoiceSettings(BaseSettings):
     # Finalized post-ASR correction is a bounded barrier before agent LLM/TTS.
     # A short ordinal candidate choice is handled deterministically and skips it.
     voice_transcript_rewrite_enabled: bool = True
-    voice_transcript_rewrite_model: str = "gpt-5-mini"
+    voice_transcript_rewrite_model: str = "gpt-4o-mini"
     voice_transcript_rewrite_base_url: str | None = None
     voice_transcript_rewrite_timeout_seconds: float = Field(default=2.0, gt=0, le=2.0)
     voice_transcript_rewrite_reasoning_effort: Literal["none", "low", "medium"] = "low"

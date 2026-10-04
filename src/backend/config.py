@@ -30,18 +30,16 @@ class Settings(BaseSettings):
     # Core Agent language understanding
     agent_llm_enabled: bool = True
     agent_llm_provider: Literal["openai"] = "openai"
-    agent_llm_model: str = "openai/gpt-5.6-luna-pro"
-    agent_llm_base_url: str | None = "https://openrouter.ai/api/v1"
+    agent_llm_model: str = "gpt-4o-mini"
+    agent_llm_base_url: str | None = None
     agent_llm_timeout_seconds: float = Field(default=5.0, gt=0)
     agent_llm_reasoning_effort: Literal["none", "low", "medium"] = "none"
 
-    # Core Agent contextual user-message rewrite (từ feature/agentic-ai — rollout độc
-    # lập với "understanding" ở trên: bật riêng để LLM viết lại câu người dùng cho rõ
-    # nghĩa hơn theo ngữ cảnh hội thoại trước khi hiểu ý định, tắt mặc định).
+    # Core Agent contextual user-message rewrite
     agent_rewrite_enabled: bool = False
     agent_rewrite_provider: Literal["openai"] = "openai"
-    agent_rewrite_model: str = "openai/gpt-5.6-luna-pro"
-    agent_rewrite_base_url: str | None = "https://openrouter.ai/api/v1"
+    agent_rewrite_model: str = "gpt-4o-mini"
+    agent_rewrite_base_url: str | None = None
     agent_rewrite_timeout_seconds: float = Field(default=5.0, gt=0)
     agent_rewrite_reasoning_effort: Literal["none", "low", "medium"] = "none"
 
