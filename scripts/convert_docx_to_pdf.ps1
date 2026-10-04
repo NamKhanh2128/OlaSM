@@ -13,11 +13,13 @@ try {
     $doc = $word.Documents.Open($docxResolved, $false, $true)
     $wdFormatPDF = 17
     $doc.SaveAs($pdfTarget, $wdFormatPDF)
-    $doc.Close(0)
+    $doc.Close([ref]$false)
     Write-Host "PDF created successfully at: $pdfTarget"
 } finally {
-    $word.Quit(0)
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($word) | Out-Null
+    if ($null -ne $word) {
+        $word.Quit([ref]$false)
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($word) | Out-Null
+    }
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
 }

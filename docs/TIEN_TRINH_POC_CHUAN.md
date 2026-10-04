@@ -11,11 +11,11 @@
 
 ## 1. Tổng Quan Tiến Trình Phase 3 (Khung 6 Tuần POC)
 
-Giai đoạn **Phase 3** của chương trình VRIC × GSM Smart City có thời lượng kéo dài đúng **6 tuần** (từ ngày 14/09/2026 đến ngày 25/10/2026). Mục tiêu cốt lõi của Phase 3 là chuyển dịch toàn bộ ý tưởng từ Báo cáo Ý tưởng thành **Hệ thống Kỹ thuật POC Hoạt động Thực tế (Working Proof-of-Concept)** có khả năng đàm thoại thời gian thực, cá nhân hóa ưu đãi, định vị thị giác và vận hành siêu rẻ cho GreenSM mobile trước khi bước vào giai đoạn thử nghiệm thực địa Pilot.
+Giai đoạn **Phase 3** của chương trình VRIC × GSM Smart City có thời lượng kéo dài đúng **6 tuần** (từ ngày 14/09/2026 đến ngày 25/10/2026). Mục tiêu cốt lõi của Phase 3 là chuyển dịch toàn bộ ý tưởng từ Báo cáo Ý tưởng thành **Hệ thống Kỹ thuật POC Hoạt động Thực tế (Working Proof-of-Concept)** có khả năng đàm thoại thời gian thực, cá nhân hóa ưu đãi, định vị thị giác và cơ chế tự chủ có chọn lọc an toàn (Selective Autonomy) trước khi bước vào giai đoạn thử nghiệm thực địa Pilot.
 
 Tính đến hôm nay (**Chủ nhật, ngày 04/10/2026**), dự án **đã chính thức đi qua 3 tuần (50% chặng đường Phase 3)**:
-- **Nửa đầu Phase 3 (Tuần 1 – Tuần 3: 14/09 – 04/10/2026 — ĐÃ HOÀN TẤT):** Tập trung xây dựng hạ tầng, luồng streaming WebRTC hai chiều, bóc băng và tách cụm âm thanh, đồng thời nghiên cứu và lập trình hoàn tất các thuật toán lõi (COE, Confidence Fusion, Gemini Vision Grounding, Kiến trúc Ultra-Low-Cost).
-- **Nửa sau Phase 3 (Tuần 4 – Tuần 6: 05/10 – 25/10/2026 — 3 TUẦN TIẾP THEO):** Tập trung hoàn thiện giao diện tổng đài viên (Operator Console HITL), mở rộng catalog 50+ điểm đón phức tạp, chạy stress-test tải lớn, đấu nối GSM Sandbox API, mô phỏng đội xe điện VinFast và đóng gói nghiệm thu toàn bộ Phase 3.
+- **Nửa đầu Phase 3 (Tuần 1 – Tuần 3: 14/09 – 04/10/2026 — ĐÃ HOÀN TẤT):** Tập trung xây dựng hạ tầng, luồng streaming WebRTC hai chiều, bóc băng và tách cụm âm thanh tiếng Việt, đồng thời nghiên cứu và lập trình hoàn tất các thuật toán lõi (COE, Dynamic Confidence Fusion, Gemini Multimodal Vision Grounding, Hệ thống Guardrails 3 lớp & Bản đồ Việt Nam).
+- **Nửa sau Phase 3 (Tuần 4 – Tuần 6: 05/10 – 25/10/2026 — 3 TUẦN TIẾP THEO):** Tập trung hoàn thiện bàn làm việc điều phối tổng đài viên (Web Operator Console HITL), mở rộng catalog 50+ điểm đón phức tạp, chạy stress-test tải lớn, đấu nối GSM Sandbox API, mô phỏng đội xe điện VinFast và đóng gói nghiệm thu toàn bộ Phase 3.
 
 ```mermaid
 gantt
@@ -24,7 +24,7 @@ gantt
     section Nửa đầu Phase 3 (Đã qua 3 tuần)
     Tuần 1: Kiến trúc Dual-Plane & Baseline Lưu trữ   :done, t1, 2026-09-14, 2026-09-20
     Tuần 2: Voice Pipeline WebRTC & LangGraph State    :done, t2, 2026-09-21, 2026-09-27
-    Tuần 3: Thuật toán lõi COE, Vision & Ultra-Low-Cost:done, t3, 2026-09-28, 2026-10-04
+    Tuần 3: Thuật toán lõi COE, Vision & Guardrails    :done, t3, 2026-09-28, 2026-10-04
     Nghiệm thu Giữa kỳ Phase 3 (Mốc 04/10/2026)        :milestone, m1, 2026-10-04, 2026-10-04
     section Nửa sau Phase 3 (3 tuần còn lại)
     Tuần 4: Operator Console HITL & Cache 1.000 Địa danh:active, t4, 2026-10-05, 2026-10-11
@@ -55,8 +55,8 @@ Trải qua 3 tuần làm việc tập trung cao độ, Nhóm 4 đã hoàn thành
   - Thiết kế LangGraph State Machine 6 bước hội thoại khép kín: Greet → Collect Route → Offer Matching → Confirm Booking → Dispatch → Monitor/Handoff.
   - Xây dựng 3 lớp Guardrails an toàn bảo vệ: Input Rail (giới hạn lượt thoại và dung lượng audio), Pre-LLM Injection Scanner (chặn 100% prompt injection) và Action Rail (PII Redaction và Explicit Confirmation Gate).
 
-### 2.3. Tuần 3 (28/09 – 04/10/2026 — MỐC HIỆN TẠI): Đột phá Thuật toán Lõi (COE, Confidence Fusion, Vision) & Kiến trúc Siêu Rẻ
-- **Mục tiêu:** Hiện thực hóa toàn bộ các công thức toán học và thuật toán AI cốt lõi đã cam kết trong Báo cáo Ý tưởng; tối ưu hóa chi phí vận hành siêu rẻ phục vụ app mobile GreenSM.
+### 2.3. Tuần 3 (28/09 – 04/10/2026 — MỐC HIỆN TẠI): Đột phá Thuật toán Lõi (COE, Confidence Fusion, Vision) & Guardrails An Toàn
+- **Mục tiêu:** Hiện thực hóa toàn bộ các công thức toán học và thuật toán AI cốt lõi đã cam kết trong Báo cáo Ý tưởng; hoàn thiện phòng thủ an toàn và cơ chế Selective Autonomy.
 - **Kết quả đạt được:**
   1. **Conversational Offer Engine (COE):** Hoàn thành thuật toán tính điểm ưu tiên ưu đãi:
      $$S_{offer} = 0.35 \cdot ChurnRisk + 0.25 \cdot PriceSensitivity + 0.40 \cdot CampaignFit$$
@@ -66,7 +66,7 @@ Trải qua 3 tuần làm việc tập trung cao độ, Nhóm 4 đã hoàn thành
      Tích hợp cơ chế tái chuẩn hóa trọng số động khi khách không gửi ảnh ($w_4 = 0 \Rightarrow w_1' + w_2' + w_3' = 1.0$), phân luồng 3 nhánh ($Auto\_Book \ge 0.85$, $0.55 < Clarify < 0.85$, $HITL \le 0.55$). Lập trình `ECEService` hiệu chuẩn Temperature Scaling đưa **Expected Calibration Error về $ECE = 0.0127$** (vượt xa chỉ tiêu $\le 0.10$).
   3. **Multimodal Visual Grounding:** Kết hợp Spatial OCR và Gemini 2.5 Flash VLM, trích xuất số hiệu cột hầm, biển chỉ dẫn và sảnh chung cư, cung cấp điểm tin cậy $p_{vision}$. Đạt **độ chính xác 93.0%** trên 5 cụm landmark phức tạp (Vincom Bà Triệu, Times City, Ocean Park, Tân Sơn Nhất, Nội Bài).
   4. **Bản đồ & Chuẩn hóa Địa danh Việt Nam:** Tích hợp `GoongMapsProvider` và OSRM thay thế hoàn toàn Mapbox, kết hợp bộ Gazetteer hơn 500 địa danh Hà Nội, chuẩn hóa địa chỉ theo mô hình 2 cấp hành chính mới, đạt độ chính xác khớp địa danh **93.3%**.
-  5. **Kiến trúc Kỹ thuật Siêu Rẻ (Ultra-Low-Cost Architecture):** Triển khai phân tầng 4 lớp (Client Edge VAD 0đ -> Goong/OSRM VN Maps tiết kiệm 84% -> GPT-4o-mini + Prompt Caching tiết kiệm 92% -> Streaming Chunker TTS tiết kiệm 78%). Đưa tổng chi phí mỗi cuộc gọi xuống chỉ **~75 - 125 VNĐ (~0.003 - 0.005 USD)**, rẻ hơn 10 - 20 lần so với giải pháp thông thường.
+  5. **Hệ thống Guardrails An toàn 3 Lớp & Bàn giao Operator Console:** Triển khai phòng thủ 3 tầng: Input Rail chặn đứng 100% tấn công Prompt Injection, Action Rail che giấu thông tin PII nhạy cảm và kích hoạt chốt xác nhận Explicit Confirmation bằng giọng nói; sẵn sàng bàn giao cuộc gọi HITL với độ trễ < 0.5s qua WebRTC.
   6. **Kiểm thử Toàn diện & Benchmark:** Chạy mô phỏng 50 kịch bản E2E thực tế; bộ kiểm thử toàn hệ thống đạt **720 / 720 tests PASSED (100% xanh)** trong ~15.4 giây.
 
 ---
@@ -79,8 +79,8 @@ Trải qua 3 tuần làm việc tập trung cao độ, Nhóm 4 đã hoàn thành
 | **Conversational Offer Engine (COE)** | Mô hình chấm điểm ưu đãi và cơ chế cold-start khách hàng mới. | Hoàn thành công thức $S_{offer}$, `OfferProfileRepository` Postgres, phân loại 4 mức ưu đãi chuẩn xác. | **Hoàn thành 100%**<br>(11/11 audit tests) |
 | **Confidence Fusion & Calibration** | Hợp nhất độ tin cậy đa nguồn, rẽ nhánh 3 đường, ECE ≤ 0.10. | Công thức $c_{trip}$ tái chuẩn hóa động; định tuyến chuẩn 100%; **Calibrated ECE = 0.0127**. | **Hoàn thành xuất sắc**<br>(ECE ≤ 0.02) |
 | **Multimodal Visual Grounding** | Định vị điểm đón qua ảnh chụp thực tế đạt độ chính xác ≥ 85%. | Spatial OCR + Gemini VLM đạt **93.0%** trên 5 cụm hạ tầng phức tạp Hà Nội & TP.HCM. | **Vượt chỉ tiêu 8.0%** |
-| **Bản đồ & Định vị Địa chỉ VN** | Chuẩn hóa địa chỉ đạt độ chính xác ≥ 90%, giảm chi phí API ngoại. | Gazetteer > 500 địa danh; `GoongMapsProvider` đạt **93.3%** accuracy; giảm 80% chi phí. | **Hoàn thành 100%** |
-| **Kiến trúc Chi phí Siêu Rẻ** | Đảm bảo tính khả thi kinh tế lâu dài cho app mobile GreenSM. | Phân tầng 4 lớp; chi phí chỉ **~75 - 125 VNĐ / cuộc gọi** (tiết kiệm ~92% so với API truyền thống). | **Đột phá kinh tế** |
+| **Bản đồ & Định vị Địa chỉ VN** | Chuẩn hóa địa chỉ đạt độ chính xác ≥ 90%, tối ưu hóa cho địa danh VN. | Gazetteer > 500 địa danh; `GoongMapsProvider` đạt **93.3%** accuracy; xử lý tốt tên riêng địa phương. | **Hoàn thành 100%** |
+| **Guardrails & Bàn giao HITL** | Phòng thủ prompt injection và bàn giao tổng đài viên mượt mà. | 3 tầng bảo vệ (Input, Action Rail PII); bàn giao Live WebRTC < 0.5s khi $c_{trip} \le \tau_{low}$. | **Hoàn thành xuất sắc** |
 | **Kiểm thử Tự động & Hồi quy** | 100% test suites pass; chặn 100% tấn công Prompt Injection. | **720 / 720 tests PASSED (100% XANH)**; thời gian chạy 15.4s; 4/4 injection bị chặn đứng. | **Đạt chuẩn tuyệt đối** |
 
 ---
@@ -100,13 +100,13 @@ Với việc các thuật toán lõi đã được xây dựng và kiểm chứn
 
 ### 4.1. Tuần 4 (05/10 – 11/10/2026): Operator Console Live WebRTC, Tiered Cache & Mở Rộng Vision
 - **Nhiệm vụ 1 (Operator Console):** Hoàn thiện bàn làm việc Web Operator Console (`/operator`). Cho phép tổng đài viên nhận cuộc gọi chuyển giao (HITL) qua LiveKit WebRTC với độ trễ bàn giao **< 0.5 giây**, hiển thị đầy đủ transcript thời gian thực, tóm tắt lý do rẽ nhánh ($c_{trip} \le \tau_{low}$) và ảnh chụp điểm đứng của khách.
-- **Nhiệm vụ 2 (Tiered Caching Siêu Rẻ):** Triển khai bộ nhớ đệm 2 tầng (In-memory LRU + Redis/Postgres) lưu trữ tọa độ và lộ trình của 1.000 điểm đón phổ biến tại Hà Nội và TP.HCM, đưa thời gian phản hồi định tuyến xuống dưới 30ms và chi phí định tuyến về 0 VNĐ cho các truy vấn lặp lại.
+- **Nhiệm vụ 2 (Tiered Caching Tối Ưu Tốc Độ):** Triển khai bộ nhớ đệm 2 tầng (In-memory LRU + Redis/Postgres) lưu trữ tọa độ và lộ trình của 1.000 điểm đón phổ biến tại Hà Nội và TP.HCM, đưa thời gian phản hồi định tuyến xuống dưới 30ms cho các truy vấn lặp lại.
 - **Nhiệm vụ 3 (Mở rộng Landmark Catalog):** Bổ sung tọa độ và metadata hình ảnh cho 50+ điểm đón phức tạp tại Hà Nội (các sảnh chung cư Vinhomes Ocean Park, Times City, Smart City, Royal City, Bệnh viện Bạch Mai, Sân bay Nội Bài Ga T1/T2).
 
-### 4.2. Tuần 5 (12/10 – 18/10/2026): Đánh Giá Chuyên Sâu Quy Mô Lớn, Stress-Testing & Audit Chi Phí
+### 4.2. Tuần 5 (12/10 – 18/10/2026): Đánh Giá Chuyên Sâu Quy Mô Lớn, Stress-Testing & Đánh Giá Hiệu Quả Khuyến Mãi
 - **Nhiệm vụ 1 (Simulation Suite 100 Kịch bản):** Mở rộng tập dữ liệu kiểm thử từ 50 lên 100 kịch bản thoại thực tế bao gồm đa dạng chất giọng (Bắc, Trung, Nam), các trường hợp nói ngắt quãng, từ lóng, nói chêm tiếng Anh ("book xe", "cancel chuyến") và môi trường nhiều tạp âm đường phố xe cộ.
 - **Nhiệm vụ 2 (Stress-Testing Tải Lớn):** Sử dụng Locust / offline load test giả lập 50 – 100 phiên gọi WebRTC đồng thời vào LiveKit Worker và FastAPI backend; đo lường mức độ chiếm dụng CPU, RAM và đảm bảo tỷ lệ lỗi (Error Rate) dưới 0.1%.
-- **Nhiệm vụ 3 (Audit Chi phí Khuyến mại & Hiệu quả COE):** Chạy mô phỏng đối chứng giữa chiến lược phân phát mã ưu đãi đại trà và chiến lược cá nhân hóa bằng thuật toán $S_{offer}$ trên tập 1.000 cuốc xe mô phỏng; chứng minh khả năng **tiết kiệm 15 - 25% ngân sách khuyến mãi dư thừa** mà vẫn giữ tỷ lệ chốt đơn tăng ≥ 20%.
+- **Nhiệm vụ 3 (Đo lường Promotion Cost Efficiency & Hiệu quả COE):** Chạy mô phỏng đối chứng giữa chiến lược phân phát mã ưu đãi đại trà và chiến lược cá nhân hóa bằng thuật toán $S_{offer}$ trên tập 1.000 cuốc xe mô phỏng; chứng minh khả năng **tối ưu hóa 15 - 25% ngân sách voucher khuyến mãi dư thừa** mà vẫn giữ tỷ lệ chốt đơn tăng ≥ 20%.
 
 ### 4.3. Tuần 6 (19/10 – 25/10/2026): Đấu Nối GSM Sandbox API, Mô Phỏng Đội Xe VinFast & Nghiệm Thu Phase 3
 - **Nhiệm vụ 1 (Đấu nối GSM Sandbox):** Kết nối module `GSMSandboxClient` với API Sandbox/Staging chính thức của GreenSM (Booking API, Fare API, Driver Status API, Promo Engine); kiểm thử trọn vẹn luồng đặt xe khép kín từ giọng nói khách hàng đến lúc phát sinh cuốc xe trên hệ thống GSM.
@@ -123,7 +123,7 @@ Với việc các thuật toán lõi đã được xây dựng và kiểm chứn
 Sau khi nghiệm thu thành công Phase 3 vào ngày 25/10/2026, dự án sẽ tiến hành thử nghiệm Pilot thực địa trong 2 tuần tiếp theo:
 1. **Triển khai có kiểm soát:** Cài đặt thử nghiệm cho 50 tài xế xe điện GreenSM tại 2 quận trọng điểm của Hà Nội (Quận Hoàn Kiếm và Quận Cầu Giấy).
 2. **Đo lường Chỉ số Thực tế (CSAT & Lost Calls):** Thu thập phản hồi từ khách hàng và tài xế; đo lường tỷ lệ giảm tải cuộc gọi cho tổng đài viên (mục tiêu giảm > 50% AHT) và tỷ lệ hài lòng đạt ≥ 4.5/5.0 sao.
-3. **Bảo vệ Chung kết:** Hoàn thiện Slide thuyết trình, số liệu phân tích tài chính/ROI và bảo vệ trước Hội đồng VinUniversity & Ban Lãnh đạo GSM.
+3. **Bảo vệ Chung kết:** Hoàn thiện Slide thuyết trình, số liệu phân tích và bảo vệ trước Hội đồng VinUniversity & Ban Lãnh đạo GSM.
 
 ---
 
@@ -138,4 +138,4 @@ Sau khi nghiệm thu thành công Phase 3 vào ngày 25/10/2026, dự án sẽ t
 
 ## 7. Kết Luận
 
-Sau **3 tuần đầu tiên** của giai đoạn Phase 3, OlaSM đã chứng minh năng lực kỹ thuật vượt trội khi hiện thực hóa toàn bộ các trụ cột công nghệ phức tạp nhất (Voice Streaming, Vietnamese Audio Chunker, COE Offer Engine, Dynamic Confidence Fusion, Gemini Multimodal Vision, Kiến trúc Ultra-Low-Cost và 720 tests xanh tuyệt đối). Với lộ trình 3 tuần còn lại được phân công rõ ràng, bám sát từng ngày, nhóm hoàn toàn tự tin sẽ hoàn thành xuất sắc mục tiêu Phase 3 và sẵn sàng cho giai đoạn thử nghiệm Pilot thực địa cùng GreenSM.
+Sau **3 tuần đầu tiên** của giai đoạn Phase 3, OlaSM đã chứng minh năng lực kỹ thuật vượt trội khi hiện thực hóa toàn bộ các trụ cột công nghệ phức tạp nhất (Voice Streaming, Vietnamese Audio Chunker, COE Offer Engine, Dynamic Confidence Fusion, Gemini Multimodal Vision, Hệ thống Guardrails An toàn 3 Lớp và 720 tests xanh tuyệt đối). Với lộ trình 3 tuần còn lại được phân công rõ ràng, bám sát từng ngày, nhóm hoàn toàn tự tin sẽ hoàn thành xuất sắc mục tiêu Phase 3 và sẵn sàng cho giai đoạn thử nghiệm Pilot thực địa cùng GreenSM.

@@ -300,9 +300,9 @@ def build_document():
     )
     add_bullet("Tuần 1 (14/09 – 20/09/2026 — Đã hoàn thành): ", "Khởi tạo kiến trúc Dual-Plane (FastAPI + LiveKit Worker); phân tích 3 điểm nghẽn nghiệp vụ tổng đài GreenSM; chuẩn hóa cơ sở dữ liệu bền vững (PostgreSQL / SQLite).")
     add_bullet("Tuần 2 (21/09 – 27/09/2026 — Đã hoàn thành): ", "Xây dựng luồng đàm thoại WebRTC LiveKit hai chiều; tích hợp Silero VAD (220ms); lập trình VietnameseAudioChunker ngắt ngữ pháp tiếng Việt (TTFA P95 đạt 1.41s); dựng LangGraph State Machine 6 bước và Guardrails an toàn 3 lớp.")
-    add_bullet("Tuần 3 (28/09 – 04/10/2026 — Đã hoàn thành, Mốc báo cáo hiện tại): ", "Hoàn thành các thuật toán lõi then chốt: COE Soffer scoring; Dynamic Confidence Fusion ctrip (ECE = 0.0127); Multimodal Vision Grounding (Spatial OCR + Gemini VLM đạt 93% accuracy); tích hợp Goong Maps Việt Nam; Kiến trúc Ultra-Low-Cost siêu rẻ cho GreenSM mobile (~75 - 125 VNĐ/cuộc gọi); toàn bộ test suite đạt 720 / 720 tests xanh 100%.")
-    add_bullet("Tuần 4 (05/10 – 11/10/2026 — Tuần tiếp theo): ", "Hoàn thiện bàn làm việc Web Operator Console (bàn giao HITL < 0.5s live WebRTC); mở rộng catalog 50+ điểm đón phức tạp Hà Nội; triển khai Tiered Cache 1.000 địa danh phổ biến.")
-    add_bullet("Tuần 5 (12/10 – 18/10/2026 — 2 tuần tới): ", "Đánh giá chuyên sâu 100 kịch bản đàm thoại thực tế giọng 3 miền; stress-testing tải 50-100 cuộc gọi đồng thời; audit biên độ tiết kiệm ngân sách khuyến mãi của thuật toán COE.")
+    add_bullet("Tuần 3 (28/09 – 04/10/2026 — Đã hoàn thành, Mốc báo cáo hiện tại): ", "Hoàn thành các thuật toán lõi then chốt: COE Soffer scoring; Dynamic Confidence Fusion ctrip (ECE = 0.0127); Multimodal Vision Grounding (Spatial OCR + Gemini VLM đạt 93% accuracy); tích hợp Goong Maps Việt Nam; Hệ thống Guardrails an toàn 3 lớp bảo vệ dữ liệu PII và chặn Prompt Injection; toàn bộ test suite đạt 720 / 720 tests xanh 100%.")
+    add_bullet("Tuần 4 (05/10 – 11/10/2026 — Tuần tiếp theo): ", "Hoàn thiện bàn làm việc Web Operator Console (bàn giao HITL < 0.5s live WebRTC); mở rộng catalog 50+ điểm đón phức tạp Hà Nội; triển khai bộ nhớ đệm Tiered Cache lưu trữ 1.000 địa danh phổ biến.")
+    add_bullet("Tuần 5 (12/10 – 18/10/2026 — 2 tuần tới): ", "Đánh giá chuyên sâu 100 kịch bản đàm thoại thực tế giọng 3 miền; stress-testing tải 50-100 cuộc gọi đồng thời; đo lường Offer Conversion Rate (tăng ≥ 20%) và Promotion Cost Efficiency (tối ưu hóa 15 - 25% ngân sách voucher khuyến mãi).")
     add_bullet("Tuần 6 (19/10 – 25/10/2026 — Tuần về đích Phase 3): ", "Đấu nối GSM Sandbox API Live; mô phỏng điều phối đội xe điện VinFast (VF e34, VF 8) theo mức pin SoC%; đóng gói toàn diện sản phẩm POC; lập Báo cáo Nghiệm thu Tổng kết Phase 3 (Go/No-go).")
     add_bullet("Giai đoạn Hậu Phase 3 (Tuần 7 – 8: 26/10 – 08/11/2026 — Pilot Thực địa): ", "Thử nghiệm thực địa có kiểm soát với 50 tài xế xe điện GreenSM tại Quận Hoàn Kiếm và Cầu Giấy (Hà Nội); đo lường CSAT thực tế và bảo vệ chung kết.")
 
@@ -310,7 +310,7 @@ def build_document():
     add_p(
         "Nhờ phương pháp làm việc quyết liệt và khoa học, trong 3 tuần vừa qua, Nhóm 4 không chỉ hoàn thành 100% mục tiêu "
         "hạ tầng và streaming âm thanh mà còn hoàn thành sớm toàn bộ các bài toán thuật toán then chốt (COE, Confidence Fusion, "
-        "Gemini Vision Grounding, Kiến trúc Siêu Rẻ). Hệ thống hiện vận hành mượt mà trên môi trường thử nghiệm với 720 / 720 tests xanh tuyệt đối:"
+        "Gemini Vision Grounding, Bản đồ & Chuẩn hóa Địa danh Việt Nam, và Hệ thống Guardrails 3 lớp). Hệ thống hiện vận hành mượt mà trên môi trường thử nghiệm với 720 / 720 tests xanh tuyệt đối:"
     )
     
     t1_headers = ["Phân hệ kỹ thuật", "Kết quả thực nghiệm kỹ thuật sau 3 tuần (14/09 – 04/10/2026)", "Đánh giá nghiệm thu"]
@@ -337,13 +337,13 @@ def build_document():
         ],
         [
             "Bản đồ & Chuẩn hóa Địa danh VN\n(Hoàn thành Tuần 3)",
-            "Xây dựng Gazetteer > 500 địa danh Hà Nội; tích hợp GoongMapsProvider và OSRM thay thế Mapbox, chuẩn hóa địa chỉ theo mô hình 2 cấp hành chính mới, đạt độ khớp 93.3%, tiết kiệm 80% chi phí.",
+            "Xây dựng Gazetteer > 500 địa danh Hà Nội; tích hợp GoongMapsProvider và OSRM thay thế Mapbox, chuẩn hóa địa chỉ theo mô hình 2 cấp hành chính mới, đạt độ khớp 93.3%, giải quyết triệt để bài toán địa danh hành chính Việt Nam.",
             "Hoàn thành 100%\n(Độ khớp 93.3%)"
         ],
         [
-            "Kiến trúc Tối ưu Chi phí Siêu Rẻ\n(Hoàn thành Tuần 3)",
-            "Triển khai phân tầng 4 lớp (Client Edge VAD -> Goong/OSRM -> GPT-4o-mini + Prompt Caching -> Streaming Chunker TTS); chi phí chỉ ~75 - 125 VNĐ / cuộc gọi (~0.003 - 0.005 USD), tiết kiệm ~92% chi phí.",
-            "Đột phá kinh tế\n(Duy trì bền vững)"
+            "Bàn làm việc Tổng đài viên (HITL)\n& GSMSandboxClient (Tuần 3)",
+            "Xây dựng khung giao diện Web Operator Console kết nối WebRTC bàn giao < 0.5s; lập trình GSMSandboxClient chuẩn OpenAPI tích hợp đầy đủ thông số đội xe điện VinFast (VF e34, VF 5 Plus, VF 8) và mô phỏng tài xế thời gian thực.",
+            "Hoàn thành sớm\n(Mock & Live Gateway)"
         ],
         [
             "Kiểm thử Tự động & Guardrails\n(Xuyên suốt 3 tuần)",
@@ -373,8 +373,8 @@ def build_document():
         "Hoàn thiện bàn làm việc Web Operator Console với độ trễ bàn giao cuộc gọi < 0.5s live WebRTC; mở rộng catalog điểm đón phức tạp lên 50+ địa điểm Hà Nội; triển khai bộ nhớ đệm Tiered Cache lưu 1.000 địa danh phổ biến."
     )
     add_bullet(
-        "Tuần 5 (12/10 – 18/10/2026) — Đánh giá Chuyên sâu, Stress-Testing & Audit Chi phí Khuyến mại: ",
-        "Chạy bộ kiểm thử 100 kịch bản thu âm thực tế (giọng Bắc, Trung, Nam có tạp âm); stress-test tải 50-100 cuộc gọi LiveKit WebRTC đồng thời; audit biên độ tiết kiệm ngân sách khuyến mãi của thuật toán COE."
+        "Tuần 5 (12/10 – 18/10/2026) — Đánh giá Chuyên sâu, Stress-Testing & Đo lường Hiệu quả Khuyến mãi: ",
+        "Chạy bộ kiểm thử 100 kịch bản thu âm thực tế (giọng Bắc, Trung, Nam có tạp âm); stress-test tải 50-100 cuộc gọi LiveKit WebRTC đồng thời; đo lường Offer Conversion Rate (tăng ≥ 20%) và Promotion Cost Efficiency (tối ưu hóa 15 - 25% ngân sách voucher khuyến mãi)."
     )
     add_bullet(
         "Tuần 6 (19/10 – 25/10/2026) — Đấu nối GSM Sandbox API, Mô phỏng Đội xe & Nghiệm thu Tổng kết Phase 3: ",
@@ -404,7 +404,7 @@ def build_document():
     )
     add_bullet(
         "Ban vận hành GreenSM: ",
-        "Ngân sách khuyến mại bị thất thoát do áp dụng tràn lan thiếu phân hóa; tổng đài viên chịu áp lực lớn vào giờ cao điểm dẫn đến tỷ lệ cuộc gọi nhỡ (lost calls) cao và chi phí nhân sự lớn."
+        "Ngân sách khuyến mại bị thất thoát do áp dụng tràn lan thiếu phân hóa; tổng đài viên chịu áp lực lớn vào giờ cao điểm dẫn đến tỷ lệ cuộc gọi nhỡ (lost calls) cao và áp lực vận hành đè nặng lên đội ngũ trực tổng đài."
     )
     add_p(
         "Mục tiêu kỹ thuật của OlaSM: Xây dựng một trợ lý AI đàm thoại đa phương thức (Voice & Vision) hỗ trợ đặt xe rảnh tay bằng tiếng Việt tự nhiên, "
@@ -437,31 +437,31 @@ def build_document():
             "Lịch sử chuyến xe ẩn danh\n(Trip Booking History)",
             "Huấn luyện và chuẩn hóa mô hình ChurnRisk và PriceSensitivity; đo lường độ co giãn nhu cầu theo phân khúc khách hàng.",
             "CSV / Parquet: [user_hash, time_slot, vehicle_type, est_fare, actual_fare, is_cancelled, promo_code]",
-            "Cực kỳ cấp thiết\n(Tuần 2 - 3)"
+            "Cực kỳ cấp thiết\n(Tuần 4)"
         ],
         [
             "Danh mục chiến dịch ưu đãi\n(Promotion Catalog)",
             "Đấu nối trực tiếp vào CampaignFit scoring của COE; kiểm thử khả năng phân bổ ưu đãi linh hoạt theo thời gian thực.",
             "JSON / REST API: [promo_id, discount_type, value, min_fare, max_discount, target_user_tier, active_flag]",
-            "Cực kỳ cấp thiết\n(Tuần 2)"
+            "Cực kỳ cấp thiết\n(Tuần 4)"
         ],
         [
             "Dữ liệu VinFast Telematics\n(SoC % & Charging Station)",
             "Định tuyến thông minh theo mức dung lượng pin xe điện và gợi ý trạm sạc V-GREEN trên lộ trình di chuyển của khách.",
             "JSON Stream / OpenAPI: [vehicle_vin, battery_pct, range_km, is_charging, current_gps]",
-            "Ưu tiên cao\n(Tuần 3 - 4)"
+            "Ưu tiên cao\n(Tuần 5)"
         ],
         [
             "Ngữ liệu cuộc gọi mẫu viễn thông\n(Anonymized Audio Samples)",
             "Đo lường Word Error Rate (WER) thực tế trên đường truyền tổng đài; tinh chỉnh nhận dạng ngữ điệu và phương ngữ vùng miền.",
             "30-50 tệp WAV (đã che thông tin định danh PII), kèm văn bản bóc băng chuẩn.",
-            "Ưu tiên cao\n(Tuần 3)"
+            "Ưu tiên cao\n(Tuần 5)"
         ],
         [
             "Tài khoản GSM Sandbox API Live\n(Booking, Fare & Dispatch)",
             "Kết nối kiểm thử luồng giao dịch khép kín từ lúc khách xác nhận giọng nói đến lúc sinh cuốc xe trên hệ sinh thái GSM thật.",
             "API Endpoint, API Key và tài liệu OpenAPI 3.0 cho môi trường Staging/Pilot.",
-            "Cực kỳ cấp thiết\n(Tuần 3 - 5)"
+            "Cực kỳ cấp thiết\n(Tuần 4 – 6)"
         ]
     ]
     create_table(t2_headers, t2_rows, [1.8, 2.4, 2.0, 1.0], [WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.CENTER])
@@ -483,7 +483,7 @@ def build_document():
         "FastAPI Backend đóng vai trò Business Source of Truth, quản lý cơ sở dữ liệu PostgreSQL Supabase, bàn làm việc Operator Console cho nhân viên tổng đài và module GSMSandboxClient điều phối xe điện VinFast."
     )
     
-    add_p("Chi tiết 3 công thức kỹ thuật nền tảng được hiện thực hóa chính xác theo Báo cáo Ý tưởng:")
+    add_p("Chi tiết 4 trụ cột kỹ thuật và thuật toán nền tảng được hiện thực hóa chính xác theo Báo cáo Ý tưởng:")
     
     # Formula 1
     add_p(
@@ -524,22 +524,20 @@ def build_document():
         bold_prefix="3. Module Multimodal Visual Grounding: "
     )
 
-    # Ultra-Low-Cost
+    # Guardrails & HITL
     add_p(
-        "Để đáp ứng yêu cầu vận hành quy mô lớn cho ứng dụng di động GreenSM với hàng triệu người dùng, nhóm đã lập trình kiến trúc "
-        "phân tầng 4 lớp: (1) Silero VAD lọc khoảng lặng ngay tại Client; (2) Định tuyến địa chỉ ưu tiên Local Cache & Goong/OSRM "
-        "giảm 80-84% chi phí bản đồ so với Google Maps/Mapbox; (3) Dynamic Prompt Caching kết hợp GPT-4o-mini / Gemini Flash giảm 92% "
-        "chi phí token; (4) VietnameseAudioChunker chỉ tổng hợp audio cụm ngắn đầu tiên giúp giảm 78% chi phí TTS. "
-        "Nhờ đó, tổng chi phí vận hành chỉ dao động từ 75 - 125 VNĐ / cuộc gọi (~0.003 - 0.005 USD), rẻ hơn 10 - 20 lần so với giải pháp thông thường "
-        "và rẻ hơn 30 - 40 lần so với nhân sự tổng đài viên truyền thống.",
-        bold_prefix="4. Kiến trúc Kỹ thuật Siêu Rẻ (Ultra-Low-Cost Architecture) cho App Mobile GreenSM: "
+        "Để bảo đảm an toàn dữ liệu và kiểm soát độ tin cậy tuyệt đối khi giao tiếp với khách hàng, hệ thống thiết lập cơ chế phòng thủ 3 tầng: "
+        "(1) Input Rail kiểm tra tính hợp lệ của luồng âm thanh đầu vào, phát hiện và ngăn chặn 100% các hành vi cố ý tấn công can thiệp câu lệnh (Prompt Injection / System Prompt Leaking); "
+        "(2) Action Rail kiểm duyệt và che giấu thông tin nhạy cảm định danh cá nhân (PII Redaction: số điện thoại, thông tin riêng tư), đồng thời kích hoạt chốt xác nhận tường minh (Explicit Confirmation) bằng giọng nói từ khách hàng trước khi sinh lệnh điều phối xe; "
+        "(3) Bàn làm việc điều phối tổng đài viên (Web Operator Console): Khi c_trip ≤ τ_low (0.55) hoặc khi khách hàng bày tỏ mong muốn gặp người thật, hệ thống tự động kích hoạt tiến trình ngắt bot và chuyển giao toàn bộ ngữ cảnh (audio stream, transcript, vị trí đề xuất) cho tổng đài viên qua LiveKit WebRTC với độ trễ bàn giao cực thấp (< 0.5s), bảo đảm không làm gián đoạn trải nghiệm của khách hàng.",
+        bold_prefix="4. Hệ thống Guardrails An toàn 3 Lớp & Bàn giao Tổng đài viên (Human-in-the-Loop): "
     )
 
-    add_h2("2.4. Kết quả thực nghiệm và Đo lường chỉ số sau hoàn thiện")
+    add_h2("2.4. Kết quả thực nghiệm và Đo lường chỉ số kỹ thuật sau 3 tuần")
     add_p(
-        "Tại mốc Tuần 1, toàn bộ hệ thống đã được kiểm thử trên bộ công cụ "
-        "OlaSM Benchmark Suite, 50-Scenario Simulation Suite và bộ kiểm thử hồi quy tự động. "
-        "Dưới đây là bảng tổng hợp các chỉ số thực nghiệm kỹ thuật đo được thực tế:"
+        "Sau 3 tuần triển khai của Phase 3 (kết thúc Tuần 3, đạt 50% chặng đường), toàn bộ hệ thống đã được kiểm thử trên bộ công cụ "
+        "OlaSM Benchmark Suite, 50-Scenario Simulation Suite và bộ kiểm thử hồi quy tự động 720 bài test. "
+        "Dưới đây là bảng tổng hợp các chỉ số thực nghiệm kỹ thuật đo được thực tế so với mục tiêu đề cương:"
     )
     
     t3_headers = ["Chỉ số đo lường", "Mục tiêu cam kết (Đề cương)", "Kết quả thực tế đo được", "Đánh giá chất lượng"]
@@ -625,9 +623,9 @@ def build_document():
     # =========================================================================
     add_h1("3. Phân bổ công việc và Kế hoạch triển khai")
     
-    add_h2("3.1. Danh sách thành viên và Phần việc đã hoàn thành tại Mốc Tuần 1")
+    add_h2("3.1. Danh sách thành viên và Phần việc cụ thể đã hoàn thành sau 3 Tuần (Nửa đầu Phase 3)")
     
-    t4_headers = ["Họ và tên & MSSV", "Vai trò trọng tâm", "Phần việc cụ thể đã hoàn thành tại Mốc Tuần 1"]
+    t4_headers = ["Họ và tên & MSSV", "Vai trò trọng tâm", "Phần việc cụ thể đã hoàn thành sau 3 Tuần (Tuần 1 – 3)"]
     t4_rows = [
         [
             "Nguyễn Đức Nam Khánh\nMSSV: 2A202601103\n(Trưởng nhóm kỹ thuật)",
@@ -637,7 +635,7 @@ def build_document():
             "• Hiện thực hóa Module Gemini Multimodal Vision Grounding (VLM + Spatial OCR).\n"
             "• Xây dựng GSMSandboxClient chuẩn OpenAPI tích hợp báo giá và điều xe điện VinFast.\n"
             "• Phát triển ECEService tối ưu hóa Temperature Scaling đưa ECE về 0.0127.\n"
-            "• Thiết kế kiến trúc Ultra-Low-Cost tối ưu chi phí vận hành cho GreenSM Mobile App.\n"
+            "• Thiết kế cơ chế phân luồng an toàn Selective Autonomy và luồng bàn giao HITL mượt mà (< 0.5s).\n"
             "• Thiết lập hạ tầng kiểm thử mô phỏng 50 kịch bản và xuất bản mã nguồn GitHub công khai."
         ],
         [
@@ -660,7 +658,7 @@ def build_document():
             "Nguyễn Thị Phương",
             "Hoàn thiện Goong Maps Provider, triển khai Tiered Cache 1.000 địa danh và tích hợp chính sách ưu đãi vào COE.",
             "11/10/2026 (Tuần 4)",
-            "Module định vị Việt Nam siêu rẻ và bộ phân bổ ưu đãi theo phân khúc khách hàng."
+            "Module định vị địa danh Việt Nam (Goong Maps) chuẩn hóa cao và bộ phân bổ ưu đãi cá nhân hóa."
         ],
         [
             "Nguyễn Đức Nam Khánh",
@@ -672,7 +670,7 @@ def build_document():
             "Cả nhóm (Nam Khánh & Phương)",
             "Chạy stress-test 100 cuộc gọi thoại đồng thời, đánh giá toàn diện 100 kịch bản thực tế và kiểm chuẩn ECE.",
             "18/10/2026 (Tuần 5)",
-            "Báo cáo Comprehensive Evaluation, biểu đồ ECE và phân tích ROI chi phí."
+            "Báo cáo Comprehensive Evaluation, biểu đồ hiệu chuẩn ECE và chỉ số chuyển đổi ưu đãi (Offer Conversion Rate)."
         ],
         [
             "Cả nhóm (Nam Khánh & Phương)",
@@ -697,8 +695,8 @@ def build_document():
         "Phiên bản hiện tại của OlaSM đã chứng minh trọn vẹn tính khả thi kỹ thuật vượt trội, độ tin cậy của thuật toán "
         "và tiềm năng ứng dụng thực tiễn to lớn đối với hệ sinh thái xe điện thông minh GreenSM. Bằng việc hoàn thành xuất sắc "
         "toàn bộ các mục tiêu của Nửa đầu Phase 3 (Tuần 1 - 3), hệ thống đã sở hữu độ trễ phản hồi ấn tượng "
-        "(TTFA P95 đạt 1.41s), thời gian đàm thoại rút ngắn 72%, độ hiệu chuẩn ECE đạt 0.0127, kiến trúc kỹ thuật siêu rẻ "
-        "(~75 - 125 VNĐ / cuộc gọi) và bộ kiểm thử tự động 720 / 720 tests xanh tuyệt đối."
+        "(TTFA P95 đạt 1.41s), thời gian đàm thoại rút ngắn 72%, độ hiệu chuẩn ECE đạt 0.0127, cơ chế tự chủ có chọn lọc "
+        "an toàn (Selective Autonomy với luồng bàn giao HITL < 0.5s), và bộ kiểm thử tự động 720 / 720 tests xanh tuyệt đối."
     )
     add_p(
         "Nhóm 4 kính đề nghị TS. Lê Duy Dũng, Anh Lê Yên Thanh và Ban Đề án xem xét: "
@@ -731,14 +729,17 @@ def build_document():
     r_s3 = p_sig3.add_run("Nhóm dự án OlaSM — VRIC × GSM Smart City (Nhóm 4: Mobility Assistant)\nNgày nộp: Chủ nhật, ngày 04/10/2026")
     r_s3.italic = True
     
+    target_updated_path = "BaoCao_KyThuat_POC_Nhom4_OlaSM_updated.docx"
+    doc.save(target_updated_path)
+    print(f"Clean document successfully generated at: {target_updated_path}")
+    
+    # Try updating original if accessible
     primary_path = "BaoCao_KyThuat_POC_Nhom4_OlaSM.docx"
-    backup_path = "BaoCao_KyThuat_POC_Nhom4_OlaSM_updated.docx"
     try:
         doc.save(primary_path)
-        print(f"Clean document successfully generated at: {primary_path}")
-    except PermissionError:
-        doc.save(backup_path)
-        print(f"Primary file locked by Word. Successfully generated at: {backup_path}")
+        print(f"Also updated {primary_path} successfully.")
+    except Exception as e:
+        print(f"Note: {primary_path} is locked by Word ({e}). Clean file is at {target_updated_path}.")
 
 if __name__ == "__main__":
     build_document()
