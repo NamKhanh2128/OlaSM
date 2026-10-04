@@ -12,7 +12,7 @@ import {
   resolveHandoff,
   type HandoffRecord,
 } from "@/features/operator/api";
-import { shortPlace, shortRoute } from "@/features/operator/addressFormat";
+import { shortRoute } from "@/features/operator/addressFormat";
 
 function formatHandoffTime(value: string): string {
   const date = new Date(value);
