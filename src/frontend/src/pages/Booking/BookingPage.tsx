@@ -22,7 +22,7 @@ export const BookingPage: React.FC = () => {
           ))}
         </div>
       </section>
-      <section className="soft-cyan-panel rounded-[30px] p-6 sm:flex sm:items-center sm:justify-between"><div><p className="text-xs font-bold text-[#008F88]">ALO SM BUSINESS</p><h2 className="mt-2 text-2xl font-extrabold text-[#173132]">Di chuyển cho doanh nghiệp</h2><p className="mt-2 max-w-xl text-sm text-slate-500">Quản lý chuyến đi minh bạch và linh hoạt cho cả đội ngũ.</p></div><button type="button" onClick={() => openWithPrefill("Tôi cần dịch vụ xe doanh nghiệp.")} className="mt-5 rounded-2xl bg-[#00C9B7] px-6 py-3 text-sm font-extrabold text-white shadow-lg shadow-[#00C9B7]/20 sm:mt-0">Tìm hiểu ngay</button></section>
+      <section className="soft-cyan-panel rounded-[30px] p-6 sm:flex sm:items-center sm:justify-between"><div><p className="text-xs font-bold text-[#008F88]">OLA SM BUSINESS</p><h2 className="mt-2 text-2xl font-extrabold text-[#173132]">Di chuyển cho doanh nghiệp</h2><p className="mt-2 max-w-xl text-sm text-slate-500">Quản lý chuyến đi minh bạch và linh hoạt cho cả đội ngũ.</p></div><button type="button" onClick={() => openWithPrefill("Tôi cần dịch vụ xe doanh nghiệp.")} className="mt-5 rounded-2xl bg-[#00C9B7] px-6 py-3 text-sm font-extrabold text-white shadow-lg shadow-[#00C9B7]/20 sm:mt-0">Tìm hiểu ngay</button></section>
     </div>
   );
 };

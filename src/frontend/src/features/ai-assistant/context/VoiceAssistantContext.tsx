@@ -22,7 +22,7 @@ import {
 } from "./voice-assistant-context";
 
 function buildWelcomeMessage(userName: string): string {
-  return `Xin chào ${userName}! Em là trợ lý AloSM, rất vui được đồng hành cùng anh/chị hôm nay 😊 Anh/chị đang cần em hỗ trợ gì ạ — đặt xe, theo dõi chuyến đi, hay có thắc mắc nào khác không?`;
+  return `Xin chào ${userName}! Em là trợ lý OlaSM, rất vui được đồng hành cùng anh/chị hôm nay 😊 Anh/chị đang cần em hỗ trợ gì ạ — đặt xe, theo dõi chuyến đi, hay có thắc mắc nào khác không?`;
 }
 
 export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -109,7 +109,7 @@ export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = (
         // Agent tự kết thúc hội thoại (vd khách nói "hủy"/"thôi") — chỉ reset PHIÊN
         // HỘI THOẠI, không đăng xuất tài khoản (khác hẳn 2 việc, xem endSession()).
         setSessionId(null);
-        localStorage.removeItem("alosm_session_id");
+        clearSessionId();
         setSessionEnded(true);
         setShowConfirmationModal(false);
         setNotice("Phiên hội thoại đã kết thúc. Nhấn “Bắt đầu phiên mới” để đặt xe tiếp.");

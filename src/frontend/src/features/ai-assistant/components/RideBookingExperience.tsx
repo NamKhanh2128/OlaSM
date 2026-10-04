@@ -7,14 +7,14 @@ type View = "map" | "vehicles" | "offers";
 type Props = { progress: BookingProgress | null; onSay: (message: string) => Promise<void>; disabled?: boolean; voiceCommand?: string };
 
 const vehicles = [
-  { type: "MOTORBIKE", name: "AloSM Bike", seats: 1, eta: 3, factor: .58, icon: Bike, detail: "Nhanh, linh hoạt" },
-  { type: "CAR_4", name: "AloSM Car", seats: 4, eta: 4, factor: 1, icon: Car, detail: "Tiện nghi, giá tốt" },
-  { type: "CAR_7", name: "AloSM Plus", seats: 7, eta: 7, factor: 1.42, icon: Car, detail: "Rộng rãi cho cả nhóm" },
-  { type: "LUXURY", name: "AloSM Premium", seats: 4, eta: 6, factor: 1.18, icon: Sparkles, detail: "Dòng xe cao cấp" },
+  { type: "MOTORBIKE", name: "OlaSM Bike", seats: 1, eta: 3, factor: .58, icon: Bike, detail: "Nhanh, linh hoạt" },
+  { type: "CAR_4", name: "OlaSM Car", seats: 4, eta: 4, factor: 1, icon: Car, detail: "Tiện nghi, giá tốt" },
+  { type: "CAR_7", name: "OlaSM Plus", seats: 7, eta: 7, factor: 1.42, icon: Car, detail: "Rộng rãi cho cả nhóm" },
+  { type: "LUXURY", name: "OlaSM Premium", seats: 4, eta: 6, factor: 1.18, icon: Sparkles, detail: "Dòng xe cao cấp" },
 ] as const;
 
 const vouchers = [
-  { code: "ALO20", name: "Giảm 20% chuyến xe", percent: 20, cap: 30000, min: 80000 },
+  { code: "OLA20", name: "Giảm 20% chuyến xe", percent: 20, cap: 30000, min: 80000 },
   { code: "XANH15", name: "Ưu đãi di chuyển xanh", percent: 15, cap: 20000, min: 50000 },
   { code: "FREESHIP10", name: "Giảm ngay 10.000đ", percent: 0, cap: 10000, min: 30000 },
 ];
@@ -67,7 +67,7 @@ export const RideBookingExperience: React.FC<Props> = ({ progress, onSay, disabl
           <div className="relative h-44 overflow-hidden bg-[#EAF1F2]">
             <div className="absolute inset-0 opacity-80" style={{ backgroundImage: 'linear-gradient(30deg, transparent 46%, white 47%, white 53%, transparent 54%), linear-gradient(120deg, transparent 45%, white 46%, white 54%, transparent 55%)', backgroundSize: '90px 90px, 120px 120px' }} />
             <div className="absolute left-[12%] top-[18%] h-2 w-40 rotate-12 rounded-full bg-white" /><div className="absolute right-[3%] top-[44%] h-2 w-48 -rotate-12 rounded-full bg-white" />
-            {[[22,34],[70,23],[79,68],[36,74],[56,48]].map(([x,y], index) => <span key={index} title="Xe AloSM minh họa — chưa phải fleet realtime" className="absolute grid h-8 w-8 place-items-center rounded-xl border-2 border-white bg-[#00C9B7] text-white shadow-lg" style={{ left: `${x}%`, top: `${y}%` }}>{index % 2 ? <Bike className="h-4 w-4" /> : <Car className="h-4 w-4" />}</span>)}
+            {[[22,34],[70,23],[79,68],[36,74],[56,48]].map(([x,y], index) => <span key={index} title="Xe OlaSM minh họa — chưa phải fleet realtime" className="absolute grid h-8 w-8 place-items-center rounded-xl border-2 border-white bg-[#00C9B7] text-white shadow-lg" style={{ left: `${x}%`, top: `${y}%` }}>{index % 2 ? <Bike className="h-4 w-4" /> : <Car className="h-4 w-4" />}</span>)}
             <span className="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[#00C9B7]/20"><span className="grid h-7 w-7 place-items-center rounded-full border-4 border-white bg-[#173132] text-white shadow-xl"><LocateFixed className="h-3 w-3" /></span></span>
             <div className="absolute bottom-2 left-2 rounded-xl bg-white/90 px-2.5 py-1.5 text-[9px] font-semibold text-slate-500 shadow-sm backdrop-blur dark:bg-[#173132]/90 dark:text-slate-300">Bản đồ và xe gần đây đang là dữ liệu minh họa</div>
           </div>

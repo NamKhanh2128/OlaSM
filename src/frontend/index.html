@@ -4,17 +4,18 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="AloSM Web — Nền tảng di chuyển thông minh kết nối AI Copilot" />
+    <meta name="description" content="OlaSM Web — Nền tảng di chuyển thông minh kết nối AI Copilot" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <title>AloSM Web — Nền tảng di chuyển thông minh AI</title>
+    <title>OlaSM Web — Nền tảng di chuyển thông minh AI</title>
     <script>
       // Áp class "dark" trước khi React mount để tránh nháy sáng->tối
       // (FOUC) khi người dùng đã chọn giao diện tối từ trước.
       (function () {
         try {
-          if (window.localStorage.getItem("alosm_theme") === "dark") {
+          const theme = window.localStorage.getItem("olasm_theme") || window.localStorage.getItem("alosm_theme");
+          if (theme === "dark") {
             document.documentElement.classList.add("dark");
           }
         } catch (error) {

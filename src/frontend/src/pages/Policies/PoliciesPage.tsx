@@ -33,10 +33,10 @@ export const PoliciesPage: React.FC = () => {
   return (
     <main className="min-h-screen bg-[#F5FAFA] px-4 py-8 dark:bg-[#0B0E11]">
       <div className="mx-auto max-w-5xl">
-        <Link to="/" className="inline-flex items-center gap-2 text-sm font-bold text-[#008F88]"><ArrowLeft className="h-4 w-4" />Quay lại AloSM</Link>
+        <Link to="/" className="inline-flex items-center gap-2 text-sm font-bold text-[#008F88]"><ArrowLeft className="h-4 w-4" />Quay lại OlaSM</Link>
         <header className="mt-5 rounded-[30px] bg-[#173132] p-7 text-white">
           <BookOpen className="h-8 w-8 text-[#00C9B7]" />
-          <h1 className="mt-4 text-3xl font-extrabold">Điều khoản và chính sách AloSM</h1>
+          <h1 className="mt-4 text-3xl font-extrabold">Điều khoản và chính sách OlaSM</h1>
           <p className="mt-2 text-sm text-white/70">Catalog vận hành đã được chủ dự án phê duyệt, có version, nguồn và citation.</p>
           {catalog && <p className="mt-3 text-xs font-bold text-[#82FFF1]">Phiên bản {catalog.catalog_version} · hiệu lực {new Date(catalog.effective_from).toLocaleDateString("vi-VN")}</p>}
         </header>

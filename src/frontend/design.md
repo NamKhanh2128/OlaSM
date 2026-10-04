@@ -1,8 +1,8 @@
-# AloSM Web — UI/UX & Frontend Design Specification
+# OlaSM Web — UI/UX & Frontend Design Specification
 
 ## 0. Technology Stack
 
-Frontend của AloSM phải được xây dựng bằng:
+Frontend của OlaSM phải được xây dựng bằng:
 
 ### Core
 
@@ -455,7 +455,7 @@ Không để:
 
 # 1. Design Mission
 
-Tôi đang thực hiện **kiểm định và redesign toàn diện UI/UX cho AloSM Web**.
+Tôi đang thực hiện **kiểm định và redesign toàn diện UI/UX cho OlaSM Web**.
 
 Hãy đóng vai:
 
@@ -467,7 +467,7 @@ Hãy đóng vai:
 
 Mục tiêu:
 
-> Biến AloSM thành một production-quality web application với chất lượng UI/UX tương đương một startup công nghệ lớn.
+> Biến OlaSM thành một production-quality web application với chất lượng UI/UX tương đương một startup công nghệ lớn.
 
 Lấy cảm hứng từ những sản phẩm mobility hiện đại như Xanh SM về:
 
@@ -478,7 +478,7 @@ Lấy cảm hứng từ những sản phẩm mobility hiện đại như Xanh SM
 * booking flow
 * visual consistency
 
-Nhưng AloSM phải có **bản sắc thương hiệu riêng**.
+Nhưng OlaSM phải có **bản sắc thương hiệu riêng**.
 
 Không copy:
 
@@ -570,7 +570,7 @@ Visual polish
 
 # 4. Final Quality Bar
 
-Hãy đánh giá AloSM như một sản phẩm chuẩn bị public release.
+Hãy đánh giá OlaSM như một sản phẩm chuẩn bị public release.
 
 Nếu một designer hoặc developer nhìn vào UI và nói:
 
@@ -580,4 +580,4 @@ thì redesign chưa đạt.
 
 Mục tiêu:
 
-> **Premium SaaS quality + Modern Mobility UX + AI-native interaction + Vietnamese user familiarity + AloSM brand identity.**
+> **Premium SaaS quality + Modern Mobility UX + AI-native interaction + Vietnamese user familiarity + OlaSM brand identity.**

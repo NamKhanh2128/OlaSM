@@ -49,7 +49,7 @@ export const Sidebar: React.FC = () => {
           "dark:border-white/10 dark:bg-[#0B0E11]/95"
         )}
       >
-        {/* Brand Header with Official AloSM AI Booking Logo — mặc định crop logo về
+        {/* Brand Header with Official OlaSM AI Booking Logo — mặc định crop logo về
             đúng phần icon vuông bên trái (viewBox logo.svg đặt icon ở x:0-80/280), lộ
             đầy đủ logo khi rê chuột mở ra. Giữ nguyên 1 file ảnh, không cần thêm asset
             logo rút gọn riêng. Ảnh giữ NGUYÊN 1 chiều cao cố định (h-12) ở mọi trạng
@@ -72,7 +72,7 @@ export const Sidebar: React.FC = () => {
             >
               <img
                 src={logoSvg}
-                alt="AloSM AI Booking Logo"
+                alt="OlaSM AI Booking Logo"
                 className="h-12 w-auto max-w-none group-hover/logo:scale-102 transition-transform duration-200"
               />
             </div>

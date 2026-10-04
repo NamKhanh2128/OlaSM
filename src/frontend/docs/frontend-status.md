@@ -1,6 +1,7 @@
-# AloSM Frontend — trạng thái hiện hành
+# OlaSM Frontend — trạng thái hiện hành
 
-Cập nhật: **2026-08-16**. Trạng thái dùng taxonomy tại
+
+Cập nhật: **2026-10-04**. Trạng thái dùng taxonomy tại
 `docs/PROJECT_SOURCE_OF_TRUTH.md`; build pass không đồng nghĩa dữ liệu production.
 
 ## Ma trận tính năng

@@ -19,7 +19,7 @@ export interface ServiceOptionItem {
 export const MOCK_SERVICES_CATALOG: ServiceOptionItem[] = [
   {
     id: "MOTORBIKE",
-    name: "AloSM Bike",
+    name: "OlaSM Bike",
     description: "Xe máy công nghệ — len lỏi nội thành, tới nơi nhanh nhất giờ cao điểm.",
     startingPrice: "13.200đ",
     basePrice: 13200,
@@ -32,7 +32,7 @@ export const MOCK_SERVICES_CATALOG: ServiceOptionItem[] = [
   },
   {
     id: "CAR_4",
-    name: "AloSM Taxi",
+    name: "OlaSM Taxi",
     description: "Di chuyển hàng ngày nhanh chóng, tiết kiệm và thân thiện môi trường.",
     startingPrice: "30.500đ",
     basePrice: 30500,
@@ -45,7 +45,7 @@ export const MOCK_SERVICES_CATALOG: ServiceOptionItem[] = [
   },
   {
     id: "CAR_7",
-    name: "AloSM Plus",
+    name: "OlaSM Plus",
     description: "Không gian rộng rãi, tiện nghi cao cấp. Phù hợp cho gia đình và công việc.",
     startingPrice: "35.000đ",
     basePrice: 35000,
@@ -58,7 +58,7 @@ export const MOCK_SERVICES_CATALOG: ServiceOptionItem[] = [
   },
   {
     id: "LUXURY",
-    name: "AloSM Premium",
+    name: "OlaSM Premium",
     badge: "DEMO",
     description: "Dòng xe cao cấp 4 chỗ; bảng giá tham khảo chờ Finance phê duyệt.",
     startingPrice: "34.400đ",

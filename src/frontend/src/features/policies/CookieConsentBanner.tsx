@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import { CURRENT_POLICY_VERSION } from "@/features/policies/api";
 
-const STORAGE_KEY = `alosm_cookie_consent_v${CURRENT_POLICY_VERSION}`;
+const STORAGE_KEY = `olasm_cookie_consent_v${CURRENT_POLICY_VERSION}`;
+const LEGACY_STORAGE_KEY = `alosm_cookie_consent_v${CURRENT_POLICY_VERSION}`;
 
 type Choice = "essential" | "all";
 
 export const CookieConsentBanner: React.FC = () => {
   const [choice, setChoice] = useState<Choice | null>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     return stored === "essential" || stored === "all" ? stored : null;
   });
 
@@ -22,7 +23,7 @@ export const CookieConsentBanner: React.FC = () => {
     <aside role="dialog" aria-label="Lựa chọn cookie" className="fixed inset-x-3 bottom-3 z-[100] mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#12161A]">
       <h2 className="font-extrabold text-[#173132] dark:text-white">Quyền riêng tư và cookie</h2>
       <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-        AloSM luôn dùng lưu trữ thiết yếu cho đăng nhập và phiên làm việc. Cookie hoặc lưu trữ tùy chọn chỉ được bật khi bạn đồng ý riêng. Hiện ứng dụng chưa cài công cụ quảng cáo bên thứ ba.
+        OlaSM luôn dùng lưu trữ thiết yếu cho đăng nhập và phiên làm việc. Cookie hoặc lưu trữ tùy chọn chỉ được bật khi bạn đồng ý riêng. Hiện ứng dụng chưa cài công cụ quảng cáo bên thứ ba.
       </p>
       <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
         Phiên bản chính sách {CURRENT_POLICY_VERSION}. <a className="font-bold underline" href="/policies?section=cookies">Xem chính sách</a>

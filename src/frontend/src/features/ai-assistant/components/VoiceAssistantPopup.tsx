@@ -22,7 +22,7 @@ export const VoiceAssistantPopup: React.FC = () => {
     <>
     <div
       role="dialog"
-      aria-label="Cuộc gọi với trợ lý AloSM"
+      aria-label="Cuộc gọi với trợ lý OlaSM"
       className="fixed z-40 inset-x-0 bottom-0 md:inset-auto md:bottom-6 md:right-8
         h-[96vh] md:h-[min(900px,calc(100vh-3rem))] w-full md:w-[720px] max-w-[calc(100vw-2rem)]
         bg-white dark:bg-[#12161A] border border-slate-200/80 dark:border-white/10
@@ -30,7 +30,7 @@ export const VoiceAssistantPopup: React.FC = () => {
         animate-in slide-in-from-bottom-4 fade-in duration-300"
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-white/10 shrink-0">
-        <p className="text-sm font-bold text-[#191C1E] dark:text-white">Gọi trợ lý AloSM</p>
+        <p className="text-sm font-bold text-[#191C1E] dark:text-white">Gọi trợ lý OlaSM</p>
         <div className="flex items-center gap-1">
           <button
             type="button"

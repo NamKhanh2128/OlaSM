@@ -2,9 +2,9 @@ import { TokenSource } from "livekit-client";
 import { API_BASE_URL } from "@/app/config/api";
 import { getAccessToken } from "@/features/auth/storage";
 
-export const LIVEKIT_AGENT_NAME = "alosm-voice";
+export const LIVEKIT_AGENT_NAME = "olasm-voice";
 
-export function createAloSMTokenSource() {
+export function createOlaSMTokenSource() {
   const accessToken = getAccessToken();
   if (!accessToken) throw new Error("Vui lòng đăng nhập để bắt đầu cuộc gọi LiveKit.");
 
@@ -14,3 +14,5 @@ export function createAloSMTokenSource() {
     },
   });
 }
+
+export const createAloSMTokenSource = createOlaSMTokenSource;

@@ -1,6 +1,6 @@
-# AloSM frontend
+# OlaSM frontend
 
-React 19 + Vite + TypeScript + Tailwind frontend cho AloSM Voice.
+React 19 + Vite + TypeScript + Tailwind frontend cho OlaSM Voice.
 
 ## Tài liệu
 

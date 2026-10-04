@@ -34,7 +34,7 @@ import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssis
 import { PostBookingRatingDialog } from "@/features/ai-assistant/components/PostBookingRatingDialog";
 import { vehicleLabel } from "@/features/ai-assistant/bookingLabels";
 import { getRideSession } from "@/features/ride/api";
-import { createAloSMTokenSource, LIVEKIT_AGENT_NAME } from "./tokenSource";
+import { createOlaSMTokenSource, LIVEKIT_AGENT_NAME } from "./tokenSource";
 import {
   BOOKING_STATE_TOPIC,
   type BookingState,
@@ -320,7 +320,7 @@ function LiveKitCallContent({
   useEffect(() => {
     // Let livekit-client attempt its native Room reconnect first. If the managed
     // Session remains disconnected, create exactly one new Room attempt using the
-    // same durable AloSM session. A completed booking must never be retried.
+    // same durable OlaSM session. A completed booking must never be retried.
     const providerFailed = agent.state === "failed" && Boolean(agentFailure);
     if (!autoRetry || bookingCompleted || (!providerFailed && !connectionLost)) return;
     const timeoutId = window.setTimeout(onRetry, connectionLost ? 4_000 : 1_500);
@@ -391,7 +391,7 @@ function LiveKitCallContent({
 
       <div className="text-center">
         <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#008F88]">LiveKit Voice Agent</p>
-        <h2 className="mt-2 text-xl font-bold text-slate-900 dark:text-white">Tổng đài AloSM</h2>
+        <h2 className="mt-2 text-xl font-bold text-slate-900 dark:text-white">Tổng đài OlaSM</h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{statusLabel}</p>
         {showRecovery ? (
           <div className="mt-2">
@@ -630,7 +630,7 @@ function LiveKitSessionAttempt({
 }) {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const callInstanceId = useMemo(() => generateUUID(), []);
-  const tokenSource = useMemo(() => createAloSMTokenSource(), []);
+  const tokenSource = useMemo(() => createOlaSMTokenSource(), []);
   const room = useMemo(
     () => new Room({ audioCaptureDefaults: voiceAudioCaptureDefaults }),
       [],
@@ -638,7 +638,7 @@ function LiveKitSessionAttempt({
     const session = useSession(tokenSource, {
       room,
       agentName: LIVEKIT_AGENT_NAME,
-      participantAttributes: { "alosm.call_id": callInstanceId },
+      participantAttributes: { "olasm.call_id": callInstanceId, "alosm.call_id": callInstanceId },
       agentConnectTimeoutMilliseconds: 20_000,
     });
 
@@ -690,8 +690,9 @@ function LiveKitSessionAttempt({
 
 export const LiveKitVoiceSession: React.FC = () => {
   const { close, sessionId, newSession } = useVoiceAssistant();
-  const consentKey = `alosm_voice_consent_v${CURRENT_POLICY_VERSION}`;
-  const [consented, setConsented] = useState(() => localStorage.getItem(consentKey) === "accepted");
+  const consentKey = `olasm_voice_consent_v${CURRENT_POLICY_VERSION}`;
+  const legacyConsentKey = `alosm_voice_consent_v${CURRENT_POLICY_VERSION}`;
+  const [consented, setConsented] = useState(() => localStorage.getItem(consentKey) === "accepted" || localStorage.getItem(legacyConsentKey) === "accepted");
   const [attempt, setAttempt] = useState(0);
   const [resumeState, setResumeState] = useState<"checking" | "prompt" | "ready" | "needs-new" | "error">(
     "checking",
@@ -758,7 +759,7 @@ export const LiveKitVoiceSession: React.FC = () => {
       <div className="rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-slate-950">
         <h2 className="text-lg font-bold text-slate-900 dark:text-white">Cho phép xử lý âm thanh</h2>
         <p className="mt-3 text-sm text-slate-500">
-          AloSM cần dùng micro và transcript realtime để thực hiện cuộc gọi. Audio recording vẫn đang tắt mặc định.
+          OlaSM cần dùng micro và transcript realtime để thực hiện cuộc gọi. Audio recording vẫn đang tắt mặc định.
         </p>
         <button
           type="button"

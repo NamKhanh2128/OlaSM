@@ -44,7 +44,7 @@ export const ConversationWindow: React.FC = () => {
     <section
       role="dialog"
       aria-modal="true"
-      aria-label="Cuộc trò chuyện với trợ lý AloSM"
+      aria-label="Cuộc trò chuyện với trợ lý OlaSM"
       className="fixed inset-x-4 bottom-4 top-4 z-50 flex min-h-0 flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-2xl dark:border-white/10 dark:bg-[#12161A] xl:inset-x-auto xl:bottom-6 xl:right-[calc(2rem+720px+1rem)] xl:top-auto xl:h-[min(900px,calc(100vh-3rem))] xl:w-[460px] xl:max-w-[calc(100vw-48.5rem)]"
     >
       <header className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-white/10">
@@ -61,7 +61,7 @@ export const ConversationWindow: React.FC = () => {
           <MessageCircle className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <h2 className="text-sm font-bold text-[#191C1E] dark:text-white">AloSM Assistant</h2>
+          <h2 className="text-sm font-bold text-[#191C1E] dark:text-white">OlaSM Assistant</h2>
           <p className="text-xs text-slate-400">Nhắn tin để tiếp tục đặt xe</p>
         </div>
         <button
@@ -96,13 +96,13 @@ export const ConversationWindow: React.FC = () => {
           })}
           {status === "connecting" && (
             <p role="status" className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-white/5 dark:text-slate-300">
-              AloSM đang khởi tạo phiên hội thoại…
+              OlaSM đang khởi tạo phiên hội thoại…
             </p>
           )}
           {status === "processing" && (
             <div className="flex justify-start">
               <div className="rounded-2xl rounded-bl-md bg-slate-100 px-3.5 py-2.5 text-sm text-slate-500 dark:bg-white/10 dark:text-slate-300">
-                AloSM đang trả lời…
+                OlaSM đang trả lời…
               </div>
             </div>
           )}
@@ -130,7 +130,7 @@ export const ConversationWindow: React.FC = () => {
             rows={1}
             disabled={sessionEnded}
             placeholder="Nhập tin nhắn…"
-            aria-label="Tin nhắn cho AloSM"
+            aria-label="Tin nhắn cho OlaSM"
             className="max-h-28 min-h-11 flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#00C9B7] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:bg-white/10"
           />
           <button

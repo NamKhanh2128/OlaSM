@@ -12,6 +12,7 @@ import {
   resolveHandoff,
   type HandoffRecord,
 } from "@/features/operator/api";
+import { shortPlace, shortRoute } from "@/features/operator/addressFormat";
 
 function formatHandoffTime(value: string): string {
   const date = new Date(value);
@@ -29,6 +30,10 @@ function formatHandoffTime(value: string): string {
 function OperatorRoom({ handoff, onLeave }: { handoff: HandoffRecord; onLeave: () => void }) {
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const [busy, setBusy] = useState(false);
+  const bookingState = (handoff.context_snapshot?.booking_state || {}) as Record<string, any>;
+  const pickupName = String(bookingState?.pickup?.display_name || bookingState?.pickup?.raw || "");
+  const destName = String(bookingState?.destination?.display_name || bookingState?.destination?.raw || "");
+  const routeDisplay = shortRoute(pickupName, destName);
 
   const leave = useCallback(async () => {
     setBusy(true);
@@ -50,13 +55,28 @@ function OperatorRoom({ handoff, onLeave }: { handoff: HandoffRecord; onLeave: (
         </div>
         <Headphones className="h-7 w-7 text-[#00A99D]" />
       </div>
-      <div className="mt-5 flex-1 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5">
-        <p className="font-semibold text-slate-800 dark:text-slate-100">{handoff.reason}</p>
-        <p className="mt-2 whitespace-pre-wrap text-slate-600 dark:text-slate-300">{handoff.summary}</p>
+
+      {routeDisplay ? (
+        <div className="mt-4 rounded-xl border border-teal-500/20 bg-teal-50/50 p-3 text-sm font-semibold text-teal-900 dark:bg-teal-950/20 dark:text-teal-200">
+          <span className="text-xs uppercase tracking-wider text-teal-600 dark:text-teal-400">Lộ trình: </span>
+          {routeDisplay}
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex-1 space-y-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5">
+        <div>
+          <span className="text-xs font-semibold uppercase text-slate-400">Lý do chuyển máy</span>
+          <p className="mt-0.5 font-bold text-slate-800 dark:text-slate-100">{handoff.reason}</p>
+        </div>
+        <div>
+          <span className="text-xs font-semibold uppercase text-slate-400">Tóm tắt hội thoại</span>
+          <p className="mt-0.5 whitespace-pre-wrap text-slate-600 dark:text-slate-300">{handoff.summary}</p>
+        </div>
         {handoff.context_snapshot?.summary ? (
-          <p className="mt-4 rounded-xl bg-white p-3 text-slate-600 shadow-sm dark:bg-white/10 dark:text-slate-200">
+          <div className="rounded-xl bg-white p-3 text-slate-600 shadow-sm dark:bg-white/10 dark:text-slate-200">
+            <span className="text-xs font-bold text-[#00A99D]">Ghi chú hệ thống: </span>
             {handoff.context_snapshot.summary}
-          </p>
+          </div>
         ) : null}
       </div>
       <div className="mt-5 flex justify-center gap-4">
@@ -140,7 +160,7 @@ export const OperatorPage: React.FC = () => {
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#008F88]">AloSM operator</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#008F88]">OlaSM operator</p>
           <h1 className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">Hàng chờ tổng đài</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -161,7 +181,18 @@ export const OperatorPage: React.FC = () => {
             <article key={handoff.handoff_id} className={`rounded-2xl border bg-white p-5 shadow-sm dark:bg-slate-950 ${handoff.severity === "CRITICAL" ? "border-rose-400" : "border-slate-200 dark:border-white/10"}`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="font-bold text-slate-900 dark:text-white">{handoff.reason_code} · {handoff.queue}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-slate-900 dark:text-white">{handoff.reason_code} · {handoff.queue}</p>
+                    {handoff.context_snapshot?.booking_state ? (() => {
+                      const bs = handoff.context_snapshot.booking_state as Record<string, any>;
+                      const r = shortRoute(String(bs.pickup?.display_name || ""), String(bs.destination?.display_name || ""));
+                      return r ? (
+                        <span className="rounded-md bg-teal-50 px-2 py-0.5 text-xs font-semibold text-teal-700 dark:bg-teal-950/40 dark:text-teal-300">
+                          {r}
+                        </span>
+                      ) : null;
+                    })() : null}
+                  </div>
                   <p className="mt-1 text-sm text-slate-500">Ưu tiên {handoff.priority} · {handoff.severity}</p>
                   <p className="mt-1 text-xs text-slate-400" title={handoff.created_at}>
                     Tạo lúc {formatHandoffTime(handoff.created_at)}

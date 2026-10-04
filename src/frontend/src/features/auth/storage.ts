@@ -1,27 +1,33 @@
-const ACCESS_TOKEN_KEY = "alosm_access_token";
-const USER_ID_KEY = "alosm_user_id";
-const USER_NAME_KEY = "alosm_user_name";
-const USER_ROLE_KEY = "alosm_user_role";
-const SESSION_ID_KEY = "alosm_session_id";
+const ACCESS_TOKEN_KEY = "olasm_access_token";
+const USER_ID_KEY = "olasm_user_id";
+const USER_NAME_KEY = "olasm_user_name";
+const USER_ROLE_KEY = "olasm_user_role";
+const SESSION_ID_KEY = "olasm_session_id";
+
+const LEGACY_ACCESS_TOKEN_KEY = "alosm_access_token";
+const LEGACY_USER_ID_KEY = "alosm_user_id";
+const LEGACY_USER_NAME_KEY = "alosm_user_name";
+const LEGACY_USER_ROLE_KEY = "alosm_user_role";
+const LEGACY_SESSION_ID_KEY = "alosm_session_id";
 
 export function getAccessToken(): string | null {
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+  return localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem(LEGACY_ACCESS_TOKEN_KEY);
 }
 
 export function getUserId(): string | null {
-  return localStorage.getItem(USER_ID_KEY);
+  return localStorage.getItem(USER_ID_KEY) || localStorage.getItem(LEGACY_USER_ID_KEY);
 }
 
 export function getSessionId(): string | null {
-  return localStorage.getItem(SESSION_ID_KEY);
+  return localStorage.getItem(SESSION_ID_KEY) || localStorage.getItem(LEGACY_SESSION_ID_KEY);
 }
 
 export function getUserName(): string {
-  return localStorage.getItem(USER_NAME_KEY) || "bạn";
+  return localStorage.getItem(USER_NAME_KEY) || localStorage.getItem(LEGACY_USER_NAME_KEY) || "bạn";
 }
 
 export function getUserRole(): string | null {
-  return localStorage.getItem(USER_ROLE_KEY);
+  return localStorage.getItem(USER_ROLE_KEY) || localStorage.getItem(LEGACY_USER_ROLE_KEY);
 }
 
 export function isAuthenticated(): boolean {
@@ -51,9 +57,15 @@ export function clearAuthSession(): void {
   localStorage.removeItem(USER_NAME_KEY);
   localStorage.removeItem(USER_ROLE_KEY);
   localStorage.removeItem(SESSION_ID_KEY);
+  localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_USER_ID_KEY);
+  localStorage.removeItem(LEGACY_USER_NAME_KEY);
+  localStorage.removeItem(LEGACY_USER_ROLE_KEY);
+  localStorage.removeItem(LEGACY_SESSION_ID_KEY);
 }
 
 /** Clear only stale conversation state while preserving the valid login. */
 export function clearSessionId(): void {
   localStorage.removeItem(SESSION_ID_KEY);
+  localStorage.removeItem(LEGACY_SESSION_ID_KEY);
 }

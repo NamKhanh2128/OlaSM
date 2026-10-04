@@ -14,7 +14,7 @@ export const VoiceAIButton: React.FC = () => {
     <button
       type="button"
       onClick={isOpen ? close : open}
-      aria-label={isOpen ? "Kết thúc cuộc gọi với trợ lý AI" : "Gọi trợ lý AI AloSM"}
+      aria-label={isOpen ? "Kết thúc cuộc gọi với trợ lý AI" : "Gọi trợ lý AI OlaSM"}
       aria-expanded={isOpen}
       className={`fixed z-40 flex items-center justify-center rounded-full shadow-xl transition-all duration-300 cursor-pointer
         bottom-24 right-5 w-14 h-14 md:bottom-8 md:right-8 md:w-16 md:h-16

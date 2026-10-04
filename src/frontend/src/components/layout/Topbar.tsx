@@ -46,7 +46,7 @@ export const Topbar: React.FC = () => {
       {/* Mobile Brand Logo */}
       <div className="md:hidden">
         <NavLink to="/">
-          <img src={logoSvg} alt="AloSM AI Booking" className="h-9 w-auto" />
+          <img src={logoSvg} alt="OlaSM AI Booking" className="h-9 w-auto" />
         </NavLink>
       </div>
 
@@ -129,7 +129,7 @@ export const Topbar: React.FC = () => {
                   className="flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:hover:bg-white/10"
                 >
                   <Wallet className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                  <span>Ví AloSM Pay</span>
+                  <span>Ví OlaSM Pay</span>
                 </NavLink>
               </div>
 

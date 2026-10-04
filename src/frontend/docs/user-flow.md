@@ -1,4 +1,4 @@
-# AloSM user flow
+# OlaSM user flow
 
 Cập nhật: **2026-08-16**.
 
@@ -6,7 +6,7 @@ Cập nhật: **2026-08-16**.
 
 1. Người dùng vào `/login`, đăng nhập hoặc đăng ký.
 2. Nếu tài khoản bật TOTP, UI yêu cầu mã 6 số trước khi cấp access token.
-3. Sau đăng nhập, `AppLayout` hiển thị Sidebar/Topbar/MobileNav và nút gọi AloSM Voice.
+3. Sau đăng nhập, `AppLayout` hiển thị Sidebar/Topbar/MobileNav và nút gọi OlaSM Voice.
 4. `VoiceAssistantProvider` khôi phục session hợp lệ hoặc tạo `POST /api/v1/sessions`.
 
 ## 2. Điều hướng chính

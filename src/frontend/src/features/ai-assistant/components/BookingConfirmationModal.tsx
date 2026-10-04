@@ -25,7 +25,7 @@ export const BookingConfirmationModal: React.FC = () => {
             Xác nhận chuyến đi
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Kiểm tra lại thông tin trước khi AloSM tìm tài xế cho anh/chị.
+            Kiểm tra lại thông tin trước khi OlaSM tìm tài xế cho anh/chị.
           </p>
         </div>
 

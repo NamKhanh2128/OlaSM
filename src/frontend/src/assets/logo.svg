@@ -44,8 +44,8 @@
   </g>
 
   <!-- Typography -->
-  <!-- "AloSM" Text -->
-  <text x="94" y="44" font-family="'Montserrat', sans-serif" font-weight="800" font-size="34" fill="#2E3338" letter-spacing="-0.5">AloSM</text>
+  <!-- "OlaSM" Text -->
+  <text x="94" y="44" font-family="'Montserrat', sans-serif" font-weight="800" font-size="34" fill="#2E3338" letter-spacing="-0.5">OlaSM</text>
   
   <!-- "AI Booking" Text -->
   <text x="94" y="68" font-family="'Montserrat', sans-serif" font-weight="500" font-size="22" fill="#5D646B" letter-spacing="0">AI Booking</text>

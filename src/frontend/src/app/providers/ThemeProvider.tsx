@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { ThemeContext, type ThemeMode } from "./theme-context";
 
-const STORAGE_KEY = "alosm_theme";
+const STORAGE_KEY = "olasm_theme";
+const LEGACY_STORAGE_KEY = "alosm_theme";
 
 function readStoredTheme(): ThemeMode {
   try {
-    return window.localStorage.getItem(STORAGE_KEY) === "dark" ? "dark" : "light";
+    const stored = window.localStorage.getItem(STORAGE_KEY) || window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    return stored === "dark" ? "dark" : "light";
   } catch {
     // localStorage có thể bị chặn (chế độ riêng tư nghiêm ngặt) — mặc định sáng.
     return "light";

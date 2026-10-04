@@ -124,7 +124,7 @@ export const LoginForm: React.FC = () => {
 
   return (
     <div className="bg-white w-full max-w-md rounded-3xl p-8 relative z-10 shadow-xl border border-slate-200 flex flex-col items-center dark:bg-[#12161A] dark:border-white/10">
-      <img src={logoSvg} alt="AloSM Voice" className="h-14 w-auto mb-5" />
+      <img src={logoSvg} alt="OlaSM Voice" className="h-14 w-auto mb-5" />
       <h1 className="text-2xl font-extrabold text-[#191C1E] dark:text-white">{isRegistering ? "Tạo tài khoản" : "Chào mừng trở lại"}</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400 text-center mt-2">Đăng nhập để đặt xe bằng giọng nói hoặc tin nhắn.</p>
       <form onSubmit={handleSubmit} className="w-full mt-7 space-y-4">

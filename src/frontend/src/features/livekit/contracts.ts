@@ -1,4 +1,5 @@
-export const BOOKING_STATE_TOPIC = "alosm.booking_state.v1";
+export const BOOKING_STATE_TOPIC = "olasm.booking_state.v1";
+export const LEGACY_BOOKING_STATE_TOPIC = "alosm.booking_state.v1";
 
 export type PlaceState = {
   place_id: string;
