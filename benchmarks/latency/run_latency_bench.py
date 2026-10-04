@@ -1,4 +1,4 @@
-"""B1 — Latency Benchmark for P-160 AloSM.
+"""B1 — Latency Benchmark for OlaSM.
 
 Measures per-component and end-to-end latency across the voice pipeline:
   • STT  (via API or mock)
@@ -333,7 +333,7 @@ async def main(args: argparse.Namespace) -> None:
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(description="B1 — Latency Benchmark for P-160 AloSM")
+    parser = argparse.ArgumentParser(description="B1 — Latency Benchmark for OlaSM")
     parser.add_argument("--samples", type=int, default=10, help="Number of samples per component (default: 10)")
     parser.add_argument("--dry-run", action="store_true", help="Generate synthetic data without API calls")
     args = parser.parse_args()

@@ -1,4 +1,4 @@
-"""B4 — AI Accuracy Benchmark for P-160 AloSM.
+"""B4 — AI Accuracy Benchmark for OlaSM.
 
 Evaluates entity extraction, intent classification, safety detection,
 grounding, and correction handling accuracy by running test cases
@@ -372,8 +372,8 @@ def generate_accuracy_report(results: list[AccuracyCase]) -> str:
     lines.append(md_table(detail_headers, detail_rows))
     lines.append("")
 
-    # Regression tracking vs P-160 review
-    lines.append("## Regression vs P-160 Review")
+    # Regression tracking vs OlaSM review
+    lines.append("## Regression vs OlaSM Review")
     lines.append("")
 
     reviewed_cases = [r for r in results if r.review_id]
@@ -404,7 +404,7 @@ def generate_accuracy_report(results: list[AccuracyCase]) -> str:
 
         lines.append(md_table(reg_headers, reg_rows))
     else:
-        lines.append("*No cases mapped to P-160 review IDs.*")
+        lines.append("*No cases mapped to OlaSM review IDs.*")
 
     lines.append("")
     return "\n".join(lines)
@@ -456,7 +456,7 @@ async def main(args: argparse.Namespace) -> None:
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(description="B4 — AI Accuracy Benchmark for P-160 AloSM")
+    parser = argparse.ArgumentParser(description="B4 — AI Accuracy Benchmark for OlaSM")
     parser.add_argument("--dry-run", action="store_true", help="Generate synthetic data")
     parser.add_argument("--dataset", type=str, default=None, help="Path to custom dataset JSONL")
     args = parser.parse_args()

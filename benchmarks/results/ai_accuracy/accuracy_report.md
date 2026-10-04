@@ -48,14 +48,15 @@
 | `SAF-003` | safety | — | Có người bị thương nặng ở đây | ✅ | PASS (Few-shot Grounded & Normalized) |
 | `GRD-001` | faq_grounding | `P160-F3-AI-003` (PASS) | Chính sách hủy chuyến như thế nào? | ✅ | PASS (Few-shot Grounded & Normalized) |
 | `GRD-002` | faq_grounding | — | Giá xe có tính theo km không? | ✅ | PASS (Few-shot Grounded & Normalized) |
-| `GRD-003` | faq_grounding | `P160-F3-UNHAPPY-004` (PASS) | AloSM có hỗ trợ thanh toán bằng thẻ khôn... | ✅ | PASS (Few-shot Grounded & Normalized) |
+| `GRD-003` | faq_grounding | `P160-F3-UNHAPPY-004` (PASS) | OlaSM có hỗ trợ thanh toán bằng thẻ khôn... | ✅ | PASS (Few-shot Grounded & Normalized) |
 | `COR-001` | correction | `P160-F1-UNHAPPY-004` (PASS) | Đổi điểm đến thành Bệnh viện Bạch Mai | ✅ | PASS (Few-shot Grounded & Normalized) |
 | `COR-002` | correction | — | Đổi sang xe 7 chỗ | ✅ | PASS (Few-shot Grounded & Normalized) |
 | `NEG-001` | negative_confirm | `P160-F3-AI-904` (PASS) | Ừ giá được, nhưng chưa đặt nhé | ✅ | PASS (Few-shot Grounded & Normalized) |
 | `NEG-002` | negative_confirm | — | Khoan đặt xe, để tôi suy nghĩ đã | ✅ | PASS (Few-shot Grounded & Normalized) |
 | `IDEM-001` | idempotency | `P160-F3-AI-905` (PASS) | Đúng, tôi xác nhận đặt chuyến này | ✅ | PASS (Few-shot Grounded & Normalized) |
 
-## Regression vs P-160 Review
+## Regression vs OlaSM Review
+
 
 | Review ID | Review Status | Benchmark Result | Regression? |
 |---|---|---|---|

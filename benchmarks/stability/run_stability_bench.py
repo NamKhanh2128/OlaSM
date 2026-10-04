@@ -1,4 +1,4 @@
-"""B3 — Stability Benchmark for P-160 AloSM.
+"""B3 — Stability Benchmark for OlaSM.
 
 Measures error rates, timeout rates, session recovery, idempotency,
 and concurrent session handling.
@@ -471,7 +471,7 @@ async def main(args: argparse.Namespace) -> None:
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(description="B3 — Stability Benchmark for P-160 AloSM")
+    parser = argparse.ArgumentParser(description="B3 — Stability Benchmark for OlaSM")
     parser.add_argument("--samples", type=int, default=20, help="Number of error-rate samples (default: 20)")
     parser.add_argument("--concurrency", type=int, default=5, help="Concurrent session count (default: 5)")
     parser.add_argument("--dry-run", action="store_true", help="Generate synthetic data")

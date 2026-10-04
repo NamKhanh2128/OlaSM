@@ -1,8 +1,8 @@
-# P-160 AloSM — Benchmark Suite
+# OlaSM — Benchmark Suite
 
 ## Tổng quan
 
-Bộ benchmark đo lường 5 khía cạnh của sản phẩm AloSM:
+Bộ benchmark đo lường 5 khía cạnh của sản phẩm OlaSM:
 
 | Module | Đo gì | Thời gian | Cost |
 |---|---|---|---|
@@ -55,7 +55,7 @@ uv run python -m benchmarks.e2e.run_e2e_bench
 ### Chạy trên staging
 
 ```bash
-VITE_API_URL=https://staging.alosm.nairyuuu.site uv run python -m benchmarks.run_all --samples 10
+VITE_API_URL=https://staging.olasm.nairyuuu.site uv run python -m benchmarks.run_all --samples 10
 ```
 
 ### Chỉ tạo report tổng hợp (sau khi đã chạy benchmark)

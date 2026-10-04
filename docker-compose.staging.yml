@@ -1,14 +1,14 @@
-name: p160-staging
+name: olasm-staging
 
 services:
   backend:
-    image: ghcr.io/ai20k-build-phase-cohort-3/p-160:development
+    image: ghcr.io/ai20k-build-phase-cohort-3/olasm:development
     restart: unless-stopped
     env_file:
-      - /opt/p160-staging/.env.production
+      - /opt/olasm-staging/.env.production
     volumes:
       - app-data:/app/data
-      - /opt/p160-staging/google-service-account.json:/run/secrets/google-service-account.json:ro
+      - /opt/olasm-staging/google-service-account.json:/run/secrets/google-service-account.json:ro
     expose:
       - "8000"
     user: root
@@ -19,14 +19,14 @@ services:
       retries: 3
 
   voice-worker:
-    image: ghcr.io/ai20k-build-phase-cohort-3/p-160:development
+    image: ghcr.io/ai20k-build-phase-cohort-3/olasm:development
     command: ["python", "-m", "src.voice_agent.server", "dev"]
     restart: unless-stopped
     env_file:
-      - /opt/p160-staging/.env.production
+      - /opt/olasm-staging/.env.production
     volumes:
       - app-data:/app/data
-      - /opt/p160-staging/google-service-account.json:/run/secrets/google-service-account.json:ro
+      - /opt/olasm-staging/google-service-account.json:/run/secrets/google-service-account.json:ro
     healthcheck:
       disable: true
     depends_on:
@@ -34,7 +34,7 @@ services:
         condition: service_healthy
 
   frontend:
-    image: ghcr.io/ai20k-build-phase-cohort-3/p-160:frontend-development
+    image: ghcr.io/ai20k-build-phase-cohort-3/olasm:frontend-development
     restart: unless-stopped
     expose:
       - "80"

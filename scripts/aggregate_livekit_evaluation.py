@@ -1,8 +1,8 @@
-"""Aggregate native LiveKit events and AloSM RTC smoke results.
+"""Aggregate native LiveKit events and OlaSM RTC smoke results.
 
 This is intentionally glue code: LiveKit owns event generation, per-turn metrics,
 usage accounting, Room lifecycle, and agent dispatch. The script only computes
-project-level percentiles, rates, and AloSM booking invariants.
+project-level percentiles, rates, and OlaSM booking invariants.
 """
 
 from __future__ import annotations
@@ -150,7 +150,7 @@ def cross_boundary_latencies(smoke_rows: list[dict[str, Any]], log_paths: list[P
 
 
 def check_business_invariants(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Check only invariants observable from structured AloSM booking state."""
+    """Check only invariants observable from structured OlaSM booking state."""
 
     violations: list[dict[str, object]] = []
     session_booking_ids: dict[str, set[str]] = defaultdict(set)
@@ -438,7 +438,7 @@ def _report_markdown(
             f"- Passed: {invariants['passed']}",
             f"- Violations: {invariants['violation_count']}",
             "",
-            "> This report aggregates native LiveKit events and structured AloSM state. "
+            "> This report aggregates native LiveKit events and structured OlaSM state. "
             "It does not infer business state from transcripts.",
             "",
         ]

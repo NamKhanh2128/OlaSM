@@ -71,7 +71,7 @@ def evaluate(dataset_path: str, api_url: str = "http://localhost:8000") -> dict:
         try:
             url = f"{api_url}/api/v1/places/search?q={url_quote(query)}&limit=5"
             start = time.monotonic()
-            req = Request(url, headers={"User-Agent": "AloSM-Eval/1.0"})
+            req = Request(url, headers={"User-Agent": "OlaSM-Eval/1.0"})
             with urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read())
             elapsed = time.monotonic() - start
@@ -132,7 +132,7 @@ def evaluate(dataset_path: str, api_url: str = "http://localhost:8000") -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate Vietnam place search quality")
     parser.add_argument("--dataset", required=True, help="Path to evaluation CSV")
-    parser.add_argument("--api-url", default="http://localhost:8000", help="AloSM API base URL")
+    parser.add_argument("--api-url", default="http://localhost:8000", help="OlaSM API base URL")
     parser.add_argument("--output", help="Output JSON report path")
     args = parser.parse_args()
 

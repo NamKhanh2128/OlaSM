@@ -1,4 +1,4 @@
-"""Base classes and utilities for P-160 AloSM benchmark suite.
+"""Base classes and utilities for OlaSM benchmark suite.
 
 Provides TimingResult, CostEntry, statistical helpers, and report
 formatting shared by all benchmark modules.

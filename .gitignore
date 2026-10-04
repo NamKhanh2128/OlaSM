@@ -43,6 +43,8 @@ test_cases/
 Thumbs.db
 desktop.ini
 $RECYCLE.BIN/
+~$*
+*.tmp
 
 # Data (never commit large/generated data) — ngoại trừ data nguồn nhỏ, có chủ đích
 # commit (gazetteer địa danh cho Voice AI, xem src/voice/text/gazetteer.py). LƯU Ý:

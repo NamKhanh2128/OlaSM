@@ -1,10 +1,10 @@
 .PHONY: run livekit-backend livekit-worker livekit-frontend seed-demo-operator test test-coverage frontend-check ci-check lint compile migration-check format typecheck check clean
 
 run:
-	uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+	uvicorn src.backend.main:app --reload --host 0.0.0.0 --port 8000
 
 livekit-backend:
-	uv run --python 3.12 uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+	uv run --python 3.12 uvicorn src.backend.main:app --reload --host 0.0.0.0 --port 8000
 
 livekit-worker:
 	uv run --python 3.12 python -m src.voice_agent.server dev --log-level INFO

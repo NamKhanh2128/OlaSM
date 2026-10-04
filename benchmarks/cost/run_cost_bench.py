@@ -1,4 +1,4 @@
-"""B2 — Cost Benchmark for P-160 AloSM.
+"""B2 — Cost Benchmark for OlaSM.
 
 Tracks all billable API usage across conversation scenarios and
 calculates cost-per-booking, cost breakdown by component, and
@@ -467,7 +467,7 @@ async def main(args: argparse.Namespace) -> None:
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(description="B2 — Cost Benchmark for P-160 AloSM")
+    parser = argparse.ArgumentParser(description="B2 — Cost Benchmark for OlaSM")
     parser.add_argument("--samples", type=int, default=3, help="Runs per scenario (default: 3)")
     parser.add_argument("--dry-run", action="store_true", help="Generate synthetic data")
     args = parser.parse_args()

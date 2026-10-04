@@ -24,7 +24,7 @@ from urllib.request import Request, urlopen
 GEOFABRIK_URL = "https://download.geofabrik.de/asia/vietnam-latest.osm.pbf"
 DEFAULT_OUTPUT_DIR = Path("data/osm/raw")
 FILENAME = "vietnam-latest.osm.pbf"
-USER_AGENT = "AloSM-OSM-Downloader/1.0"
+USER_AGENT = "OlaSM-OSM-Downloader/1.0"
 
 
 def download(output_dir: Path, *, force: bool = False) -> None:

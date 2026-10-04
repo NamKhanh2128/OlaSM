@@ -1,4 +1,4 @@
-"""Visual Chart & Infographic Generator for P-160 AloSM Benchmarks.
+"""Visual Chart & Infographic Generator for OlaSM Benchmarks.
 
 Produces publication-grade, high-resolution visual charts (PNG) with
 a modern, bright, clear, and presentation-ready executive aesthetic.
@@ -221,7 +221,7 @@ def generate_latency_waterfall_chart(lat_data: dict[str, dict[str, Any]]):
     ax_top.set_xlim(0, max(2400, text_turn_p95 + 200))
     ax_top.set_ylim(-0.7, len(phases) - 0.2)
     ax_top.grid(True, axis="x", alpha=0.6)
-    ax_top.set_title("ALOSM VOICE LATENCY WATERFALL — PHAN TICH THOI GIAN 1 LUOT HOI THOAI",
+    ax_top.set_title("OLASM VOICE LATENCY WATERFALL — PHAN TICH THOI GIAN 1 LUOT HOI THOAI",
                      fontsize=14, fontweight="bold", color=TEXT_PRIMARY, pad=18)
 
     # --- Bottom: Clean Light Styled Table with precise column widths ---
@@ -604,7 +604,7 @@ def generate_master_dashboard(lat_data: dict[str, Any], cost_data: list[Any],
     fig = plt.figure(figsize=(19.2, 10.8), dpi=200)
 
     # Header title banner
-    fig.text(0.05, 0.945, "ALOSM (P-160) — BENCHMARK SCORECARD DASHBOARD", fontsize=20, fontweight="bold", color=TEXT_PRIMARY)
+    fig.text(0.05, 0.945, "OLASM — BENCHMARK SCORECARD DASHBOARD", fontsize=20, fontweight="bold", color=TEXT_PRIMARY)
     fig.text(0.05, 0.915, "He thong Voice AI Dat Xe Taxi Thong Minh • Bao cao hieu nang, do tin cay va chi phi Demo Day", fontsize=11.5, color=TEXT_SECONDARY)
 
     # 4 Top KPI Cards (Dynamically computed from actual benchmark data)
@@ -680,7 +680,8 @@ def generate_master_dashboard(lat_data: dict[str, Any], cost_data: list[Any],
     # Subplot C: Review Regression Mapping Summary (Left Bottom)
     ax_c = fig.add_subplot(gs[1, 0])
     ax_c.axis("off")
-    ax_c.set_title("TONG HOP PASS GATE REVIEW (P-160 TEST CATALOG)", fontsize=12, fontweight="bold", pad=12, color=TEXT_PRIMARY)
+    ax_c.set_title("TONG HOP PASS GATE REVIEW (OLASM TEST CATALOG)", fontsize=12, fontweight="bold", pad=12, color=TEXT_PRIMARY)
+
 
     p_cnt = sum(1 for v in REVIEW_TEST_MAP.values() if v["status"] == "PASS")
     f_cnt = sum(1 for v in REVIEW_TEST_MAP.values() if v["status"] == "FAIL")

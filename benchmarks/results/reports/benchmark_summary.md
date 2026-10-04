@@ -1,4 +1,4 @@
-# 📊 P-160 AloSM — Benchmark Dashboard
+# 📊 OlaSM — Benchmark Dashboard
 
 **Generated**: 2026-09-04 18:00:03 SE Asia Standard Time
 
@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-Benchmark suite đo lường 5 khía cạnh của sản phẩm AloSM theo yêu cầu review:
+Benchmark suite đo lường 5 khía cạnh của sản phẩm OlaSM theo yêu cầu review:
 
 | Module | Đo gì | Report |
 |---|---|---|
@@ -197,7 +197,7 @@ Chi tiết từng lần đo nằm trong JSON files tại `benchmarks/results/lat
 | `NEG-002` | negative_confirm | — | Khoan đặt xe, để tôi suy nghĩ đã | ✅ | PASS (Few-shot Grounded & Normalized) |
 | `IDEM-001` | idempotency | `P160-F3-AI-905` (PASS) | Đúng, tôi xác nhận đặt chuyến này | ✅ | PASS (Few-shot Grounded & Normalized) |
 
-## Regression vs P-160 Review
+## Regression vs OlaSM Review
 
 | Review ID | Review Status | Benchmark Result | Regression? |
 |---|---|---|---|
@@ -258,7 +258,7 @@ Chi tiết từng lần đo nằm trong JSON files tại `benchmarks/results/lat
 
 ---
 
-## Mapping với P-160 Review Test Catalog
+## Mapping với OlaSM Review Test Catalog
 
 Bảng so sánh kết quả benchmark với verdict cuối cùng từ review:
 

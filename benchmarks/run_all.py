@@ -36,7 +36,7 @@ def run_module(module: str, extra_args: list[str]) -> int:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    parser = argparse.ArgumentParser(description="Run all P-160 benchmarks")
+    parser = argparse.ArgumentParser(description="Run all OlaSM benchmarks")
     parser.add_argument("--dry-run", action="store_true", help="Synthetic data mode")
     parser.add_argument("--samples", type=int, default=10, help="Samples per benchmark")
     parser.add_argument("--skip", nargs="*", default=[], help="Module names to skip (e.g. B1 B2)")

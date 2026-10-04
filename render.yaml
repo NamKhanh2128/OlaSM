@@ -4,7 +4,7 @@
 services:
   # 1. FastAPI Web Backend
   - type: web
-    name: alosm-backend
+    name: olasm-backend
     env: docker
     dockerfilePath: Dockerfile
     dockerContext: .
@@ -44,7 +44,7 @@ services:
 
   # 2. LiveKit Voice Agent Worker
   - type: worker
-    name: alosm-voice-worker
+    name: olasm-voice-worker
     env: docker
     dockerfilePath: Dockerfile
     dockerContext: .

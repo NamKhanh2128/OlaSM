@@ -1,4 +1,4 @@
-"""Configuration and pricing tables for P-160 AloSM benchmarks.
+"""Configuration and pricing tables for OlaSM benchmarks.
 
 All pricing is approximate and should be updated to match actual provider
 contracts before running cost benchmarks.

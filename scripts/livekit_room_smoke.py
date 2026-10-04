@@ -3,7 +3,7 @@
 The script uses LiveKit's RTC client as the simulated participant. It does not
 replace Room/WebRTC, agent dispatch, AgentSession, or any media pipeline node.
 
-Run while the ``alosm-voice`` worker is registered::
+Run while the ``olasm-voice`` worker is registered::
 
     uv run python -m scripts.livekit_room_smoke --runs 30
     uv run python -m scripts.livekit_room_smoke --runs 5 --booking

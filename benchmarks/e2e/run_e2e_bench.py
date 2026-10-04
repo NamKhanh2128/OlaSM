@@ -1,4 +1,4 @@
-"""B5 — E2E Functional Benchmark for P-160 AloSM.
+"""B5 — E2E Functional Benchmark for OlaSM.
 
 Runs scripted end-to-end conversation scenarios via the text API
 and validates booking state machine, correction flow, handoff,
@@ -203,7 +203,7 @@ SCENARIOS: list[E2EScenario] = [
         review_ids=["P160-F3-UNHAPPY-004"],
         steps=[
             E2EStep(
-                user_message="AloSM có hỗ trợ đặt vé máy bay không?",
+                user_message="OlaSM có hỗ trợ đặt vé máy bay không?",
                 expect_not_in_response=["có", "chắc chắn"],
                 description="Should decline or refer to human",
             ),
@@ -491,7 +491,7 @@ async def main(args: argparse.Namespace) -> None:
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(description="B5 — E2E Functional Benchmark for P-160 AloSM")
+    parser = argparse.ArgumentParser(description="B5 — E2E Functional Benchmark for OlaSM")
     parser.add_argument("--dry-run", action="store_true", help="Generate synthetic data")
     args = parser.parse_args()
     asyncio.run(main(args))

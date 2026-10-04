@@ -1,7 +1,7 @@
-# fly.toml app configuration file for AloSM Voice AI
+# fly.toml app configuration file for OlaSM Voice AI
 # Reference: https://fly.io/docs/reference/configuration/
 
-app = "alosm-voice-ai"
+app = "olasm-voice-ai"
 primary_region = "sin" # Singapore region for lowest latency to Vietnam
 
 [build]

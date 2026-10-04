@@ -1,4 +1,4 @@
-"""Aggregate report generator for P-160 AloSM benchmark suite.
+"""Aggregate report generator for OlaSM benchmark suite.
 
 Reads individual benchmark results and produces a unified markdown
 dashboard suitable for Demo Day presentation.
@@ -35,7 +35,7 @@ def _count_lines_starting(report: str, prefix: str) -> int:
 def generate_dashboard() -> str:
     """Build the master benchmark dashboard."""
     lines = [
-        "# 📊 P-160 AloSM — Benchmark Dashboard",
+        "# 📊 OlaSM — Benchmark Dashboard",
         "",
         f"**Generated**: {time.strftime('%Y-%m-%d %H:%M:%S %Z')}",
         "",
@@ -46,7 +46,7 @@ def generate_dashboard() -> str:
     # --- Executive Summary ---
     lines.append("## Executive Summary")
     lines.append("")
-    lines.append("Benchmark suite đo lường 5 khía cạnh của sản phẩm AloSM theo yêu cầu review:")
+    lines.append("Benchmark suite đo lường 5 khía cạnh của sản phẩm OlaSM theo yêu cầu review:")
     lines.append("")
 
     summary_items = [
@@ -96,8 +96,9 @@ def generate_dashboard() -> str:
             lines.append("---")
             lines.append("")
 
-    # --- P-160 Review Regression Map ---
-    lines.append("## Mapping với P-160 Review Test Catalog")
+    # --- OlaSM Review Regression Map ---
+    lines.append("## Mapping với OlaSM Review Test Catalog")
+
     lines.append("")
     lines.append("Bảng so sánh kết quả benchmark với verdict cuối cùng từ review:")
     lines.append("")

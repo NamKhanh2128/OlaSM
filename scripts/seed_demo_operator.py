@@ -18,7 +18,7 @@ async def seed_demo_operator(
     *,
     phone: str = DEMO_OPERATOR_PHONE,
     password: str = DEMO_OPERATOR_PASSWORD,
-    full_name: str = "Tổng đài viên AloSM (Demo)",
+    full_name: str = "Tổng đài viên OlaSM (Demo)",
 ) -> None:
     settings = get_settings()
     if settings.app_env == "production":
@@ -44,9 +44,9 @@ async def seed_demo_operator(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Seed a development-only AloSM operator")
+    parser = argparse.ArgumentParser(description="Seed a development-only OlaSM operator")
     parser.add_argument("--phone", default=DEMO_OPERATOR_PHONE)
     parser.add_argument("--password", default=DEMO_OPERATOR_PASSWORD)
-    parser.add_argument("--name", default="Tổng đài viên AloSM (Demo)")
+    parser.add_argument("--name", default="Tổng đài viên OlaSM (Demo)")
     args = parser.parse_args()
     asyncio.run(seed_demo_operator(phone=args.phone, password=args.password, full_name=args.name))

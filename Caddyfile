@@ -1,3 +1,4 @@
-staging.alosm.nairyuuu.site {
+staging.olasm.nairyuuu.site, staging.alosm.nairyuuu.site {
     reverse_proxy frontend:80
 }
+
