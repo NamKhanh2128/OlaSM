@@ -1,4 +1,6 @@
 import re
+import unicodedata
+from dataclasses import dataclass
 
 from pydantic import ValidationError
 
@@ -62,13 +64,183 @@ _TOOL_PARAM_MODELS = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class AudioBudget:
+    """Frame and session ceilings for voice streaming in bytes."""
+
+    max_frame_bytes: int = 65536
+    max_session_bytes: int = 19660800
+
+    def check_frame(self, size: int) -> bool:
+        return 0 <= size <= self.max_frame_bytes
+
+    def check_session(self, total_sent: int) -> bool:
+        return 0 <= total_sent <= self.max_session_bytes
+
+
+_BASE64_RUN = re.compile(
+    r"(?=[A-Za-z0-9+/]{24,})"
+    r"(?=[A-Za-z0-9+/]*[A-Z])(?=[A-Za-z0-9+/]*[a-z])"
+    r"(?=[A-Za-z0-9+/]*[0-9])[A-Za-z0-9+/]*={0,2}"
+)
+_HEX_RUN = re.compile(r"(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{32,}")
+
+_INSTRUCTION_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(
+            r"bỏ qua (?:các |mọi |toàn bộ )?(?:chỉ thị|hướng dẫn|lệnh|prompt|system prompt|yêu cầu)"
+        ),
+        "bỏ qua chỉ thị/hướng dẫn",
+    ),
+    (
+        re.compile(r"quên (?:các |mọi )?(?:chỉ thị|hướng dẫn|lệnh)"),
+        "quên chỉ thị/hướng dẫn",
+    ),
+    (
+        re.compile(r"(?:không|đừng) làm theo (?:các |mọi )?(?:chỉ thị|hướng dẫn|lệnh|yêu cầu)"),
+        "không/đừng làm theo chỉ thị",
+    ),
+    (re.compile(r"(?:không|đừng) làm theo"), "không/đừng làm theo"),
+    (re.compile(r"không tuân theo"), "không tuân theo"),
+    (
+        re.compile(r"không nghe theo (?:các |mọi )?(?:chỉ thị|hướng dẫn|lệnh)"),
+        "không nghe theo chỉ thị",
+    ),
+    (re.compile(r"\bignore (?:all |the |your |previous )?instructions\b"), "ignore instructions"),
+    (re.compile(r"\bignore everything\b"), "ignore everything"),
+    (re.compile(r"\bforget (?:all |previous )?instructions\b"), "forget instructions"),
+    (re.compile(r"\bforget everything\b"), "forget everything"),
+    (re.compile(r"\bdisregard (?:all |previous )?instructions\b"), "disregard instructions"),
+    (re.compile(r"\bdisregard all previous\b"), "disregard all previous"),
+    (
+        re.compile(r"\b(?:print|reveal|show) (?:your |the )?system prompt\b"),
+        "yêu cầu lộ system prompt",
+    ),
+    (re.compile(r"\bwhat is your system prompt\b"), "hỏi nội dung system prompt"),
+    (re.compile(r"system prompt"), "nhắc tới system prompt"),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ScanResult:
+    """Result of deterministic injection scan."""
+
+    flagged: bool
+    reason: str | None = None
+
+
+class InjectionScanner:
+    """Deterministic pre-LLM scan to detect prompt injection attempts."""
+
+    def scan(self, text: str) -> ScanResult:
+        stripped = text.strip()
+        if not stripped:
+            return ScanResult(flagged=False)
+        lowered = stripped.lower()
+        for rule, reason in _INSTRUCTION_RULES:
+            if rule.search(lowered):
+                return ScanResult(flagged=True, reason=reason)
+        if _BASE64_RUN.search(stripped):
+            return ScanResult(flagged=True, reason="chuỗi dài dạng base64")
+        if _HEX_RUN.search(stripped):
+            return ScanResult(flagged=True, reason="chuỗi dài dạng hex")
+        return ScanResult(flagged=False)
+
+
+_WHITESPACE = re.compile(r"\s+")
+_OUT_OF_SCOPE_PHRASES: tuple[str, ...] = (
+    # Weather
+    "thoi tiet",
+    "du bao",
+    "troi mua",
+    "troi nang",
+    "troi lanh",
+    "troi nong",
+    "nhiet do",
+    # News
+    "tin tuc",
+    "tin moi",
+    "thoi su",
+    # Small talk
+    "ban la ai",
+    "ban ten gi",
+    "ban lam gi",
+    "gioi thieu ve ban",
+    "ai lap trinh ra ban",
+    # Stories & entertainment
+    "ke chuyen",
+    "cau chuyen",
+    "bai hat",
+    "ca si",
+    "hat cho toi",
+    "loi bai hat",
+    # General web
+    "google",
+    # English
+    "what is the weather",
+    "what's the weather",
+    "tell me a joke",
+    "who are you",
+    "what can you do",
+    "sing me a song",
+    "sing a song",
+)
+
+
+def _normalize_scope_text(value: str) -> str:
+    lowered = value.lower().replace("đ", "d")
+    decomposed = unicodedata.normalize("NFD", lowered)
+    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    return _WHITESPACE.sub(" ", stripped).strip()
+
+
+_IN_SCOPE_OVERRIDE_KEYWORDS: tuple[str, ...] = (
+    "dat xe",
+    "dat giup",
+    "goi xe",
+    "di tu",
+    "don toi",
+    "di den",
+    "gia cuoc",
+    "bao nhieu tien",
+    "tra cuu",
+    "chuyen xe",
+    "tai xe",
+    "huy chuyen",
+    "loai xe",
+    "gia tien",
+    "bao gia",
+    "don o",
+    "den ",
+    "cho toi di",
+)
+
+
+def is_out_of_scope(text: str) -> bool:
+    """Whether the utterance is clearly out of scope for ride booking or fare queries."""
+    normalized = _normalize_scope_text(text)
+    if not normalized:
+        return False
+    if any(keyword in normalized for keyword in _IN_SCOPE_OVERRIDE_KEYWORDS):
+        return False
+    return any(phrase in normalized for phrase in _OUT_OF_SCOPE_PHRASES)
+
+
 class GuardrailViolationError(ValueError):
     pass
 
 
 class AgentGuardrails:
-    def __init__(self, policy: AgentPolicy | None = None) -> None:
+    def __init__(
+        self,
+        policy: AgentPolicy | None = None,
+        injection_scanner: InjectionScanner | None = None,
+    ) -> None:
         self.policy = policy or AgentPolicy()
+        self.injection_scanner = injection_scanner or InjectionScanner()
+
+    def scan_input(self, text: str) -> ScanResult:
+        return self.injection_scanner.scan(text)
 
     def validate_and_sanitize(
         self,

@@ -60,6 +60,24 @@ class BookingData(BaseModel):
     estimated_currency: str | None = None
     estimated_eta_minutes: int | None = Field(default=None, ge=0)
     estimated_distance_km: float | None = Field(default=None, ge=0)
+    # ── Offer (populated by get_personalized_offer tool result) ─────────────
+    promotion_code: str | None = None           # Mã khuyến mãi áp dụng
+    promotion_snapshot: dict | None = None      # Full BestOffer.to_snapshot()
+    offer_tier: str | None = None               # PREMIUM | STANDARD | SUGGEST
+    offer_discount_vnd: int | None = None       # Số tiền giảm (VND)
+    s_offer: float | None = None                # Điểm ưu đãi S_offer (Báo cáo Mục 4.2)
+    c_offer: float | None = None                # Alias S_offer
+    offer_speech_suggestion: str | None = None  # Câu thoại gợi ý chuẩn hóa GSM
+    offer_skipped: bool = False                 # True nếu user chủ động bỏ qua
+    # ── Multimodal & Selective Autonomy (Báo cáo Mục 4.3) ───────────────────
+    c_trip: float | None = None                 # c_trip = w1*p_stt + w2*p_intent + w3*p_addr + w4*p_vision
+    autonomy_decision: str | None = None        # AUTO_BOOK | CLARIFY | HITL_HANDOFF
+    p_stt: float | None = None                  # PhoWhisper confidence
+    p_intent: float | None = None               # LLM intent confidence
+    p_addr: float | None = None                 # RapidFuzz match score
+    p_vision: float | None = None               # Multimodal VLM grounding confidence
+    visual_grounding_result: dict | None = None # Landmark/Pillar spatial details
+    # ── Phone & correction ──────────────────────────────────────────────────
     phone_number: str | None = None
     correction_field: CorrectionField | None = None
     correction_return_step: BookingStep | None = None
@@ -113,6 +131,12 @@ def clear_fare_estimate(data: BookingData) -> BookingData:
             "estimated_currency": None,
             "estimated_eta_minutes": None,
             "estimated_distance_km": None,
+            # Reset offer khi fare thay đổi — offer cũ không còn valid
+            "promotion_code": None,
+            "promotion_snapshot": None,
+            "offer_tier": None,
+            "offer_discount_vnd": None,
+            "offer_skipped": False,
         },
         deep=True,
     )

@@ -69,6 +69,46 @@ SERVICE_TOOLS = [
         {},
     ),
     tool_definition(
+        "get_personalized_offer",
+        (
+            "Lấy mã ưu đãi cá nhân hóa tốt nhất cho booking hiện tại dựa trên lịch sử "
+            "hành vi khách hàng. Gọi ngay sau khi estimate_fare thành công và TRƯỚC khi "
+            "request_booking_confirmation. Trả về offer phù hợp nhất (offer_tier: PREMIUM/"
+            "STANDARD/SUGGEST) hoặc {\"offer\": null} nếu không có offer phù hợp."
+        ),
+        {
+            "fare_estimate_id": {
+                "type": "string",
+                "description": "ID báo giá hiện tại từ kết quả estimate_fare.",
+            },
+            "vehicle_type": {
+                "type": "string",
+                "description": "Loại xe đang chọn, ví dụ CAR_4.",
+            },
+        },
+        ["fare_estimate_id", "vehicle_type"],
+    ),
+    tool_definition(
+        "ground_pickup_image",
+        "Định vị điểm đón qua ảnh chụp thực tế bằng Multimodal VLM và Spatial OCR (hầm B3 Vincom, cột số 4 TSN...).",
+        {
+            "image_url": {"type": "string", "description": "URL ảnh khách gửi qua Zalo/Web link."},
+            "image_base64": {"type": "string", "description": "Chuỗi base64 của ảnh khách chụp."},
+            "text_hint": {"type": "string", "description": "Gợi ý hoặc lời miêu tả bằng giọng nói của khách về ảnh."},
+        },
+    ),
+    tool_definition(
+        "evaluate_trip_confidence",
+        "Tính toán điểm tin cậy tổng thể c_trip (Dynamic Confidence Fusion) và quyết định Selective Autonomy (Auto-book / Clarify / HITL).",
+        {
+            "p_stt": {"type": "number", "minimum": 0, "maximum": 1, "description": "Confidence STT PhoWhisper."},
+            "p_intent": {"type": "number", "minimum": 0, "maximum": 1, "description": "Xác suất intent từ LLM."},
+            "p_addr": {"type": "number", "minimum": 0, "maximum": 1, "description": "Điểm khớp địa chỉ RapidFuzz + Mapbox."},
+            "p_vision": {"type": "number", "minimum": 0, "maximum": 1, "description": "Điểm tin cậy đối chiếu ảnh đón nếu có."},
+        },
+        ["p_stt", "p_intent", "p_addr"],
+    ),
+    tool_definition(
         "request_booking_confirmation",
         "Tạo câu tóm tắt deterministic và chuyển state sang chờ khách xác nhận.",
         {},

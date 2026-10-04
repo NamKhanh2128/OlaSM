@@ -42,8 +42,7 @@ Core Agent được coi là done khi:
 4. Real-provider smoke tests vẫn là opt-in; phải chạy trong release environment
    khi phát hành cấu hình model production.
 
-Current verification ngày 2026-08-16: toàn bộ Agent/Backend/API/Voice scope `325 passed, 5 skipped`; frontend lint và production build đều pass. Live Transcript Rewriter qua OpenRouter với `openai/gpt-5.6-luna-pro` đã pass 5/5 case thật. Các skip phụ thuộc fixture/audio hoặc credential external được theo dõi trong `mustdo.md`.
-Real-provider tests vẫn opt-in và yêu cầu key tương ứng.
+Current verification ngày 2026-10-04: toàn bộ Agent/Backend/API/Voice/LiveKit scope **694 passed, 3 skipped (100% green)**; frontend lint và production build đều pass. Toàn bộ các bộ kiểm thử InjectionScanner, AudioBudget, ScopeGuard, ScheduleParser, và đối soát công thức độc lập đều đạt chuẩn. Real-provider tests vẫn opt-in và yêu cầu key tương ứng.
 
 ## Ngoài phạm vi Core Agent
 

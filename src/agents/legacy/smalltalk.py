@@ -45,7 +45,7 @@ def unsupported_utterance_response(transcript: str) -> UnsupportedUtteranceRespo
         )
     if any(pattern.search(normalized) for pattern in _OFF_TOPIC_PATTERNS):
         return UnsupportedUtteranceResponse(
-            message="Tôi chỉ hỗ trợ đặt xe, tra cứu chuyến đi và thông tin dịch vụ AloSM. Bạn muốn tôi hỗ trợ mục nào?",
+            message="Tôi chỉ hỗ trợ đặt xe, tra cứu chuyến đi và thông tin dịch vụ OlaSM. Bạn muốn tôi hỗ trợ mục nào?",
             reason="The user asked for something outside supported workflows.",
         )
     if len(normalized) < 4 or any(pattern.search(normalized) for pattern in _GARBAGE_PATTERNS):

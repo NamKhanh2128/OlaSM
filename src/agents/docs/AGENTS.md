@@ -1,7 +1,7 @@
 # AGENTS.md — Coding Principles for Agentic AI Track
 
 > **CURRENT INSTRUCTION** — Quy tắc làm việc trong `src/agents/docs/`. Product scope nằm tại
-> `docs/PRD_AloSM_Voice.md`; runtime truth nằm tại `docs/PROJECT_SOURCE_OF_TRUTH.md` và
+> `docs/PRD_OlaSM_Voice.md`; runtime truth nằm tại `docs/PROJECT_SOURCE_OF_TRUTH.md` và
 > `src/agents/README.md`. Không dùng brief, stack hoặc kế hoạch lịch sử để suy ra implementation.
 ## 1. Vai trò của coding agent
 

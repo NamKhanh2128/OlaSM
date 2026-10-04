@@ -1,4 +1,4 @@
-# Voice Agent Design — AloSM Ride-Hailing
+# Voice Agent Design — OlaSM Ride-Hailing
 
 Tài liệu này giải thích **Core Agent** trong hệ thống Voice AI Ride-Hailing:
 Agent là gì, nằm ở đâu trong hệ thống, xử lý một lượt hội thoại như thế nào, học
@@ -251,7 +251,7 @@ Reducer của capability sở hữu schema/result tương ứng. Model chỉ di�
 
 ---
 
-## 6. Các workflow của AloSM Agent
+## 6. Các workflow của OlaSM Agent
 
 ### Ride Booking
 
@@ -312,7 +312,7 @@ tạp thành component nhỏ thay vì nhồi toàn bộ logic vào một prompt.
 
 **Không copy nguyên:**
 
-LiveKit tools thường có thể gọi external service ngay trong agent runtime. AloSM
+LiveKit tools thường có thể gọi external service ngay trong agent runtime. OlaSM
 Agent chỉ tạo `ToolCall`; Backend executor mới chạy side effect.
 
 Tham khảo:
@@ -367,7 +367,7 @@ Tham khảo:
 
 Vocode mô tả action bằng typed parameters và response, sau đó một worker/factory
 thực thi action, đưa result trở lại agent để tiếp tục conversation. Pattern này
-gần với AloSM nhất về vòng đời action/result.
+gần với OlaSM nhất về vòng đời action/result.
 
 **Học theo:**
 
@@ -377,9 +377,9 @@ gần với AloSM nhất về vòng đời action/result.
 - result được đưa lại làm context cho lượt sau;
 - cấu hình được việc agent có cần nói trước/sau action hay không.
 
-**Điểm AloSM siết chặt hơn:**
+**Điểm OlaSM siết chặt hơn:**
 
-Vocode action worker có thể nằm trong cùng voice-agent system; AloSM đặt executor
+Vocode action worker có thể nằm trong cùng voice-agent system; OlaSM đặt executor
 ở Backend để quản lý validation, credentials, persistence và idempotency.
 
 Tham khảo:
@@ -404,7 +404,7 @@ handoff sang specialist. Voice pipeline tách STT → workflow → TTS.
 
 **Không copy nguyên:**
 
-SDK runner có thể tự chạy tool loop. AloSM dừng sau `AgentAction` để Backend thực
+SDK runner có thể tự chạy tool loop. OlaSM dừng sau `AgentAction` để Backend thực
 thi, rồi tiếp tục ở request kế tiếp khi có `ToolResult`.
 
 Tham khảo:
@@ -417,9 +417,9 @@ Tham khảo:
 
 ---
 
-## 8. Kiến trúc AloSM chọn lọc từ các pattern trên
+## 8. Kiến trúc OlaSM chọn lọc từ các pattern trên
 
-| Nhu cầu | Pattern học được | Cách AloSM áp dụng |
+| Nhu cầu | Pattern học được | Cách OlaSM áp dụng |
 |---|---|---|
 | Realtime voice | Pipecat/LiveKit pipeline | Voice Gateway sở hữu audio/STT/TTS |
 | Session workflow | LiveKit AgentSession | Backend + `AgentState` duy trì session |

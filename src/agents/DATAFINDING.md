@@ -1,4 +1,4 @@
-# DATAFINDING — dữ liệu production cho AloSM Agent
+# DATAFINDING — dữ liệu production cho OlaSM Agent
 
 Cập nhật: **2026-08-16**. Phạm vi: Core Agent, Voice AI, booking, map/fleet, pricing,
 promotion, RAG, handoff và evaluation. Đây là bản đối chiếu trực tiếp với code hiện tại; không coi
@@ -115,7 +115,7 @@ reject quote hết hạn hoặc không khớp state đã xác nhận.
   `src/backend/services/pricing_catalog.py`.
 - Provenance: file người dùng cung cấp có SHA-256
   `6AFF08BD3DAFD6C8833F423D9CEC6DAE1F74E60932EA3696B3096C6B97315718`; dữ liệu tham khảo
-  GreenSM công khai, khu vực Hà Nội, tuyệt đối không phải bảng giá AloSM đã được Finance duyệt.
+  GreenSM công khai, khu vực Hà Nội, tuyệt đối không phải bảng giá OlaSM đã được Finance duyệt.
 - Loại xe: `MOTORBIKE`, `CAR_4`, `CAR_7`, `LUXURY`. `CAR_7` là mức suy diễn; giá Bike mở cửa
   và chính sách hủy chưa được xác minh đủ; tất cả vẫn mang `status/data_quality=DEMO`.
 - Công thức runtime: giá mở cửa bao phủ `base_km`, phần vượt ngưỡng tính progressive tiers và áp
@@ -206,7 +206,7 @@ false-resolved, chi phí/booking và điều khoản cache. Không chọn theo c
 
 ## 4. Giá, fleet và promotion
 
-Ba miền này không thể “tìm trên Internet” để biến thành sự thật AloSM:
+Ba miền này không thể “tìm trên Internet” để biến thành sự thật OlaSM:
 
 - Product/Ops/Finance phê duyệt pricing version và case đối soát.
 - Fleet/Dispatch phát availability qua stream/API có timestamp, service area và privacy filter.
@@ -214,7 +214,7 @@ Ba miền này không thể “tìm trên Internet” để biến thành sự t
 
 Khi chưa có dữ liệu, code phải gắn `data_quality=DEMO` hoặc `estimated=true`; UI không dùng câu
 “xe đang ở gần bạn” hay “đã áp voucher” nếu chỉ là mảng hard-code. Dữ liệu thị trường công khai chỉ
-được dùng benchmark và phải ghi nguồn/ngày, không copy thành chính sách AloSM.
+được dùng benchmark và phải ghi nguồn/ngày, không copy thành chính sách OlaSM.
 
 ## 5. OpenAI, voice và model data
 
@@ -254,7 +254,7 @@ Policy catalog hiện hành nằm tại `data/policies/catalog.json`, bản ngu�
 tự phê duyệt bộ quy tắc vận hành ngày 2026-08-16; RAG không còn dùng sáu FAQ tự soạn.
 
 Đã có version, approved/effective time, checksum, citation, effective-date filter và identity guard.
-Phần còn lại trước production: (1) cung cấp pháp nhân/hotline/email AloSM thật; (2) lưu consent
+Phần còn lại trước production: (1) cung cấp pháp nhân/hotline/email OlaSM thật; (2) lưu consent
 bền vững trong Postgres và hỗ trợ rút consent/xóa/export; (3) eval groundedness, citation correctness,
 stale-policy rejection và prompt injection trên bộ câu hỏi thật; (4) rollback/canary policy.
 

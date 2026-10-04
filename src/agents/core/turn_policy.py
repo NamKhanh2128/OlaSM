@@ -8,6 +8,7 @@ from src.agents.contracts.state import AgentState, ConfirmationStatus
 from src.agents.core.booking.actions import request_cancel_booking_action, request_create_booking_action
 from src.agents.core.booking.messages import format_fare, passenger_confirmation, vehicle_label
 from src.agents.core.booking.state import BookingData, BookingStep
+from src.agents.core.guardrails import InjectionScanner, is_out_of_scope
 from src.agents.core.handoff import HandoffReason, classify_handoff, deterministic_handoff_action
 from src.agents.core.policy import AgentPolicy
 from src.agents.tools.builders import CancelBookingTool, CreateBookingTool
@@ -59,13 +60,29 @@ _CONTINUE_BOOKING = {
 
 
 class TurnPolicy:
-    def __init__(self, policy: AgentPolicy | None = None) -> None:
+    def __init__(
+        self,
+        policy: AgentPolicy | None = None,
+        injection_scanner: InjectionScanner | None = None,
+    ) -> None:
         self.policy = policy or AgentPolicy()
+        self.injection_scanner = injection_scanner or InjectionScanner()
 
     def evaluate(self, agent_input: AgentInput, state: AgentState) -> AgentAction | None:
         replay = self._completed_side_effect_replay(agent_input, state)
         if replay is not None:
             return replay
+
+        # Deterministic prompt injection protection before LLM
+        if agent_input.transcript:
+            injection = self.injection_scanner.scan(agent_input.transcript)
+            if injection.flagged:
+                return deterministic_handoff_action(
+                    state,
+                    reason_code=HandoffReason.SAFETY_RISK,
+                    reason=f"Prompt injection detected: {injection.reason}",
+                )
+
         immediate_handoff = classify_handoff(agent_input.transcript)
         if immediate_handoff is not None and immediate_handoff is not HandoffReason.USER_REQUEST:
             return deterministic_handoff_action(
@@ -73,6 +90,20 @@ class TurnPolicy:
                 reason_code=immediate_handoff,
                 reason=f"Deterministic handoff trigger: {immediate_handoff.value}",
             )
+
+        # Deterministic out-of-scope refusal
+        if (
+            agent_input.transcript
+            and state.confirmation is not ConfirmationStatus.AWAITING_CONFIRMATION
+            and state.pending_tool_name is None
+            and agent_input.tool_result is None
+        ):
+            if is_out_of_scope(agent_input.transcript):
+                return AgentAction(
+                    action_type=ActionType.ASK_USER,
+                    message="Tôi là trợ lý ảo đặt xe của GSM. Tôi chỉ có thể hỗ trợ bạn đặt chuyến, tra cứu thông tin chuyến đi và hỏi giá cước. Bạn cần hỗ trợ gì về chuyến đi không ạ?",
+                    reason="Out of scope request detected deterministically.",
+                )
         if agent_input.tool_result is not None:
             return None
         if state.pending_tool_name is not None:

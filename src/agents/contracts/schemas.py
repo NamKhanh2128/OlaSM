@@ -35,6 +35,9 @@ class ToolName(StrEnum):
     LOOKUP_TRIP = "lookup_trip"
     RETRIEVE_KNOWLEDGE = "retrieve_knowledge"
     CREATE_HANDOFF = "create_handoff"
+    GET_PERSONALIZED_OFFER = "get_personalized_offer"
+    GROUND_PICKUP_IMAGE = "ground_pickup_image"
+    EVALUATE_TRIP_CONFIDENCE = "evaluate_trip_confidence"
 
 
 class ToolStatus(StrEnum):
