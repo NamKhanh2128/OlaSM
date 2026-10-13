@@ -11,8 +11,55 @@ import { Smartphone, MonitorSmartphone, Sparkles, ShieldCheck, Zap } from "lucid
 import logoSvg from "@/assets/logo.svg";
 
 const AppShell: React.FC<{ isOperator: boolean }> = ({ isOperator }) => {
-  const [isPhoneMockup, setIsPhoneMockup] = useState(true);
+  const [isPhoneMockup, setIsPhoneMockup] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth >= 768;
+    }
+    return true;
+  });
 
+  // Chế độ Toàn màn hình chuẩn Native Mobile (không có viền ngoài, tràn 100% màn hình)
+  if (!isPhoneMockup) {
+    return (
+      <div className="w-full min-h-[100dvh] bg-[#F4FBFA] dark:bg-[#0B1317] text-[#191C1E] dark:text-slate-100 flex flex-col justify-between relative selection:bg-[#00A699]/30">
+        {/* Toggle quay lại khung mô phỏng nếu đang xem trên PC */}
+        <div className="hidden md:flex justify-end p-2 bg-slate-900/90 text-white text-[11px] backdrop-blur-sm z-50">
+          <button
+            type="button"
+            onClick={() => setIsPhoneMockup(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#00A699] text-white font-bold hover:bg-[#008F88] transition cursor-pointer"
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span>Hiện khung iPhone</span>
+          </button>
+        </div>
+
+        {/* Dynamic Island & Status Bar */}
+        <MobileStatusBar />
+
+        {/* Green SM Mobile Header */}
+        <MobileAppHeader />
+
+        {/* Scrollable Screen Content */}
+        <main className="flex-1 min-h-0 overflow-y-auto no-scrollbar relative p-4 pb-20">
+          <Outlet />
+
+          {!isOperator ? <VoiceAIButton /> : null}
+          {!isOperator ? <VoiceAssistantPopup /> : null}
+        </main>
+
+        {/* Mobile Bottom Tab Navigation */}
+        <MobileNav />
+
+        {/* iOS Home Indicator Bar */}
+        <div className="shrink-0 h-4 flex items-center justify-center bg-white dark:bg-[#12191F]">
+          <div className="w-32 h-1 bg-slate-300 dark:bg-slate-700 rounded-full" />
+        </div>
+      </div>
+    );
+  }
+
+  // Chế độ Khung iPhone mô phỏng trên Desktop
   return (
     <div className="min-h-screen w-full bg-[#071318] dark:bg-[#050D11] text-slate-100 flex flex-col items-center justify-center p-0 md:p-6 transition-colors duration-200 selection:bg-[#00A699]/30">
       {/* Desktop Presentation Header (Ẩn trên mobile thật) */}
@@ -37,11 +84,7 @@ const AppShell: React.FC<{ isOperator: boolean }> = ({ isOperator }) => {
           <button
             type="button"
             onClick={() => setIsPhoneMockup(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-              isPhoneMockup
-                ? "bg-[#00A699] text-white shadow-md shadow-[#00A699]/30"
-                : "text-slate-400 hover:text-white"
-            }`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition bg-[#00A699] text-white shadow-md shadow-[#00A699]/30 cursor-pointer"
           >
             <Smartphone className="w-3.5 h-3.5" />
             <span>Khung điện thoại</span>
@@ -49,11 +92,7 @@ const AppShell: React.FC<{ isOperator: boolean }> = ({ isOperator }) => {
           <button
             type="button"
             onClick={() => setIsPhoneMockup(false)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-              !isPhoneMockup
-                ? "bg-[#00A699] text-white shadow-md shadow-[#00A699]/30"
-                : "text-slate-400 hover:text-white"
-            }`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-400 hover:text-white cursor-pointer"
           >
             <MonitorSmartphone className="w-3.5 h-3.5" />
             <span>Toàn màn hình</span>
@@ -62,13 +101,7 @@ const AppShell: React.FC<{ isOperator: boolean }> = ({ isOperator }) => {
       </div>
 
       {/* Main Mobile App Frame */}
-      <div
-        className={`relative flex flex-col overflow-hidden transition-all duration-300 ${
-          isPhoneMockup
-            ? "w-full max-w-[412px] h-[100dvh] md:h-[870px] md:max-h-[92vh] md:rounded-[50px] md:border-[10px] md:border-slate-900 phone-chassis bg-[#F4FBFA] dark:bg-[#0B1317] text-[#191C1E] dark:text-slate-100"
-            : "w-full max-w-lg min-h-screen bg-[#F4FBFA] dark:bg-[#0B1317] text-[#191C1E] dark:text-slate-100 shadow-2xl"
-        }`}
-      >
+      <div className="relative flex flex-col overflow-hidden transition-all duration-300 w-full max-w-[412px] h-[100dvh] md:h-[870px] md:max-h-[92vh] md:rounded-[50px] md:border-[10px] md:border-slate-900 phone-chassis bg-[#F4FBFA] dark:bg-[#0B1317] text-[#191C1E] dark:text-slate-100">
         {/* iOS Dynamic Island & Status Bar */}
         <MobileStatusBar />
 
@@ -79,10 +112,7 @@ const AppShell: React.FC<{ isOperator: boolean }> = ({ isOperator }) => {
         <main className="flex-1 min-h-0 overflow-y-auto no-scrollbar relative p-4 pb-20">
           <Outlet />
 
-          {/* Voice Assistant Button (FAB) inside phone screen */}
           {!isOperator ? <VoiceAIButton /> : null}
-
-          {/* Voice Assistant Mobile Bottom Sheet inside phone screen */}
           {!isOperator ? <VoiceAssistantPopup /> : null}
         </main>
 
