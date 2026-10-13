@@ -3,10 +3,10 @@
 // luôn khớp nhau, tránh lệch nhãn nếu sửa riêng từng file. Đồng bộ với
 // VehicleType và catalog bảng giá có version ở backend.
 export const VEHICLE_LABELS: Record<string, string> = {
-  MOTORBIKE: "Xe máy",
-  CAR_4: "Ô tô 4 chỗ",
-  CAR_7: "Ô tô 7 chỗ",
-  LUXURY: "Xe cao cấp",
+  MOTORBIKE: "Xanh SM Bike (Xe máy điện)",
+  CAR_4: "Xanh SM Taxi (VF 5 / e34)",
+  CAR_7: "Xanh SM Plus (VF 9)",
+  LUXURY: "Xanh SM Luxury (VF 8 VIP)",
 };
 
 export function vehicleLabel(vehicleType: string | null | undefined): string {

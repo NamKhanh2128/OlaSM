@@ -23,7 +23,7 @@ describe("createOlaSMTokenSource", () => {
 
   it("sends the app bearer token only to the backend token endpoint", () => {
     const mockResult = { tokenSource: true };
-    mockEndpoint.mockReturnValueOnce(mockResult);
+    mockEndpoint.mockReturnValue(mockResult);
     localStorage.setItem("olasm_access_token", "access-token");
 
     expect(createOlaSMTokenSource()).toEqual(mockResult);

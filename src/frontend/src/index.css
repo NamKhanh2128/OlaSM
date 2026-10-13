@@ -92,14 +92,14 @@ body {
 .mobility-card {
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(39, 74, 75, 0.08);
-  border-radius: 1.75rem;
-  box-shadow: 0 12px 36px rgba(0, 143, 136, 0.08);
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0, 143, 136, 0.07);
 }
 .mobility-input {
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(39, 74, 75, 0.1);
-  border-radius: 1.5rem;
-  box-shadow: 0 10px 30px rgba(15, 75, 77, 0.09);
+  border-radius: 1.25rem;
+  box-shadow: 0 8px 24px rgba(15, 75, 77, 0.08);
 }
 .mobility-chip {
   border: 1px solid rgba(39, 74, 75, 0.12);
@@ -114,3 +114,25 @@ body {
 :root.dark .mobility-card,
 :root.dark .mobility-input,
 :root.dark .mobility-chip { background: rgba(18, 32, 33, 0.95); border-color: rgba(255,255,255,.1); }
+
+/* Mobile Device Frame styling */
+.phone-chassis {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 25px 65px -12px rgba(0, 0, 0, 0.65),
+    0 0 40px rgba(0, 166, 153, 0.18);
+}
+
+.dynamic-island {
+  background: #000000;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+@keyframes pulse-wave {
+  0%, 100% { height: 6px; }
+  50% { height: 26px; }
+}
+
+.waveform-bar {
+  animation: pulse-wave 1.2s ease-in-out infinite;
+}

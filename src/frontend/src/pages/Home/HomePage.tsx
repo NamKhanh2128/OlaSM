@@ -1,54 +1,319 @@
 import React, { useEffect, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
-import { ArrowRight, Bell, Bike, BriefcaseBusiness, CalendarClock, Car, ChevronRight, Gift, MapPin, Package, Plane, Search, ShieldCheck, Sparkles } from "lucide-react";
-import { getUserName } from "@/features/auth/storage";
+import { useNavigate } from "react-router-dom";
+import {
+  ArrowRight,
+  Bike,
+  Car,
+  ChevronRight,
+  Gift,
+  Leaf,
+  MapPin,
+  Package,
+  Search,
+  Sparkles,
+} from "lucide-react";
 import { listBookings, locationLabel, type BookingSummary } from "@/features/activity/api";
 import { redirectToLoginIfUnauthorized } from "@/features/auth/sessionGuard";
 import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssistant";
 
-const quickServices = [
-  { label: "Xe máy", icon: Bike, prompt: "Tôi muốn đặt xe máy.", tone: "from-cyan-100 to-teal-50" },
-  { label: "Hẹn giờ", icon: CalendarClock, prompt: "Tôi muốn hẹn giờ đặt xe.", tone: "from-sky-100 to-cyan-50" },
-  { label: "Liên tỉnh", icon: MapPin, prompt: "Tôi muốn đặt xe đi liên tỉnh.", tone: "from-emerald-100 to-cyan-50" },
-  { label: "Giao hàng", icon: Package, prompt: "Tôi muốn đặt dịch vụ giao hàng.", tone: "from-amber-100 to-cyan-50" },
-  { label: "Sân bay", icon: Plane, prompt: "Tôi muốn đặt xe đi sân bay.", tone: "from-blue-100 to-cyan-50" },
-  { label: "Doanh nghiệp", icon: BriefcaseBusiness, prompt: "Tôi cần dịch vụ xe doanh nghiệp.", tone: "from-slate-100 to-cyan-50" },
-  { label: "An toàn", icon: ShieldCheck, prompt: "Cho tôi biết về an toàn chuyến đi.", tone: "from-teal-100 to-cyan-50" },
-  { label: "Ưu đãi", icon: Gift, prompt: "Tôi muốn xem ưu đãi đặt xe.", tone: "from-yellow-100 to-cyan-50" },
+const quickPrompts = [
+  "Đặt Xanh SM Taxi đến Vincom Landmark 81",
+  "Đặt xe máy điện VinFast về nhà",
+  "Tìm xe Xanh SM Luxury 4 chỗ",
+  "Tài xế của tôi đang ở đâu?",
 ];
-
-const heroImage = "https://lh3.googleusercontent.com/aida-public/AB6AXuDz__xU-VKyGvWrkMn6EuJ7j_L7aaVl3Ophlb-0dJM7tNhsDU9oVMOFtKU8tqDydyYMKhcg-rllg1Pk7VRhGAx6lMEU8gAq7ejasrB6RGO8b31U6Z6RM8jnBhbIuOBQrAydBBLWmBc7bHvxORcHrSnj6s99C7qpemBbFyxNiKDBRGhf_Gp1GjHusOvf-2loVNBIcTbKD0UaVymNzeRbziJ6J49JyPncxbTsPnhpkNHaU-Dn6Su7z-Yz";
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const userName = getUserName();
   const { openWithPrefill, open } = useVoiceAssistant();
   const [recentBookings, setRecentBookings] = useState<BookingSummary[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    listBookings().then((data) => !cancelled && setRecentBookings(data.slice(0, 2))).catch((cause) => {
-      if (!cancelled) redirectToLoginIfUnauthorized(cause, navigate);
-    });
-    return () => { cancelled = true; };
+    listBookings()
+      .then((data) => !cancelled && setRecentBookings(data.slice(0, 2)))
+      .catch((cause) => {
+        if (!cancelled) redirectToLoginIfUnauthorized(cause, navigate);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-7 pb-10">
-      <header className="flex items-center justify-between pt-1">
-        <div><p className="text-xs font-bold uppercase tracking-[.18em] text-[#008F88]">OlaSM mobility</p><h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight text-[#173132] dark:text-white">Chào {userName || "bạn"} 👋</h1></div>
-        <button type="button" className="mobility-card grid h-12 w-12 place-items-center text-slate-600 dark:text-slate-200" aria-label="Thông báo"><Bell className="h-5 w-5" /></button>
-      </header>
+    <div className="space-y-4 pb-6">
+      {/* Green SM Loyalty & Wallet Bar */}
+      <div className="rounded-2xl p-3.5 bg-gradient-to-r from-[#00A699] to-[#008F88] text-white shadow-md shadow-[#00A699]/15">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-white/20 text-white">
+              <Leaf className="h-3.5 w-3.5" />
+            </span>
+            <span className="font-bold">Xanh Club • Hạng Vàng</span>
+          </div>
+          <span className="text-[11px] font-semibold bg-white/20 px-2 py-0.5 rounded-full">
+            1.250 điểm
+          </span>
+        </div>
+        <div className="mt-2.5 pt-2 border-t border-white/15 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-white/80 uppercase tracking-wider">Số dư Xanh Pay</p>
+            <p className="text-sm font-extrabold">250.000 đ</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/payment")}
+            className="text-[11px] font-bold bg-white text-[#008F88] px-3 py-1 rounded-xl shadow-sm hover:bg-slate-50 transition cursor-pointer"
+          >
+            Nạp tiền
+          </button>
+        </div>
+      </div>
 
-      <button type="button" onClick={open} className="mobility-input flex w-full items-center gap-4 px-5 py-5 text-left transition hover:-translate-y-0.5 hover:shadow-xl"><Search className="h-6 w-6 shrink-0 text-[#173132] dark:text-slate-100" /><span className="flex-1 text-lg font-semibold text-slate-400">Bạn muốn đi đâu?</span><span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#00C9B7] text-white"><Sparkles className="h-5 w-5" /></span></button>
+      {/* Voice Assistant Search Bar */}
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={open}
+          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-white dark:bg-[#152026] border border-slate-200/80 dark:border-white/10 shadow-sm text-left hover:border-[#00A699] transition-all group cursor-pointer"
+        >
+          <Search className="h-5 w-5 text-[#00A699] shrink-0" />
+          <span className="flex-1 text-xs font-semibold text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 truncate">
+            Bạn muốn đi đâu hôm nay?
+          </span>
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-tr from-[#00A699] to-[#00C9B7] text-white shadow-sm shrink-0">
+            <Sparkles className="h-4 w-4" />
+          </span>
+        </button>
 
-      <section className="soft-cyan-panel overflow-hidden rounded-[32px] p-5 sm:p-7 shadow-[0_16px_50px_rgba(0,143,136,.10)]"><div className="grid gap-5 md:grid-cols-[1.1fr_.9fr] md:items-center"><div><span className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1.5 text-xs font-bold text-[#008F88]"><Sparkles className="h-4 w-4" /> AI đặt xe thông minh</span><h2 className="mt-4 text-2xl sm:text-4xl font-extrabold leading-tight text-[#173132]">Sáng bánh mật,<br />đặt xe đi cho lẹ nhé!</h2><div className="mt-5 flex flex-wrap gap-2">{["Đặt xe đi làm", "Đặt xe ra sân bay"].map((label) => <button key={label} type="button" onClick={() => openWithPrefill(label)} className="mobility-chip px-4 py-2 text-xs font-bold text-[#315052]">{label}</button>)}</div></div><div className="relative min-h-48 overflow-hidden rounded-[26px] bg-[#00C9B7]"><img src={heroImage} alt="Xe điện OlaSM" className="absolute inset-0 h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-[#073B3A]/60 to-transparent" /><button type="button" onClick={() => openWithPrefill("Tôi muốn đặt ô tô 4 chỗ.")} className="absolute bottom-4 left-4 right-4 flex items-center justify-between rounded-2xl bg-white/92 px-4 py-3 text-sm font-extrabold text-[#173132] backdrop-blur">Đặt ô tô ngay <ArrowRight className="h-4 w-4 text-[#00C9B7]" /></button></div></div></section>
+        {/* Quick Voice Prompts Horizontal Scroll */}
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          {quickPrompts.map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              onClick={() => openWithPrefill(prompt)}
+              className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white dark:bg-[#152026] border border-slate-200/60 dark:border-white/5 text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:text-[#00A699] hover:border-[#00A699]/40 transition cursor-pointer"
+            >
+              <span className="text-[#00A699]">🗣️</span>
+              <span className="truncate max-w-[200px]">{prompt}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <section><div className="mb-4 flex items-center justify-between"><h2 className="text-xl sm:text-2xl font-extrabold text-[#173132] dark:text-white">Dịch vụ của bạn</h2><NavLink to="/booking" className="flex items-center text-xs font-bold text-[#008F88]">Xem tất cả <ChevronRight className="h-4 w-4" /></NavLink></div><div className="grid grid-cols-4 gap-3 sm:grid-cols-8">{quickServices.map(({ label, icon: Icon, prompt, tone }) => <button key={label} type="button" onClick={() => openWithPrefill(prompt)} className="group flex flex-col items-center gap-2 text-center"><span className={`grid aspect-square w-full max-w-[82px] place-items-center rounded-[24px] bg-gradient-to-br ${tone} border border-white shadow-[0_8px_24px_rgba(0,143,136,.08)] transition group-hover:-translate-y-1`}><Icon className="h-7 w-7 text-[#00B9AE]" /></span><span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">{label}</span></button>)}</div></section>
+      {/* Green SM 4 Core Services */}
+      <div>
+        <div className="flex items-center justify-between mb-2 px-1">
+          <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Dịch vụ Xanh SM
+          </h2>
+          <button
+            type="button"
+            onClick={() => navigate("/booking")}
+            className="text-[11px] font-bold text-[#00A699] flex items-center cursor-pointer"
+          >
+            Tất cả <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
-      <section className="grid gap-4 md:grid-cols-2"><button type="button" onClick={() => openWithPrefill("Tôi muốn đặt xe máy.")} className="mobility-card flex min-h-44 items-center justify-between overflow-hidden p-6 text-left"><div><span className="text-xs font-bold text-[#008F88]">DI CHUYỂN LINH HOẠT</span><h3 className="mt-2 text-2xl font-extrabold text-[#173132] dark:text-white">Đặt xe máy</h3><p className="mt-2 max-w-xs text-sm text-slate-500">Nhanh chóng, tiện lợi và thân thiện với môi trường.</p></div><span className="grid h-24 w-24 shrink-0 place-items-center rounded-[30px] bg-gradient-to-br from-cyan-100 to-teal-50"><Bike className="h-12 w-12 text-[#00B9AE]" /></span></button><button type="button" onClick={() => openWithPrefill("Tôi muốn đặt ô tô.")} className="mobility-card flex min-h-44 items-center justify-between overflow-hidden p-6 text-left"><div><span className="text-xs font-bold text-[#008F88]">ÊM ÁI MỖI CHUYẾN</span><h3 className="mt-2 text-2xl font-extrabold text-[#173132] dark:text-white">Đặt ô tô</h3><p className="mt-2 max-w-xs text-sm text-slate-500">Không gian thoải mái, tài xế chuyên nghiệp.</p></div><span className="grid h-24 w-24 shrink-0 place-items-center rounded-[30px] bg-gradient-to-br from-sky-100 to-cyan-50"><Car className="h-12 w-12 text-[#36BDE3]" /></span></button></section>
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* Xanh SM Taxi */}
+          <button
+            type="button"
+            onClick={() => navigate("/booking")}
+            className="p-3 rounded-2xl bg-white dark:bg-[#152026] border border-slate-200/70 dark:border-white/10 text-left hover:border-[#00A699]/50 transition shadow-sm group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-[#00A699]">
+                <Car className="h-5 w-5" />
+              </span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                VF 5 / e34
+              </span>
+            </div>
+            <p className="mt-2 text-xs font-extrabold text-slate-800 dark:text-white group-hover:text-[#00A699]">
+              Xanh SM Taxi
+            </p>
+            <p className="text-[10px] text-slate-400">4 chỗ • Không mùi</p>
+          </button>
 
-      <section className="mobility-card p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Chuyến gần đây</p><h2 className="mt-1 text-xl font-extrabold text-[#173132] dark:text-white">Đi lại chỉ với một chạm</h2></div><NavLink to="/activity" className="grid h-10 w-10 place-items-center rounded-full bg-[#E7FBF9] text-[#008F88]"><ArrowRight className="h-5 w-5" /></NavLink></div><div className="mt-5 grid gap-3 md:grid-cols-2">{recentBookings.length ? recentBookings.map((booking) => <button key={booking.booking_id} type="button" onClick={() => openWithPrefill(`Đặt lại chuyến đến ${locationLabel(booking.destination, "điểm đến cũ")}.`)} className="flex items-center gap-4 rounded-2xl bg-[#F6FAFA] p-4 text-left dark:bg-white/5"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-[#00C9B7] shadow-sm dark:bg-white/10"><MapPin className="h-5 w-5" /></span><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-[#173132] dark:text-white">{locationLabel(booking.destination, "Điểm đến")}</strong><small className="block truncate text-slate-400">{locationLabel(booking.pickup, "Điểm đón")}</small></span><ChevronRight className="h-4 w-4 text-slate-400" /></button>) : <p className="col-span-2 rounded-2xl bg-[#F6FAFA] p-5 text-center text-sm text-slate-400 dark:bg-white/5">Chưa có chuyến gần đây. Hãy bắt đầu chuyến đầu tiên!</p>}</div></section>
+          {/* Xanh SM Luxury */}
+          <button
+            type="button"
+            onClick={() => navigate("/booking")}
+            className="p-3 rounded-2xl bg-white dark:bg-[#152026] border border-slate-200/70 dark:border-white/10 text-left hover:border-[#00A699]/50 transition shadow-sm group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600">
+                <Car className="h-5 w-5" />
+              </span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300">
+                VF 8 VIP
+              </span>
+            </div>
+            <p className="mt-2 text-xs font-extrabold text-slate-800 dark:text-white group-hover:text-cyan-600">
+              Xanh SM Luxury
+            </p>
+            <p className="text-[10px] text-slate-400">Thương gia 5 sao</p>
+          </button>
+
+          {/* Xanh SM Bike */}
+          <button
+            type="button"
+            onClick={() => navigate("/booking")}
+            className="p-3 rounded-2xl bg-white dark:bg-[#152026] border border-slate-200/70 dark:border-white/10 text-left hover:border-[#00A699]/50 transition shadow-sm group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-teal-50 dark:bg-teal-950/40 text-teal-600">
+                <Bike className="h-5 w-5" />
+              </span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300">
+                Feliz S
+              </span>
+            </div>
+            <p className="mt-2 text-xs font-extrabold text-slate-800 dark:text-white group-hover:text-teal-600">
+              Xanh SM Bike
+            </p>
+            <p className="text-[10px] text-slate-400">Xe máy điện nội thành</p>
+          </button>
+
+          {/* Xanh Express */}
+          <button
+            type="button"
+            onClick={() => openWithPrefill("Tôi muốn đặt dịch vụ giao hàng Xanh Express.")}
+            className="p-3 rounded-2xl bg-white dark:bg-[#152026] border border-slate-200/70 dark:border-white/10 text-left hover:border-[#00A699]/50 transition shadow-sm group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600">
+                <Package className="h-5 w-5" />
+              </span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                Siêu tốc
+              </span>
+            </div>
+            <p className="mt-2 text-xs font-extrabold text-slate-800 dark:text-white group-hover:text-amber-600">
+              Xanh Express
+            </p>
+            <p className="text-[10px] text-slate-400">Giao hàng xe điện</p>
+          </button>
+        </div>
+      </div>
+
+      {/* Live Radar Mini-Map Widget (Mô phỏng vị trí xe điện quanh bạn) */}
+      <div className="relative rounded-2xl overflow-hidden border border-slate-200/80 dark:border-white/10 bg-slate-900 text-white shadow-sm">
+        {/* Map Canvas Background */}
+        <div className="h-32 w-full bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:14px_14px] bg-[#0f172a] relative flex items-center justify-center overflow-hidden">
+          {/* Radar Circles */}
+          <div className="absolute w-44 h-44 rounded-full border border-[#00A699]/20" />
+          <div className="absolute w-28 h-28 rounded-full border border-[#00A699]/30" />
+          <div className="absolute w-14 h-14 rounded-full bg-[#00A699]/15 animate-ping" />
+
+          {/* User Location Pin */}
+          <div className="relative z-10 flex flex-col items-center">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-[#00A699] text-white shadow-lg ring-2 ring-white">
+              <MapPin className="h-4 w-4" />
+            </span>
+            <span className="mt-1 text-[9px] font-bold bg-black/70 px-1.5 py-0.5 rounded backdrop-blur">
+              Bạn ở đây
+            </span>
+          </div>
+
+          {/* Surrounding Electric Vehicles */}
+          <div className="absolute top-4 left-10 flex items-center gap-1 bg-black/60 px-1.5 py-0.5 rounded-full text-[9px] border border-white/10">
+            <Car className="w-3 h-3 text-[#00E5C9]" />
+            <span>VF e34 • 2m</span>
+          </div>
+          <div className="absolute bottom-5 right-8 flex items-center gap-1 bg-black/60 px-1.5 py-0.5 rounded-full text-[9px] border border-white/10">
+            <Car className="w-3 h-3 text-cyan-400" />
+            <span>VF 8 • 4m</span>
+          </div>
+          <div className="absolute top-6 right-12 flex items-center gap-1 bg-black/60 px-1.5 py-0.5 rounded-full text-[9px] border border-white/10">
+            <Bike className="w-3 h-3 text-emerald-400" />
+            <span>Feliz S • 1m</span>
+          </div>
+        </div>
+
+        {/* Radar Map Bottom Bar */}
+        <div className="p-2.5 bg-slate-800/90 backdrop-blur-md flex items-center justify-between text-xs">
+          <div>
+            <p className="font-bold text-white text-[11px]">Đang có 5 xe VinFast quanh bạn</p>
+            <p className="text-[10px] text-slate-400">Thời gian đón trung bình: 2-3 phút</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => openWithPrefill("Tôi muốn đặt xe ngay bây giờ.")}
+            className="px-3 py-1.5 rounded-xl bg-[#00A699] text-white font-bold text-[11px] shadow-sm hover:bg-[#008F88] transition cursor-pointer"
+          >
+            Đặt xe ngay
+          </button>
+        </div>
+      </div>
+
+      {/* Promo Banner VinFast GSM */}
+      <div className="rounded-2xl p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200/60 dark:border-emerald-800/30">
+        <div className="flex items-center gap-2">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-[#00A699] text-white shrink-0">
+            <Gift className="h-3.5 w-3.5" />
+          </span>
+          <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+            Ưu đãi 50% cho chuyến đi bằng giọng nói
+          </p>
+        </div>
+        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+          Nói với Trợ lý ảo để áp dụng mã giảm giá GSM độc quyền hôm nay.
+        </p>
+      </div>
+
+      {/* Recent Trips */}
+      <div>
+        <div className="flex items-center justify-between mb-2 px-1">
+          <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Chuyến gần đây
+          </h2>
+          <button
+            type="button"
+            onClick={() => navigate("/activity")}
+            className="text-[11px] font-bold text-[#00A699] cursor-pointer"
+          >
+            Lịch sử
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {recentBookings.length ? (
+            recentBookings.map((booking) => (
+              <button
+                key={booking.booking_id}
+                type="button"
+                onClick={() =>
+                  openWithPrefill(
+                    `Đặt lại chuyến đến ${locationLabel(booking.destination, "điểm đến cũ")}.`
+                  )
+                }
+                className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white dark:bg-[#152026] border border-slate-200/70 dark:border-white/10 text-left hover:border-[#00A699]/40 transition shadow-sm cursor-pointer"
+              >
+                <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-100 dark:bg-white/10 text-[#00A699] shrink-0">
+                  <MapPin className="h-4 w-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-800 dark:text-white truncate">
+                    {locationLabel(booking.destination, "Điểm đến")}
+                  </p>
+                  <p className="text-[10px] text-slate-400 truncate">
+                    {locationLabel(booking.pickup, "Điểm đón")}
+                  </p>
+                </div>
+                <ArrowRight className="h-4 w-4 text-slate-400 shrink-0" />
+              </button>
+            ))
+          ) : (
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#152026] border border-slate-200/70 dark:border-white/10 text-center text-xs text-slate-400">
+              Chưa có chuyến gần đây. Hãy nói để đặt chuyến xe đầu tiên!
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

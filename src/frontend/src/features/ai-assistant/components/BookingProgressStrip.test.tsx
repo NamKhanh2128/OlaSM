@@ -42,6 +42,6 @@ describe("BookingProgressStrip", () => {
       />,
     );
 
-    expect(screen.getByText("Ô tô 4 chỗ")).toBeInTheDocument();
+    expect(screen.getByText("Xanh SM Taxi (VF 5 / e34)")).toBeInTheDocument();
   });
 });

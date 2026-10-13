@@ -32,15 +32,19 @@ import { getCurrentUser } from "@/features/auth/api";
 import { CURRENT_POLICY_VERSION } from "@/features/policies/api";
 import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssistant";
 import { PostBookingRatingDialog } from "@/features/ai-assistant/components/PostBookingRatingDialog";
+import { useNavigate } from "react-router-dom";
 import { vehicleLabel } from "@/features/ai-assistant/bookingLabels";
 import { getRideSession } from "@/features/ride/api";
 import { createOlaSMTokenSource, LIVEKIT_AGENT_NAME } from "./tokenSource";
 import {
   BOOKING_STATE_TOPIC,
+  APP_CONTROL_TOPIC,
   type BookingState,
   type BookingSlotKey,
   type BookingSlotStatus,
   type ClarificationTarget,
+  type AppControlState,
+  type AppAction,
 } from "./contracts";
 
 function generateUUID(): string {
@@ -252,13 +256,16 @@ function LiveKitCallContent({
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const [speakerMuted, setSpeakerMuted] = useState(false);
   const [draft, setDraft] = useState("");
+  const navigate = useNavigate();
   const [textSendPending, setTextSendPending] = useState(false);
   const [textError, setTextError] = useState<string | null>(null);
   const [bookingState, setBookingState] = useState<BookingState | null>(null);
+  const [recentAction, setRecentAction] = useState<AppAction | null>(null);
   const announcedBookingId = useRef<string | null>(null);
   const restartedBookingId = useRef<string | null>(null);
   const [wasConnected, setWasConnected] = useState(false);
   const { message: bookingStateMessage } = useDataChannel(BOOKING_STATE_TOPIC);
+  const { message: appControlMessage } = useDataChannel(APP_CONTROL_TOPIC);
   const agentFailure = agent.failureReasons?.join("; ") ?? "";
   const bookingCompleted = Boolean(bookingState?.booking);
   const handoffConnected = bookingState?.handoff?.status === "connected";
@@ -291,6 +298,38 @@ function LiveKitCallContent({
       // Ignore malformed/older packets; conversation audio must keep running.
     }
   }, [bookingStateMessage]);
+
+  useEffect(() => {
+    if (!appControlMessage) return;
+    try {
+      const decoded = new TextDecoder().decode(appControlMessage.payload);
+      const state = JSON.parse(decoded) as AppControlState;
+      if (state.app_actions && state.app_actions.length > 0) {
+        const latest = state.app_actions[state.app_actions.length - 1];
+        setRecentAction(latest);
+        if (latest.kind === "NAVIGATE" && latest.target) {
+          const t = latest.target;
+          if (["CAR_BOOKING", "BIKE_BOOKING", "SERVICE_SELECTOR", "EXPRESS_BOOKING"].includes(t)) {
+            navigate("/booking");
+          } else if (t === "TRIP_TRACKING") {
+            navigate("/tracking");
+          } else if (t === "ACTIVITY") {
+            navigate("/activity");
+          } else if (t === "PAYMENTS" || t === "PROMOTIONS") {
+            navigate("/payment");
+          } else if (t === "PROFILE" || t === "SETTINGS") {
+            navigate("/profile");
+          } else if (t === "HOME") {
+            navigate("/");
+          }
+        } else if (latest.kind === "GO_BACK") {
+          navigate(-1);
+        }
+      }
+    } catch {
+      // Ignore malformed packets
+    }
+  }, [appControlMessage, navigate]);
 
   useEffect(() => {
     const bookingId = bookingState?.booking?.booking_id ?? null;
@@ -386,34 +425,57 @@ function LiveKitCallContent({
   }, [newSession]);
 
   return (
-    <div className="relative flex h-full min-h-[560px] w-full flex-col rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-950">
+    <div className="relative flex h-full min-h-0 w-full flex-col bg-white px-4 py-3 dark:bg-[#10171D] overflow-y-auto no-scrollbar">
       <RoomAudioRenderer muted={speakerMuted} />
 
-      <div className="text-center">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#008F88]">LiveKit Voice Agent</p>
-        <h2 className="mt-2 text-xl font-bold text-slate-900 dark:text-white">Tổng đài OlaSM</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{statusLabel}</p>
+      <div className="text-center shrink-0">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#00A699]">Trợ lý VinFast Green SM</p>
+        <h2 className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">Trợ lý giọng nói Green SM</h2>
+        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{statusLabel}</p>
+
+        {/* Audio Waveform Visualizer */}
+        <div className="flex items-center justify-center gap-1 my-2">
+          {[0.2, 0.7, 1.1, 0.5, 0.9, 0.3, 0.8].map((delay, i) => (
+            <span
+              key={i}
+              className={`w-1 rounded-full bg-[#00A699] transition-all duration-300 ${
+                agent.state === "speaking" || agent.state === "listening"
+                  ? "waveform-bar"
+                  : "h-1.5 opacity-30"
+              }`}
+              style={{ animationDelay: `${delay}s` }}
+            />
+          ))}
+        </div>
+
+        {recentAction ? (
+          <div className="mt-1 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E7FBF9] text-[#00A699] dark:bg-[#00A699]/15 dark:text-[#00E5C9] text-[11px] font-bold animate-pulse">
+            <span>⚡ Điều khiển: {recentAction.kind}</span>
+            {recentAction.target ? <span>({recentAction.target})</span> : null}
+          </div>
+        ) : null}
+
         {showRecovery ? (
           <div className="mt-2">
-            <p className="text-sm text-rose-600">
+            <p className="text-xs text-rose-600">
               {connectionLost
-                ? "Kết nối cuộc gọi bị gián đoạn. Thông tin đặt xe đã nhập vẫn được giữ lại."
-                : "Dịch vụ thoại đang tạm thời gián đoạn. Bạn có thể tạo lại cuộc gọi hoặc tiếp tục bằng tin nhắn."}
+                ? "Kết nối thoại bị gián đoạn. Đang khôi phục..."
+                : "Dịch vụ thoại đang tạm gián đoạn."}
             </p>
             <button
               type="button"
               onClick={onRetry}
               disabled={autoRetry}
-              className="mt-3 rounded-xl bg-[#00A99D] px-4 py-2 text-sm font-semibold text-white"
+              className="mt-2 rounded-xl bg-[#00A699] px-3.5 py-1.5 text-xs font-semibold text-white"
             >
-              {autoRetry ? "Đang khôi phục cuộc gọi…" : "Khôi phục cuộc gọi"}
+              {autoRetry ? "Đang khôi phục…" : "Khôi phục cuộc gọi"}
             </button>
           </div>
         ) : null}
       </div>
 
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-700 dark:border-slate-800 dark:bg-white/5 dark:text-slate-200">
-        <p className="mb-2 font-bold text-slate-700 dark:text-slate-200">Thông tin chuyến xe</p>
+      <div className="mt-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-2.5 text-xs text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 shrink-0">
+        <p className="mb-1.5 font-bold text-slate-700 dark:text-slate-200 text-[11px]">Thông tin chuyến xe</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <BookingSlot
             title="Điểm đón"

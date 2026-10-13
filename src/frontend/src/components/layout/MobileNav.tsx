@@ -1,40 +1,61 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { Headphones, Home, Grid, History, User } from "lucide-react";
+import { Car, Clock, Gift, Headphones, Home, User } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { getUserRole } from "@/features/auth/storage";
 
-const customerMobileItems = [
-  { path: "/", label: "Home", icon: Home },
-  { path: "/booking", label: "Dịch vụ", icon: Grid },
-  { path: "/activity", label: "Hoạt động", icon: History },
+const customerMobileTabs = [
+  { path: "/", label: "Trang chủ", icon: Home },
+  { path: "/booking", label: "Đặt xe", icon: Car },
+  { path: "/activity", label: "Hoạt động", icon: Clock },
+  { path: "/payment", label: "Ưu đãi", icon: Gift },
   { path: "/profile", label: "Tài khoản", icon: User },
 ];
 
 export const MobileNav: React.FC = () => {
-  const mobileItems = getUserRole() === "OPERATOR" || getUserRole() === "ADMIN"
-    ? [...customerMobileItems, { path: "/operator", label: "Tổng đài", icon: Headphones }]
-    : customerMobileItems;
+  const isOperator = getUserRole() === "OPERATOR" || getUserRole() === "ADMIN";
+  const tabs = isOperator
+    ? [
+        { path: "/", label: "Trang chủ", icon: Home },
+        { path: "/booking", label: "Đặt xe", icon: Car },
+        { path: "/activity", label: "Hoạt động", icon: Clock },
+        { path: "/operator", label: "Tổng đài", icon: Headphones },
+        { path: "/profile", label: "Tài khoản", icon: User },
+      ]
+    : customerMobileTabs;
+
   return (
-    <nav className="md:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md h-[72px] px-2 bg-white/88 backdrop-blur-2xl border border-white/90 rounded-[28px] flex items-center justify-around z-50 shadow-[0_16px_48px_rgba(19,73,74,0.2)] dark:bg-[#102021]/90 dark:border-white/10">
-      {mobileItems.map((item) => {
+    <nav
+      aria-label="Điều hướng chính"
+      className="shrink-0 h-[64px] px-2 bg-white/95 dark:bg-[#12191F]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/10 flex items-center justify-around z-30"
+    >
+      {tabs.map((item) => {
         const Icon = item.icon;
         return (
           <NavLink
             key={item.path}
             to={item.path}
-            end
+            end={item.path === "/"}
             className={({ isActive }) =>
               cn(
-                "relative min-w-14 h-14 rounded-[22px] flex flex-col items-center justify-center gap-0.5 text-xs font-semibold transition-all duration-200",
+                "flex-1 flex flex-col items-center justify-center py-1.5 transition-all duration-200 cursor-pointer",
                 isActive
-                  ? "text-[#00C9B7] bg-[#E7FBF9] shadow-[inset_0_0_0_1px_rgba(0,201,183,.16),0_6px_18px_rgba(0,201,183,.2)] dark:bg-[#00C9B7]/15"
-                  : "text-slate-500 hover:text-[#008F88] dark:text-slate-400 dark:hover:text-[#00C9B7]"
+                  ? "text-[#00A699] dark:text-[#00C9B7] font-bold"
+                  : "text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 font-medium"
               )
             }
           >
-            <Icon className="w-5 h-5" />
-            <span className="text-[9px]">{item.label}</span>
+            {({ isActive }) => (
+              <>
+                <div className={cn("relative p-1 rounded-xl transition-all", isActive && "bg-[#E7FBF9] dark:bg-[#00C9B7]/15")}>
+                  <Icon className={cn("w-5 h-5", isActive ? "stroke-[2.5px]" : "stroke-[1.8px]")} />
+                  {isActive && (
+                    <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#00A699] dark:bg-[#00C9B7]" />
+                  )}
+                </div>
+                <span className="text-[10px] mt-0.5 tracking-tight">{item.label}</span>
+              </>
+            )}
           </NavLink>
         );
       })}

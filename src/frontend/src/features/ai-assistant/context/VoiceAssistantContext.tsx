@@ -22,7 +22,7 @@ import {
 } from "./voice-assistant-context";
 
 function buildWelcomeMessage(userName: string): string {
-  return `Xin chào ${userName}! Em là trợ lý OlaSM, rất vui được đồng hành cùng anh/chị hôm nay 😊 Anh/chị đang cần em hỗ trợ gì ạ — đặt xe, theo dõi chuyến đi, hay có thắc mắc nào khác không?`;
+  return `Xin chào ${userName || "quý khách"}! Em là Trợ lý giọng nói Green SM (OlaSM Voice Core). Em có thể hỗ trợ anh/chị đặt xe điện VinFast, kiểm tra hành trình hoặc thông tin giá cước. Hôm nay anh/chị muốn đến đâu ạ?`;
 }
 
 export const VoiceAssistantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

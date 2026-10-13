@@ -1,34 +1,28 @@
 import React from "react";
-import { Phone, PhoneOff } from "lucide-react";
+import { Mic } from "lucide-react";
 import { useVoiceAssistant } from "@/features/ai-assistant/context/useVoiceAssistant";
 
-// Entry point DUY NHẤT của Voice AI — nổi cố định góc màn hình, không che nội dung
-// chính, luôn khả dụng ở mọi trang (mounted 1 lần trong AppLayout). Bấm là MỞ CUỘC
-// GỌI thoại thẳng (không phải mở popup chat) — icon ống nghe, không phải mic, đúng
-// tinh thần "gọi điện với AI Agentic chứ không phải nhắn tin chatbot". Tự ẩn khi popup
-// đang mở để tránh 2 lớp điều khiển chồng nhau trên mobile.
 export const VoiceAIButton: React.FC = () => {
-  const { isOpen, open, close, status } = useVoiceAssistant();
+  const { isOpen, open, status } = useVoiceAssistant();
+
+  if (isOpen) return null;
 
   return (
     <button
       type="button"
-      onClick={isOpen ? close : open}
-      aria-label={isOpen ? "Kết thúc cuộc gọi với trợ lý AI" : "Gọi trợ lý AI OlaSM"}
+      onClick={open}
+      aria-label="Gọi Trợ lý giọng nói Green SM"
       aria-expanded={isOpen}
-      className={`fixed z-40 flex items-center justify-center rounded-full shadow-xl transition-all duration-300 cursor-pointer
-        bottom-24 right-5 w-14 h-14 md:bottom-8 md:right-8 md:w-16 md:h-16
-        ${isOpen ? "bg-rose-500 hover:bg-rose-600" : "bg-gradient-to-br from-[#00C9B7] to-[#008F88] hover:scale-105 active:scale-95"}
-        ${!isOpen && status === "listening" ? "animate-pulse ring-4 ring-[#00C9B7]/30" : ""}`}
+      className={`absolute z-30 bottom-20 right-4 flex items-center gap-2 pl-3.5 pr-4 py-2.5 rounded-full shadow-[0_8px_25px_rgba(0,166,153,0.35)] transition-all duration-300 cursor-pointer
+        bg-gradient-to-r from-[#00A699] to-[#00C9B7] text-white hover:scale-105 active:scale-95 border border-white/30
+        ${status === "listening" ? "ring-4 ring-[#00E5C9]/40 animate-pulse" : ""}`}
     >
-      {isOpen ? (
-        <PhoneOff className="w-6 h-6 text-white" />
-      ) : (
-        <Phone className="w-6 h-6 md:w-7 md:h-7 text-white" />
-      )}
-      {!isOpen && (
-        <span className="absolute inset-0 rounded-full bg-[#00C9B7]/40 animate-ping [animation-duration:2.5s] pointer-events-none" />
-      )}
+      <span className="relative flex h-3 w-3">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-80" />
+        <span className="relative inline-flex rounded-full h-3 w-3 bg-white" />
+      </span>
+      <Mic className="w-4 h-4 text-white" />
+      <span className="text-xs font-bold tracking-tight">Nói với Trợ lý</span>
     </button>
   );
 };

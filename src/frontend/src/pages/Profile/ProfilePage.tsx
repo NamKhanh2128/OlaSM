@@ -44,11 +44,11 @@ export const ProfilePage: React.FC = () => {
     : "?";
 
   return (
-    <div className="max-w-[1024px] mx-auto space-y-7 pb-16">
+    <div className="w-full space-y-4 pb-6">
       {/* Page Header */}
-      <header className="mb-2">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-[#191C1E] dark:text-white tracking-tight">
-          Tài khoản
+      <header className="mb-1">
+        <h1 className="text-lg font-extrabold text-[#191C1E] dark:text-white tracking-tight">
+          Tài khoản & Hồ sơ
         </h1>
       </header>
 
