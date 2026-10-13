@@ -30,6 +30,7 @@ class AgentTurnAdapter:
             transcript=query,
             stt_confidence=values.get("stt_confidence"),
             tool_result=tool_result,
+            app_context=values.get('app_context'),
         )
         action = await self.llm_agent.handle(agent_input, state)
         return {

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
+from src.agents.contracts.app_control import AppActionKind, AppActionRisk, capability_allowed
 from src.agents.contracts.schemas import (
     ActionType,
     AgentAction,
@@ -249,6 +250,7 @@ class AgentGuardrails:
         action: AgentAction,
     ) -> AgentAction:
         updates = dict(action.state_updates)
+        _validate_app_actions(agent_input, action)
         managed_updates = _AGENT_MANAGED_STATE_FIELDS.intersection(updates)
         if managed_updates:
             fields = ", ".join(sorted(managed_updates))
@@ -424,3 +426,31 @@ def redact_pii_data(value):
     if isinstance(value, tuple):
         return tuple(redact_pii_data(item) for item in value)
     return value
+def _validate_app_actions(agent_input: AgentInput, action: AgentAction) -> None:
+    if not action.app_actions:
+        return
+
+    context = agent_input.app_context
+    for app_action in action.app_actions:
+        if app_action.kind is AppActionKind.END_ASSISTANT:
+            continue
+        if context is None:
+            raise GuardrailViolationError('app actions require Green SM mobile context')
+        if not context.foreground and app_action.kind is not AppActionKind.REQUEST_OPEN_APP:
+            raise GuardrailViolationError('foreground app context is required for this app action')
+
+        capability = {
+            AppActionKind.NAVIGATE: f'navigate:{app_action.target}',
+            AppActionKind.GO_BACK: 'system:back',
+            AppActionKind.READ_SCREEN: 'system:read_screen',
+            AppActionKind.SET_FIELD: f'field:{app_action.target}',
+            AppActionKind.SELECT_OPTION: f'field:{app_action.target}',
+            AppActionKind.SUBMIT: f'submit:{app_action.target}',
+            AppActionKind.OPEN_HELP: 'support:open',
+            AppActionKind.REQUEST_OPEN_APP: 'system:open_app',
+        }[app_action.kind]
+        if not capability_allowed(context, capability):
+            raise GuardrailViolationError(f'app capability is not advertised: {capability}')
+        if app_action.kind is AppActionKind.SUBMIT:
+            if not app_action.confirmation_required or app_action.risk is AppActionRisk.SAFE_NAVIGATION:
+                raise GuardrailViolationError('side-effecting app actions require app confirmation')

@@ -1,11 +1,15 @@
 # TIẾN TRÌNH POC CHUẨN XÁC & LỘ TRÌNH THỰC HIỆN PHASE 3 — DỰ ÁN OLASM
-## Trợ lý Giọng nói Đa phương thức (Voice & Vision) Cá nhân hóa Ưu đãi & Đặt xe Thông minh cho GreenSM
+## **[PIVOT 2026-10-13]** Trợ lý Giọng nói Điều khiển App Mobile Green SM của VinGroup
 **Chương trình:** VRIC × GSM Smart City — Nhóm 4: Mobility Assistant  
-**Mã dự án:** OlaSM  
+**Mã dự án:** OlaSM Voice Core  
 **Giai đoạn:** Phase 3 — Phát triển Kỹ thuật & Thực nghiệm POC (Tổng thời gian: 6 tuần: 14/09/2026 – 25/10/2026)  
-**Thời điểm báo cáo:** Chủ nhật, ngày 04/10/2026 (Hoàn thành Mốc Tuần 3 — Đã qua 3 tuần / 50% chặng đường Phase 3)  
+**Thời điểm báo cáo:** Thứ Hai, ngày 13/10/2026 (Cập nhật sau Pivot — Tuần 4 / Phase 3)  
 **Nhóm tác giả:** Nguyễn Đức Nam Khánh (MSSV: 2A202601103) & Nguyễn Thị Phương (MSSV: 2A202601315)  
 **Hội đồng cố vấn & Ban giám khảo:** TS. Lê Duy Dũng (VinUniversity) & Anh Lê Yên Thanh (Chuyên gia công nghệ VRIC × GSM)
+
+---
+
+> ⚠️ **PIVOT SẢN PHẨM (2026-10-13):** OlaSM không còn là web app đặt xe độc lập. OlaSM là **lớp voice assistant tích hợp bên trong app mobile Green SM của VinGroup**. Người dùng bấm microphone trong Green SM → nói → OlaSM xử lý → Green SM thực thi. Green SM là nguồn dữ liệu, booking và thanh toán chính thức duy nhất. Các phần trong tài liệu này mô tả tiến trình đến Tuần 3 theo hướng cũ; từ Tuần 4 trở đi nhóm đã pivot và xây dựng typed AppAction contract + app-control tools cho Green SM mobile.
 
 ---
 

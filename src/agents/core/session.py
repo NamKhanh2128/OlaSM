@@ -75,6 +75,7 @@ class TurnSession:
         if booking.get("phone_number"):
             booking["phone_number"] = "đã có và hợp lệ"
         return {
+            'app_context': self.event.get('app_context'),
             "event": self.event,
             "state": {
                 "active_capability": (self.updates.get("current_workflow", self.state.current_workflow)),

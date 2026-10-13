@@ -1,14 +1,12 @@
-# PRD — OlaSM Voice AI Agent
+# PRD — OlaSM Voice Core (Green SM Mobile Voice Assistant)
 
-> **PRODUCT · CANONICAL** — Yêu cầu sản phẩm mới nhất. Trạng thái triển khai thực tế được đối chiếu với code hiện tại, [mustdo.md](../mustdo.md) và [system design](architecture_diagram.md).
+> **PRODUCT · CANONICAL** — Yêu cầu sản phẩm sau khi pivot. Trạng thái triển khai thực tế được đối chiếu với code hiện tại, [mustdo.md](../mustdo.md) và [system design](architecture_diagram.md).
 
-**Phiên bản:** 1.4 · **Trạng thái:** APPROVED — Baseline demo/staging, tiếp tục hoàn thiện production · **Primary persona:** Khách hàng ít thành thạo công nghệ / người lớn tuổi
+**Phiên bản:** 2.0 · **Trạng thái:** ACTIVE — Voice control layer cho app mobile Green SM · **Primary persona:** Người dùng Green SM muốn điều khiển app bằng giọng nói
 
-> Sản phẩm hiện cung cấp voice session tiếng Việt trên web qua LiveKit Room, có text fallback và các provider STT/LLM/TTS cấu hình được. Runtime hiện tự động hóa có kiểm soát luồng đặt xe, hỏi thông tin và handoff; payment, refund/complaint, driver support, emergency dispatch/112 và telephony vẫn là roadmap.
+> ⚠️ **PIVOT 2026-10-13:** OlaSM không còn là web app đặt xe độc lập. OlaSM là **lớp voice assistant tích hợp bên trong app mobile Green SM của VinGroup**. Người dùng bấm nút microphone trong Green SM → nói → OlaSM xử lý → Green SM thực thi. **Green SM là nguồn dữ liệu, booking và thanh toán chính thức duy nhất.**
 
----
-
-> **Cập nhật triển khai 2026-08-31:** Voice runtime dùng LiveKit AgentServer/AgentSession; STT dùng LiveKit Inference/Deepgram Nova-3, LLM dùng OpenAI plugin, TTS dùng Google Gemini Flash `Kore` với Chirp 3 HD fallback. Voice và text dùng chung state/guardrail contract; booking có quote, explicit confirmation, idempotency và invalidate quote khi đổi yêu cầu; handoff lưu context snapshot và đưa operator vào cùng room, sau đó dừng AI audio khi takeover. Payment, refund/complaint ticketing, driver support, emergency dispatch/112, SIP/VoIP và fleet/ETA production chưa hoàn thành.
+> **Trạng thái kỹ thuật 2026-10-13:** Voice runtime dùng LiveKit AgentServer/AgentSession với typed AppAction contract. STT dùng LiveKit Inference/Deepgram Nova-3, LLM dùng OpenAI plugin, TTS dùng Google Gemini Flash `Kore` với Chirp 3 HD fallback. Typed AppAction contract (NAVIGATE/GO_BACK/READ_SCREEN/SET_FIELD/SELECT_OPTION/SUBMIT/OPEN_HELP/REQUEST_OPEN_APP/END_ASSISTANT) đã implemented. Green SM API integration: EXTERNAL_BLOCKED — cần chốt với team GSM. Mobile SDK: EXTERNAL_BLOCKED — phụ thuộc công nghệ app GSM.
 
 ---
 

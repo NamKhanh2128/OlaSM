@@ -9,6 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from src.agents.contracts.app_control import AppAction, AppContext, SessionControl
 from src.voice_agent.place_query_validator import is_valid_place_query
 
 BookingTarget = Literal["pickup", "destination"]
@@ -584,6 +585,9 @@ class OlaSMSessionData(BaseModel):
     handoff: HandoffState | None = None
     lifecycle_status: SessionLifecycle = "active"
     post_booking_support: PostBookingSupportState | None = None
+    app_context: AppContext | None = None
+    pending_app_actions: list[AppAction] = Field(default_factory=list, max_length=8)
+    app_session_control: SessionControl = SessionControl.ACTIVE
 
     _transcript_rewrite_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
     _transcript_rewrite_tasks: dict[str, asyncio.Task[object]] = PrivateAttr(default_factory=dict)
@@ -662,6 +666,23 @@ class OlaSMSessionData(BaseModel):
 
     def clear_failure(self) -> None:
         self.last_failure = None
+
+    def set_app_context(self, context: AppContext | dict[str, object]) -> None:
+        self.app_context = AppContext.model_validate(context)
+
+    def queue_app_action(self, action: AppAction) -> None:
+        self.pending_app_actions = [action]
+
+    def clear_app_actions(self) -> None:
+        self.pending_app_actions = []
+
+    def app_control_state(self) -> dict[str, object]:
+        return {
+            'schema_version': '1',
+            'screen': self.app_context.screen.value if self.app_context else 'UNKNOWN',
+            'session_control': self.app_session_control.value,
+            'app_actions': [item.model_dump(mode='json') for item in self.pending_app_actions],
+        }
 
     def public_state(self) -> dict[str, object]:
         return {

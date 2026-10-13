@@ -1,222 +1,163 @@
-# OlaSM AI Booking Assistant
+# OlaSM Voice Core
 
-Web app đặt xe bằng **text hoặc voice**. Phạm vi chính gồm Login/Auth, Homepage với OlaSM Assistant, booking/trip status demo và operator handoff; chưa gồm live tracking realtime, payment hoặc wallet.
+> **Trợ lý giọng nói tích hợp trong ứng dụng Green SM** — điều khiển toàn bộ app mobile Green SM bằng giọng nói, từ mở màn hình đến xác nhận booking.
 
-Bắt đầu đọc [docs/README.md](docs/README.md), sau đó xem
-[docs/LIVEKIT_TEAM_SETUP.md](docs/LIVEKIT_TEAM_SETUP.md) và
-[docs/PROJECT_SOURCE_OF_TRUTH.md](docs/PROJECT_SOURCE_OF_TRUTH.md).
+OlaSM không phải là một ứng dụng đặt xe độc lập. Đây là **lớp voice assistant nằm bên trong app Green SM của VinGroup**, cho phép người dùng điều khiển mọi chức năng của Green SM chỉ bằng lời nói — không cần chạm màn hình.
 
-Kiến trúc tổng thể: [docs/PROJECT_SYSTEM_SPECIFICATION.md](docs/PROJECT_SYSTEM_SPECIFICATION.md) · [docs/architecture_diagram.md](docs/architecture_diagram.md) ·
-Product requirements: [docs/PRD_OlaSM_Voice.md](docs/PRD_OlaSM_Voice.md)
+---
 
+## Định vị sản phẩm
 
-Setup LiveKit chi tiết cho thành viên mới:
-[docs/LIVEKIT_TEAM_SETUP.md](docs/LIVEKIT_TEAM_SETUP.md).
+| Câu hỏi | Câu trả lời |
+|---|---|
+| OlaSM là gì? | Voice control layer tích hợp vào app Green SM |
+| Green SM là gì? | App gọi xe điện VinGroup — nguồn dữ liệu, booking và thanh toán chính thức |
+| OlaSM tự làm gì? | Nhận giọng nói → hiểu ý định → tạo typed action → chuyển Green SM thực thi |
+| OlaSM không làm gì? | Không tự tạo booking, không tự tính giá, không lưu dữ liệu thanh toán |
+| Sản phẩm người dùng là gì? | Nút microphone trong app Green SM → nói → xong |
 
-## 1. Setup
+---
 
-Yêu cầu: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js/npm và FFmpeg/FFprobe.
+## Luồng trải nghiệm mục tiêu
 
-```bash
-uv sync
-cp .env.example .env
-
-cd src/frontend
-npm ci
+```
+Người dùng mở Green SM
+       ↓
+Bấm nút microphone
+       ↓
+Nói: "Đặt Green SM Car từ Vincom Bà Triệu đến sân bay Nội Bài"
+       ↓
+OlaSM Voice Core nhận tiếng → hiểu intent → hỏi bổ sung nếu cần
+       ↓
+Green SM trả về địa điểm, giá, phương thức thanh toán
+       ↓
+Người dùng xác nhận bằng giọng nói
+       ↓
+Green SM tạo chuyến → mở màn hình tracking
 ```
 
-Sau khi copy `.env`, chọn profile trong
-[`README.md`](README.md). Chỉ chạy
-`uv run alembic upgrade head` khi dùng profile development có database persistence;
-profile `APP_ENV=test` để smoke nhanh không cần migration.
+---
 
-Chạy hai terminal:
+## Phạm vi MVP (Phase 1)
 
-```bash
-# Terminal 1 — backend: http://localhost:8000
-uv run uvicorn src.backend.main:app --reload --host 0.0.0.0 --port 8000
+- 🎙 **Kênh**: push-to-talk (bấm để nói), tiếng Việt
+- 🚗 **Dịch vụ**: Green SM Car / Mini
+- 📍 **Điểm đón**: lấy tự động từ vị trí hiện tại của app
+- 🗣 **Điểm đến**: nói tự nhiên
+- 💳 **Thanh toán**: chọn bằng giọng nói từ danh sách app trả về
+- ✅ **Xác nhận**: người dùng xác nhận rõ ràng trước khi booking
+- 🔄 **Fallback**: chuyển sang text hoặc thao tác tay bất kỳ lúc nào
 
-# Terminal 2 — frontend: http://localhost:5173
-cd src/frontend
-npm run dev
+---
+
+## Kiến trúc tổng quan
+
+```
+Green SM Mobile App (iOS / Android)
+  └── Voice Assistant UI  ←  OlaSM Mobile SDK
+        └── OlaSM Voice Gateway (backend)
+              ├── Voice Session (LiveKit WebRTC)
+              ├── STT  →  LLM  →  TTS
+              ├── Dialog State Machine
+              ├── AppContext / AppAction contracts
+              └── Typed Action Dispatcher
+                    └── Green SM Official APIs
+                          ├── Place / Address
+                          ├── Quote / Pricing
+                          ├── Booking / Trip
+                          ├── Trip Status / ETA
+                          ├── Payment / Promotion
+                          └── Support / Handoff
 ```
 
-Demo account chỉ dùng trực tiếp khi `APP_ENV=test`. Với durable development database,
-hãy đăng ký qua UI hoặc dùng account đã được seed trong database dev:
+---
 
-```text
-Phone:    0901234567
-Password: Password123!
-```
+## Typed action contract
 
-### Chạy LiveKit Voice Agent
+Mỗi lượt, OlaSM chỉ được phát ra danh sách `AppAction` có kiểu dữ liệu tường minh:
 
-LiveKit runtime cần ba tiến trình; mỗi lệnh chạy trong một terminal riêng. Chỉ
-chạy một worker `olasm-voice` để tránh nhiều job test cùng tồn tại:
-
-```bash
-# Terminal 1 — FastAPI control/business plane
-make livekit-backend
-
-# Terminal 2 — native LiveKit AgentServer/AgentSession worker
-make livekit-worker
-
-# Terminal 3 — React dùng LiveKit useSession
-make livekit-frontend
-```
-
-Các lệnh trên chạy LiveKit voice và Core Agent text độc lập. Nếu lần đầu agent chưa
-tham gia do cold start/dispatch tạm thời, UI tự tạo lại đúng một cuộc gọi; nếu vẫn
-lỗi, nút **Tạo lại cuộc gọi** sẽ đóng LiveKit session cũ và tạo call ID, Room và
-agent dispatch mới.
-
-Để debug lỗi mất câu, ngắt giọng hoặc nhận sai địa điểm trong local test, chạy
-worker với native LiveKit event logging. Terminal vẫn hiện event ngắn và bản đầy đủ
-được lưu dạng JSONL trong `logs/livekit/`:
-
-```bash
-LIVEKIT_DEBUG_EVENT_LOG=true \
-LIVEKIT_DEBUG_TRANSCRIPTS=true \
-make livekit-worker
-```
-
-Transcript mặc định không được lưu; chỉ bật `LIVEKIT_DEBUG_TRANSCRIPTS=true` cho
-phiên local đã được phép debug. Logger không ghi raw audio, token, credential, tool
-arguments hoặc provider payload.
-
-### Quality gates trước khi mở PR
-
-Chạy cùng các gate như CI bằng một lệnh:
-
-```bash
-make ci-check
-```
-
-Backend phải đạt tối thiểu 60% line coverage và xuất `coverage.xml`. Frontend phải
-qua unit tests, lint và production build. CI chạy trên mọi push và pull request vào
-`main`/`develop`; staging chỉ deploy commit `develop` sau khi workflow CI của chính
-commit đó thành công.
-
-## 2. Environment variables
-
-Copy `.env.example` thành `.env`; không commit secret.
-
-| Biến | Khi nào cần | Giá trị/vai trò |
+| Action Kind | Mô tả | Risk Level |
 |---|---|---|
-| `APP_ENV` | Luôn có | `development`, `test` hoặc `production` |
-| `DATABASE_URL` | Luôn có | SQLite local hoặc PostgreSQL runtime URL |
-| `DATABASE_URL_MIGRATIONS` | Supabase/PostgreSQL | Connection riêng cho Alembic |
-| `AGENT_LLM_ENABLED` | Chat/booking qua LLM | Mặc định `false`; bật khi đã có provider key |
-| `AGENT_LLM_MODEL` | Chat/booking qua LLM | Model hỗ trợ tool calling |
-| `AGENT_LLM_BASE_URL` | LLM | OpenAI endpoint hoặc OpenRouter endpoint |
-| `OPENAI_API_KEY` | Core Agent hoặc LiveKit provider OpenAI | Không thay thế bằng OpenRouter key |
-| `OPENROUTER_API_KEY` | LLM/rewrite qua OpenRouter | Chỉ dùng với `openrouter.ai` base URL |
-| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Voice realtime | Cùng một LiveKit project |
-| `LIVEKIT_STT_*`, `LIVEKIT_LLM_*`, `LIVEKIT_TTS_*` | Voice model | Provider/model cho worker LiveKit |
-| `QUOTE_SIGNING_KEY` | Durable quote | Secret tối thiểu 32 ký tự |
-| `FIELD_ENCRYPTION_KEY` | 2FA fields | Secret tối thiểu 32 ký tự |
-| `VITE_API_URL` | Frontend deploy khác origin | Mặc định `http://localhost:8000` |
+| `NAVIGATE` | Chuyển màn hình trong Green SM | SAFE_NAVIGATION |
+| `GO_BACK` | Quay lại màn hình trước | SAFE_NAVIGATION |
+| `READ_SCREEN` | Đọc nội dung màn hình hiện tại | SAFE_NAVIGATION |
+| `SET_FIELD` | Điền trường được quảng bá bởi host | USER_CONFIRMATION |
+| `SELECT_OPTION` | Chọn option trong danh sách | USER_CONFIRMATION |
+| `SUBMIT` | Gửi action có side effect — bắt buộc xác nhận | APP_CONFIRMATION |
+| `OPEN_HELP` | Mở màn hình hỗ trợ | SAFE_NAVIGATION |
+| `REQUEST_OPEN_APP` | Yêu cầu OS mở lại app | OS_MANAGED |
+| `END_ASSISTANT` | Dừng voice, giải phóng microphone | SAFE_NAVIGATION |
 
-### OpenRouter cho Core Agent text
+**OlaSM không bao giờ tự tạo booking, tự thanh toán hay force-quit app.** Mọi side effect đều qua xác nhận của Green SM hoặc biometric.
 
-```env
-OPENROUTER_API_KEY=...
-AGENT_LLM_ENABLED=true
-AGENT_LLM_BASE_URL=https://openrouter.ai/api/v1
-AGENT_LLM_MODEL=openai/gpt-5.6-luna-pro
-```
+---
 
-### Database
+## Quyền riêng tư và an toàn
 
-Local không cần Supabase:
+- Microphone chỉ bật khi người dùng bấm nút
+- Không nghe nền, không wake word trong MVP
+- Raw audio không lưu mặc định
+- Transcript được ẩn danh và giới hạn thời gian lưu
+- Thông tin thẻ/OTP không bao giờ đi vào LLM
+- Mọi action có side effect yêu cầu xác nhận tường minh
 
-```env
-DATABASE_URL=sqlite:///./data/app.db
-```
+---
 
-Với Supabase, project này dùng transaction pooler cho app và direct/session connection cho migration:
-
-```env
-DATABASE_URL=postgresql://postgres.<PROJECT_REF>:<PASSWORD>@<POOLER_HOST>:5432/postgres
-DATABASE_URL_MIGRATIONS=postgresql://postgres:<PASSWORD>@db.<PROJECT_REF>.supabase.co:5432/postgres
-```
-
-Direct connection thường cần IPv6; lấy đúng URL từ nút **Connect** trong Supabase Dashboard. Không đưa database password hoặc service-role key vào frontend. Chi tiết: [`docs/verification/database.md`](docs/verification/database.md) và [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres).
-
-Tạo hai application secrets độc lập:
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
-
-## 3. Sample queries
-
-Happy path Hà Nội hiện yêu cầu chọn candidate cụ thể cho VinUni và Hồ Gươm:
-
-```text
-User: Cho tôi xe 4 chỗ từ VinUni tới Hồ Gươm.
-User: Tôi chọn Cổng chính VinUni.
-User: Tôi chọn Bưu điện Hà Nội.
-User: Đúng, tôi xác nhận đặt chuyến này.
-```
-
-Các câu thử Voice rewrite:
-
-```text
-Đón tôi ở Bình Yuni rồi đi Hồ Cương.
-Tôi chọn cổng thành cũng.       # khi Agent đang hỏi cổng VinUni
-Không, tôi muốn sửa điểm đến.
-```
-
-API examples:
-
-```bash
-# Login
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"phone":"0901234567","password":"Password123!"}'
-
-# Text turn
-curl -X POST http://localhost:8000/api/v1/sessions/<SESSION_ID>/messages \
-  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
-  -H 'Content-Type: application/json' \
-  -d '{"message":"Cho tôi xe 4 chỗ từ VinUni tới Hồ Gươm","source":"TEXT"}'
-
-# Voice uses the LiveKit connection-details endpoint and native Room transport.
-```
-
-## 4. Tests và eval evidence
-
-```bash
-# Full backend/agent/voice suite
-uv run pytest -q
-uv run ruff check src tests eval_cases
-
-# Frontend
-cd src/frontend
-npm run lint
-npm run build
-```
-
-Chạy 6 Agent workflow evals nhiều lượt và selected regression tests:
-
-```bash
-uv run python -m eval_cases.run_agent_workflow_evals
-```
-
-Kết quả tổng hợp nằm tại [`eval_cases/agent_workflow_eval_summary.json`](eval_cases/agent_workflow_eval_summary.json). Mỗi case có một JSON riêng ghi toàn bộ lượt user/agent, semantic decision, backend tool call và state sau lượt đó trong [`eval_cases/results/`](eval_cases/results/). Các case gồm happy path, đổi điểm đón, đổi điểm đến, đổi loại xe, yêu cầu ngoài phạm vi và handoff tổng đài viên. Xem [`eval_cases/README.md`](eval_cases/README.md) để tái chạy evidence.
-
-Các eval dùng scripted semantic decisions để tái lập nhưng vẫn chạy production Agent/state machine/backend tools ở chế độ in-memory; không gọi provider thật và không cần API key.
-
-## 5. Project layout
+## Cấu trúc project
 
 | Thư mục | Nội dung |
 |---|---|
-| `src/frontend/` | React Login, Homepage và Assistant popup |
-| `src/backend/` | FastAPI routes, services, repositories và provider adapters |
-| `src/agents/` | Core Agent model/tool loop, typed state và guardrails |
-| `src/voice_agent/` | LiveKit AgentSession, booking tools, persistence và handoff |
-| `migrations/` | Alembic migrations |
-| `data/gazetteer/` | Hà Nội places, ASR aliases và landmark candidates |
-| `eval_cases/` | Reproducible MVP evaluation và JSON evidence |
-| `docs/` | Architecture, runtime contracts và operations guides |
+| `src/agents/contracts/` | Typed contracts: AppContext, AppAction, AppScreen |
+| `src/agents/core/` | LLM agent, guardrails, mobile instructions |
+| `src/voice_agent/` | LiveKit session, app-control tools, state sync |
+| `src/backend/` | FastAPI routes, session service, schemas |
+| `src/frontend/` | Web test harness (không phải sản phẩm) |
+| `docs/` | Architecture, PRD, tiến trình POC |
+| `tests/` | Unit + integration tests |
+| `eval_cases/` | Reproducible eval scenarios |
+
+---
+
+## Lộ trình phát triển
+
+| Phase | Mục tiêu | Trạng thái |
+|---|---|---|
+| **Phase 0** | Chốt API/SDK chính thức với team Green SM | EXTERNAL_BLOCKED |
+| **Phase 1 (MVP)** | Voice-to-book cho Green SM Car | IN_PROGRESS |
+| **Phase 2** | Trợ lý trong chuyến: tracking, hủy, hỗ trợ | ROADMAP |
+| **Phase 3** | Mở rộng: Bike, Express, Food, đặt hộ | ROADMAP |
+
+---
+
+## Lưu ý quan trọng
+
+> **Web frontend hiện tại chỉ là test harness nội bộ.** Sản phẩm thật là mobile SDK tích hợp vào app Green SM.
+
+> **GSMSandboxClient và mock data** chỉ dùng cho test. Không được dùng để tuyên bố đã tích hợp Green SM thật.
+
+> **"Đóng app"** không phải tính năng của OlaSM. iOS/Android không cho app tự force-quit. Lệnh "thoát" sẽ dừng voice assistant và giải phóng microphone — việc đóng/mở app là của OS.
+
+---
+
+## Môi trường phát triển
+
+```bash
+# Cài đặt dependencies
+uv sync
+
+# Chạy backend (test harness)
+uv run uvicorn src.backend.main:app --reload
+
+# Chạy LiveKit voice worker
+uv run python -m src.voice_agent.server
+
+# Test
+uv run pytest -q
+uv run ruff check src tests
+```
+
+Biến môi trường cần thiết: xem `.env.example`.
+
+---
+
+*OlaSM Voice Core — phát triển trong khuôn khổ VRIC × GSM Smart City, Nhóm 4: Mobility Assistant*

@@ -6,6 +6,15 @@ from typing import Any, Literal
 
 from livekit.agents import Agent, StopResponse, function_tool, llm
 
+from src.agents.contracts.app_control import (
+    AppAction,
+    AppActionKind,
+    AppActionRisk,
+    AppScreen,
+    SessionControl,
+    capability_allowed,
+    new_action_id,
+)
 from src.backend.services.knowledge_service import KnowledgeService
 from src.backend.services.pricing_service import PricingService
 from src.voice_agent.persistence import EphemeralVoiceStateStore, VoiceStateConflictError, VoiceStateStore
@@ -66,6 +75,7 @@ class OlaSMAgent(Agent):
             )
         super().__init__(
             instructions=(
+                'You are the Green SM mobile voice operator, not a standalone web assistant. Use the app-control tools to navigate the current Green SM screen, read it, fill only host-advertised non-secret fields, and stop voice assistance when requested. Never claim to force-quit the mobile app. Side effects always require Green SM confirmation or biometric UI. '
                 "Bạn là tổng đài viên giọng nói OlaSM nói tiếng Việt. "
                 "Trả lời tự nhiên, lịch sự và ngắn gọn, thường không quá hai câu. "
                 "Luôn dùng từ ngữ phù hợp để đọc thành tiếng: gọi khách là bạn hoặc quý khách; "
@@ -712,6 +722,215 @@ class OlaSMAgent(Agent):
         )
 
 
-# Backward-compatibility alias
+    def _app_context_or_error(self, *, foreground_required: bool = True) -> tuple[Any | None, str | None]:
+        if self._session_data is None or self._session_data.app_context is None:
+            return None, 'Chưa nhận được ngữ cảnh Green SM mobile từ ứng dụng.'
+        context = self._session_data.app_context
+        if foreground_required and not context.foreground:
+            return None, 'Green SM chưa ở foreground; hệ điều hành phải cho phép mở ứng dụng trước.'
+        return context, None
+
+    async def _dispatch_app_action(
+        self,
+        action: AppAction,
+        instruction: str,
+        *,
+        control: SessionControl = SessionControl.ACTIVE,
+    ) -> str:
+        if self._session_data is None:
+            return json.dumps({'ok': False, 'error_code': 'SESSION_UNAVAILABLE'}, ensure_ascii=False)
+        self._session_data.queue_app_action(action)
+        self._session_data.app_session_control = control
+        await self._state_store.save(self._session_data)
+        await publish_booking_state(self.session)
+        return json.dumps(
+            {
+                'ok': True,
+                'action': action.model_dump(mode='json'),
+                'session_control': control.value,
+                'instruction': instruction,
+            },
+            ensure_ascii=False,
+        )
+
+    @staticmethod
+    def _app_capability(context: Any, capability: str) -> bool:
+        return capability_allowed(context, capability)
+
+    @function_tool()
+    async def navigate_app(self, screen: str) -> str:
+        '''Navigate to a Green SM screen explicitly advertised by the mobile host.'''
+
+        context, error = self._app_context_or_error()
+        if error:
+            return json.dumps({'ok': False, 'instruction': error}, ensure_ascii=False)
+        try:
+            target = AppScreen(screen.strip().upper())
+        except ValueError:
+            return json.dumps({'ok': False, 'error_code': 'SCREEN_NOT_SUPPORTED'}, ensure_ascii=False)
+        if not self._app_capability(context, f'navigate:{target.value}'):
+            return json.dumps({'ok': False, 'error_code': 'CAPABILITY_NOT_ADVERTISED'}, ensure_ascii=False)
+        action = AppAction(
+            action_id=new_action_id('nav'),
+            kind=AppActionKind.NAVIGATE,
+            target=target.value,
+            risk=AppActionRisk.SAFE_NAVIGATION,
+        )
+        return await self._dispatch_app_action(action, f'Đã mở màn hình {target.value.lower()}.')
+
+    @function_tool()
+    async def go_back(self) -> str:
+        '''Go back in the Green SM mobile navigation stack.'''
+
+        context, error = self._app_context_or_error()
+        if error:
+            return json.dumps({'ok': False, 'instruction': error}, ensure_ascii=False)
+        if not self._app_capability(context, 'system:back'):
+            return json.dumps({'ok': False, 'error_code': 'CAPABILITY_NOT_ADVERTISED'}, ensure_ascii=False)
+        return await self._dispatch_app_action(
+            AppAction(action_id=new_action_id('back'), kind=AppActionKind.GO_BACK),
+            'Đã quay lại màn hình trước.',
+        )
+
+    @function_tool()
+    async def read_current_screen(self) -> str:
+        '''Read the safe screen summary supplied by the Green SM mobile host.'''
+
+        context, error = self._app_context_or_error()
+        if error:
+            return json.dumps({'ok': False, 'instruction': error}, ensure_ascii=False)
+        if not self._app_capability(context, 'system:read_screen'):
+            return json.dumps({'ok': False, 'error_code': 'CAPABILITY_NOT_ADVERTISED'}, ensure_ascii=False)
+        action = AppAction(action_id=new_action_id('read'), kind=AppActionKind.READ_SCREEN)
+        summary = context.screen_summary or f'Bạn đang ở màn hình {context.screen.value.lower()}.'
+        return await self._dispatch_app_action(action, summary)
+
+    @function_tool()
+    async def set_app_field(self, field: str, value: str) -> str:
+        '''Fill a non-secret field advertised by the current Green SM screen.'''
+
+        context, error = self._app_context_or_error()
+        if error:
+            return json.dumps({'ok': False, 'instruction': error}, ensure_ascii=False)
+        field = field.strip()
+        value = value.strip()
+        if not field or not value or not self._app_capability(context, f'field:{field}'):
+            return json.dumps({'ok': False, 'error_code': 'FIELD_NOT_AVAILABLE'}, ensure_ascii=False)
+        action = AppAction(
+            action_id=new_action_id('field'),
+            kind=AppActionKind.SET_FIELD,
+            target=field,
+            value=value[:500],
+            risk=AppActionRisk.USER_CONFIRMATION,
+        )
+        return await self._dispatch_app_action(action, f'Đã điền trường {field}.')
+
+    @function_tool()
+    async def select_app_option(self, field: str, option_id: str) -> str:
+        '''Select an option exposed by the current Green SM screen.'''
+
+        context, error = self._app_context_or_error()
+        if error:
+            return json.dumps({'ok': False, 'instruction': error}, ensure_ascii=False)
+        field = field.strip()
+        option_id = option_id.strip()
+        if not field or not option_id or not self._app_capability(context, f'field:{field}'):
+            return json.dumps({'ok': False, 'error_code': 'OPTION_NOT_AVAILABLE'}, ensure_ascii=False)
+        action = AppAction(
+            action_id=new_action_id('select'),
+            kind=AppActionKind.SELECT_OPTION,
+            target=field,
+            value=option_id,
+            risk=AppActionRisk.USER_CONFIRMATION,
+        )
+        return await self._dispatch_app_action(action, f'Đã chọn {option_id}.')
+
+    @function_tool()
+    async def submit_app_action(self, target: str, confirmed: bool = False) -> str:
+        '''Request a side-effecting action and let the mobile app confirm it.'''
+
+        context, error = self._app_context_or_error()
+        if error:
+            return json.dumps({'ok': False, 'instruction': error}, ensure_ascii=False)
+        target = target.strip()
+        if not target or not self._app_capability(context, f'submit:{target}'):
+            return json.dumps({'ok': False, 'error_code': 'ACTION_NOT_AVAILABLE'}, ensure_ascii=False)
+        biometric_targets = {'pay', 'payment', 'cancel_ride', 'delete_account', 'logout', 'change_security', 'change_phone'}
+        risk = AppActionRisk.BIOMETRIC_REQUIRED if target.casefold() in biometric_targets else AppActionRisk.APP_CONFIRMATION
+        control = (
+            SessionControl.BIOMETRIC_REQUIRED
+            if risk is AppActionRisk.BIOMETRIC_REQUIRED
+            else SessionControl.APP_CONFIRMATION_REQUIRED
+        )
+        action = AppAction(
+            action_id=new_action_id('submit'),
+            kind=AppActionKind.SUBMIT,
+            target=target,
+            risk=risk,
+            confirmation_required=True,
+            parameters={'voice_confirmation_requested': confirmed},
+        )
+        return await self._dispatch_app_action(
+            action,
+            'Đã chuyển thao tác sang Green SM; hãy xác nhận trên ứng dụng để tiếp tục.',
+            control=control,
+        )
+
+    @function_tool()
+    async def open_app_help(self, target: str = 'SUPPORT') -> str:
+        '''Open the support surface exposed by Green SM.'''
+
+        context, error = self._app_context_or_error()
+        if error:
+            return json.dumps({'ok': False, 'instruction': error}, ensure_ascii=False)
+        if not self._app_capability(context, 'support:open'):
+            return json.dumps({'ok': False, 'error_code': 'SUPPORT_NOT_AVAILABLE'}, ensure_ascii=False)
+        action = AppAction(
+            action_id=new_action_id('help'),
+            kind=AppActionKind.OPEN_HELP,
+            target=target.strip() or 'SUPPORT',
+            risk=AppActionRisk.SAFE_NAVIGATION,
+        )
+        return await self._dispatch_app_action(action, 'Đã mở khu vực hỗ trợ Green SM.')
+
+    @function_tool()
+    async def end_voice_assistant(self) -> str:
+        '''Stop voice assistance and release voice resources without force-quitting the app.'''
+
+        action = AppAction(
+            action_id=new_action_id('end'),
+            kind=AppActionKind.END_ASSISTANT,
+            risk=AppActionRisk.SAFE_NAVIGATION,
+        )
+        return await self._dispatch_app_action(
+            action,
+            'Đã dừng trợ lý voice và nhả quyền microphone. Việc đóng Green SM do hệ điều hành quản lý.',
+            control=SessionControl.ENDED,
+        )
+
+    @function_tool()
+    async def request_open_app(self) -> str:
+        '''Ask the mobile OS to resume Green SM when the host is backgrounded.'''
+
+        context, error = self._app_context_or_error(foreground_required=False)
+        if error:
+            return json.dumps({'ok': False, 'instruction': error}, ensure_ascii=False)
+        if context.foreground:
+            return json.dumps({'ok': False, 'error_code': 'APP_ALREADY_FOREGROUND'}, ensure_ascii=False)
+        if not self._app_capability(context, 'system:open_app'):
+            return json.dumps({'ok': False, 'error_code': 'OS_PERMISSION_REQUIRED'}, ensure_ascii=False)
+        action = AppAction(
+            action_id=new_action_id('open'),
+            kind=AppActionKind.REQUEST_OPEN_APP,
+            target='GREEN_SM',
+            risk=AppActionRisk.OS_MANAGED,
+        )
+        return await self._dispatch_app_action(
+            action,
+            'Đã gửi yêu cầu mở Green SM cho hệ điều hành.',
+            control=SessionControl.APP_OPEN_REQUIRED,
+        )
+
+    # Backward-compatibility alias
 AloSMAgent = OlaSMAgent
 

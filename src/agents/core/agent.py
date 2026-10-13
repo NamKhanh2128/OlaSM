@@ -13,7 +13,7 @@ from src.agents.core.booking.actions import (
     request_place_selection_action,
 )
 from src.agents.core.booking.state import BookingStep
-from src.agents.core.instructions import SERVICE_AGENT_INSTRUCTIONS
+from src.agents.core.mobile_instructions import MOBILE_VOICE_AGENT_INSTRUCTIONS
 from src.agents.core.model import ConversationModel, ConversationModelError, ToolExchange
 from src.agents.core.policy import AgentPolicy
 from src.agents.core.registry import ContinueToolLoop, ToolRegistry
@@ -50,6 +50,10 @@ class ModelDrivenAgent:
             session = TurnSession.load(AgentState(session_id=state.session_id), event={})
             return handoff(session, {"reason": "Invalid typed session state", "reason_code": "POLICY_BLOCK"})
 
+        session.event['app_context'] = (
+            agent_input.app_context.model_dump(mode='json') if agent_input.app_context is not None else None
+        )
+
         if agent_input.tool_result is not None:
             outcome = self._reduce_result(session, agent_input)
             if isinstance(outcome, AgentAction):
@@ -80,7 +84,7 @@ class ModelDrivenAgent:
 
             try:
                 decision = await self.model.decide(
-                    instructions=SERVICE_AGENT_INSTRUCTIONS,
+                    instructions=MOBILE_VOICE_AGENT_INSTRUCTIONS,
                     context=session.public_context(),
                     tools=self.registry.definitions(session),
                     exchanges=exchanges,

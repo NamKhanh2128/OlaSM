@@ -30,6 +30,7 @@ async def publish_booking_state(session: AgentSession[OlaSMSessionData]) -> None
             reliable=True,
             topic=BOOKING_STATE_TOPIC,
         )
+        await publish_app_control_state(session)
     except RuntimeError as exc:
         # LiveKit tears down RoomIO before late provider-failure callbacks run.
         # There is no recipient at that point, so this is an expected cleanup
@@ -51,3 +52,29 @@ async def publish_booking_state(session: AgentSession[OlaSMSessionData]) -> None
             (time.perf_counter() - started) * 1000,
             result,
         )
+
+
+APP_CONTROL_TOPIC = 'olasm.app_control.v1'
+
+
+async def publish_app_control_state(session: AgentSession[OlaSMSessionData]) -> None:
+    '''Publish the typed mobile-control state on its own LiveKit topic.'''
+
+    payload = json.dumps(
+        session.userdata.app_control_state(),
+        ensure_ascii=False,
+        separators=(',', ':'),
+    )
+    try:
+        await session.room_io.room.local_participant.publish_data(
+            payload,
+            reliable=True,
+            topic=APP_CONTROL_TOPIC,
+        )
+    except RuntimeError as exc:
+        if 'room_io' in str(exc).lower() and 'not started with a room' in str(exc).lower():
+            logger.info('skipped app-control publish because the session is closed')
+            return
+        logger.exception('failed to publish LiveKit app-control state')
+    except Exception:
+        logger.exception('failed to publish LiveKit app-control state')

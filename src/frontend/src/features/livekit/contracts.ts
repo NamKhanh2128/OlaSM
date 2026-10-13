@@ -91,3 +91,58 @@ export type BookingState = {
     vehicle_type: BookingClarificationState | null;
   };
 };
+export const APP_CONTROL_TOPIC = 'olasm.app_control.v1';
+
+export type AppScreen =
+  | 'HOME'
+  | 'SERVICE_SELECTOR'
+  | 'CAR_BOOKING'
+  | 'BIKE_BOOKING'
+  | 'FOOD_HOME'
+  | 'EXPRESS_BOOKING'
+  | 'INTERCITY'
+  | 'ACTIVITY'
+  | 'TRIP_TRACKING'
+  | 'PAYMENTS'
+  | 'PROMOTIONS'
+  | 'PROFILE'
+  | 'SETTINGS'
+  | 'SUPPORT'
+  | 'PRIVACY'
+  | 'UNKNOWN';
+
+export type AppAction = {
+  action_id: string;
+  kind:
+    | 'NAVIGATE'
+    | 'GO_BACK'
+    | 'READ_SCREEN'
+    | 'SET_FIELD'
+    | 'SELECT_OPTION'
+    | 'SUBMIT'
+    | 'OPEN_HELP'
+    | 'REQUEST_OPEN_APP'
+    | 'END_ASSISTANT';
+  target?: string | null;
+  value?: string | number | boolean | null;
+  parameters?: Record<string, string | number | boolean | null>;
+  risk: 'SAFE_NAVIGATION' | 'USER_CONFIRMATION' | 'APP_CONFIRMATION' | 'BIOMETRIC_REQUIRED' | 'OS_MANAGED';
+  confirmation_required: boolean;
+  expires_in_seconds: number;
+  reason?: string | null;
+};
+
+export type AppActionResult = {
+  action_id: string;
+  status: 'EXECUTED' | 'REJECTED' | 'EXPIRED' | 'REQUIRES_CONFIRMATION' | 'NOT_SUPPORTED';
+  message?: string | null;
+  error_code?: string | null;
+  resulting_screen?: AppScreen | null;
+  context_revision?: number | null;
+};
+
+export type AppControlState = {
+  schema_version: '1';
+  session_control: 'ACTIVE' | 'APP_OPEN_REQUIRED' | 'APP_CONFIRMATION_REQUIRED' | 'BIOMETRIC_REQUIRED' | 'ENDED';
+  app_actions: AppAction[];
+};

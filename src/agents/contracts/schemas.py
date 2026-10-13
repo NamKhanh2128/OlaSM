@@ -2,6 +2,7 @@ from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from src.agents.contracts.app_control import AppAction, AppContext, SessionControl
 
 
 def _normalize_identity(value: str) -> str:
@@ -20,6 +21,7 @@ class ActionType(StrEnum):
 
 
 class WorkflowType(StrEnum):
+    APP_CONTROL = 'APP_CONTROL'
     RIDE_BOOKING = "RIDE_BOOKING"
     TRIP_LOOKUP = "TRIP_LOOKUP"
     FAQ = "FAQ"
@@ -79,6 +81,7 @@ class AgentInput(BaseModel):
     transcript: str = ""
     stt_confidence: float | None = Field(default=None, ge=0, le=1)
     tool_result: ToolResult | None = None
+    app_context: AppContext | None = None
 
     @field_validator("session_id")
     @classmethod
@@ -111,11 +114,23 @@ class ToolCall(BaseModel):
 
 
 class AgentAction(BaseModel):
+    @model_validator(mode='after')
+    def validate_app_action_payload(self) -> 'AgentAction':
+        action_ids = [item.action_id for item in self.app_actions]
+        if len(action_ids) != len(set(action_ids)):
+            raise ValueError('app action ids must be unique')
+        if self.session_control is SessionControl.ENDED and not any(
+            item.kind.value == 'END_ASSISTANT' for item in self.app_actions
+        ):
+            raise ValueError('ENDED session control requires END_ASSISTANT action')
+        return self
     action_type: ActionType
     message: str | None = None
     tool_call: ToolCall | None = None
     state_updates: dict[str, Any] = Field(default_factory=dict)
     reason: str | None = None
+    app_actions: list[AppAction] = Field(default_factory=list, max_length=8)
+    session_control: SessionControl | None = None
 
     @model_validator(mode="after")
     def validate_action_payload(self) -> "AgentAction":

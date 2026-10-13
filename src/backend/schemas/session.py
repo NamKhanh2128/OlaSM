@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from src.backend.schemas.common import LocationDTO
+from src.agents.contracts.app_control import AppAction, AppContext, SessionControl
 
 
 class SessionDTO(BaseModel):
@@ -25,7 +26,7 @@ class SessionDTO(BaseModel):
 
 
 class CreateSessionDTO(BaseModel):
-    channel: Literal["WEB_VOICE", "WEB_TEXT"] = "WEB_TEXT"
+    channel: Literal['WEB_VOICE', 'WEB_TEXT', 'MOBILE_VOICE', 'MOBILE_TEXT'] = 'MOBILE_VOICE'
     device_id: str | None = Field(default=None, max_length=128)
 
 
@@ -40,6 +41,7 @@ class SessionMessageDTO(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     source: Literal["TEXT", "VOICE"] = "TEXT"
     stt_confidence: float | None = Field(default=None, ge=0, le=1)
+    app_context: AppContext | None = None
 
 
 class SessionMessageResponseDTO(BaseModel):
@@ -48,6 +50,8 @@ class SessionMessageResponseDTO(BaseModel):
     message: str
     state: dict[str, object]
     booking: dict[str, object] | None = None
+    app_actions: list[AppAction] = Field(default_factory=list)
+    session_control: SessionControl | None = None
 
 
 class SessionFeedbackDTO(BaseModel):

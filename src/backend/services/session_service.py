@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from src.agents.contracts.app_control import AppContext
 from src.backend.config import get_settings
 from src.backend.repositories.persistence_repository import PersistenceRepository
 from src.backend.services.conversation_logger import ConversationLogger
@@ -260,6 +261,7 @@ class SessionService:
         session_id: str,
         message: str,
         confidence: float | None = None,
+        app_context: AppContext | None = None,
         *,
         source: str = "TEXT",
     ) -> dict[str, object]:
@@ -286,6 +288,7 @@ class SessionService:
             agent_state=agent_state,
             transcript=normalized_message,
             stt_confidence=confidence,
+            app_context=app_context,
         )
         agent_state = agent_state.apply(action.state_updates)
         tool_turns = 0
@@ -304,6 +307,7 @@ class SessionService:
                 agent_state=agent_state,
                 transcript="",
                 tool_result=tool_result,
+                app_context=app_context,
             )
             agent_state = agent_state.apply(action.state_updates)
             tool_turns += 1
@@ -358,6 +362,7 @@ class SessionService:
         transcript: str,
         stt_confidence: float | None = None,
         tool_result=None,
+        app_context: AppContext | None = None,
     ) -> AgentAction:
         from src.agents.schemas import AgentInput
 
@@ -372,6 +377,7 @@ class SessionService:
             transcript=transcript,
             stt_confidence=stt_confidence,
             tool_result=tool_result,
+            app_context=app_context,
         )
         return await self._conversation_agent().handle(agent_input, agent_state)
 
@@ -564,6 +570,8 @@ class SessionService:
             "message": message,
             "state": state,
             "booking": booking,
+            'app_actions': [item.model_dump(mode='json') for item in action.app_actions],
+            'session_control': action.session_control.value if action.session_control is not None else None,
         }
 
     @classmethod
