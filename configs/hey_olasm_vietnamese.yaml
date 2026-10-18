@@ -1,0 +1,75 @@
+# Configuration for Training "Hey OlaSM" / "Ola Ơi" Wake Word Engine
+# Powered by livekit-wakeword Conv-Attention architecture
+
+wake_word: "hey olasm"
+target_phrase: "hey olasm"
+
+phonetic_variants:
+  - "hây ô la ét em"
+  - "hê ô la ét em"
+  - "hey ola s m"
+  - "ô la ơi"
+  - "hey ola"
+
+synthetic_generation:
+  engine: "voxcpm"
+  tts_providers:
+    - edge_tts:
+        voices:
+          - "vi-VN-HoaiMyNeural"
+          - "vi-VN-NamMinhNeural"
+    - piper_vi:
+        model: "viphoneme_medium"
+  total_positive_samples: 25000
+  accent_distribution:
+    northern: 0.40   # Giọng miền Bắc
+    southern: 0.45   # Giọng miền Nam
+    central: 0.15    # Giọng miền Trung
+
+data_augmentation:
+  room_impulse_response: true       # Mô phỏng vang trong xe hơi và phòng kín
+  speed_perturbation: [0.85, 1.15]   # Tốc độ nói nhanh/chậm
+  pitch_shift: [-3, 3]               # Biến thiên cao độ
+  background_noises:
+    - traffic_noise: 0.35            # Tiếng còi xe, đường phố Việt Nam
+    - car_cabin_noise: 0.30          # Tiếng máy xe, gió trong cabin xe
+    - cafe_babble: 0.20              # Tiếng ồn quán xá
+    - pure_silence: 0.15
+
+negative_dataset:
+  common_voice_vi_hours: 120        # 120 giờ âm thanh đàm thoại tiếng Việt thông thường
+  hard_negatives:
+    - "ô la"
+    - "hê la"
+    - "a lô em"
+    - "ét em"
+    - "ola"
+    - "hôm nay"
+    - "alo"
+
+training_hyperparameters:
+  model_type: "conv_attention"
+  conv_layers: 3
+  conv_channels: 64
+  attention_heads: 4
+  embedding_dim: 96
+  sequence_length: 16
+  learning_rate: 0.001
+  batch_size: 512
+  epochs: 60
+  loss: "focal_loss"
+  focal_loss_gamma: 2.0
+  early_stopping_patience: 8
+
+evaluation:
+  target_recall: 0.88               # > 88%
+  target_fpph: 0.05                 # < 0.05 False Positives Per Hour
+  default_threshold: 0.68
+
+export:
+  format: "onnx"
+  quantization: "int8"
+  target_platforms:
+    - "android_nnapi"
+    - "ios_coreml"
+  output_model_name: "hey_olasm_int8.onnx"

@@ -556,6 +556,14 @@ async def olasm_voice_session(ctx: JobContext) -> None:
         duration_ms=room_connect_duration_ms,
     )
 
+    def _on_mobile_data_received(dp: object) -> None:
+        topic = str(getattr(dp, "topic", "") or "")
+        if topic == "lk.agent.pre-connect-audio-buffer":
+            payload_len = len(getattr(dp, "data", b"") or b"")
+            logger.info("mobile_preconnect_audio_frame_received bytes=%d", payload_len)
+
+    ctx.room.on("data_received", _on_mobile_data_received)
+
     state_store = _process_state_store(ctx)
     knowledge_service = _process_knowledge(ctx)
     pricing_service = _process_pricing(ctx)

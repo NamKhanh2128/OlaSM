@@ -8,6 +8,7 @@ from src.backend.api.routes.health import router as health_router
 from src.backend.api.routes.livekit import router as livekit_router
 from src.backend.api.routes.maps import route_router as maps_route_router
 from src.backend.api.routes.maps import router as maps_router
+from src.backend.api.routes.mobile import router as mobile_router
 from src.backend.api.routes.policies import router as policies_router
 from src.backend.api.routes.quotes import router as quotes_router
 from src.backend.api.routes.sessions import router as sessions_router
@@ -23,6 +24,7 @@ router.include_router(sessions_router)
 router.include_router(bookings_router)
 router.include_router(handoffs_router)
 router.include_router(livekit_router)
+router.include_router(mobile_router)
 router.include_router(policies_router)
 router.include_router(quotes_router)
 router.include_router(trips_router)

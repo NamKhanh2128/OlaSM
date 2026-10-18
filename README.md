@@ -160,4 +160,10 @@ Biến môi trường cần thiết: xem `.env.example`.
 
 ---
 
+## 👥 Phân công công việc (Khánh & Phương)
+
+Chi tiết phân chia 50% - 50% khối lượng công việc kỹ thuật giữa **Khánh** (Lead Mobile & Edge AI) và **Phương** (Lead Backend & DevOps): xem tại [docs/PHAN_CONG_CONG_VIEC.md](docs/PHAN_CONG_CONG_VIEC.md).
+
+---
+
 *OlaSM Voice Core — phát triển trong khuôn khổ VRIC × GSM Smart City, Nhóm 4: Mobility Assistant*

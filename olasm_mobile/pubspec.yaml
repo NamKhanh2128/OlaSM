@@ -1,0 +1,48 @@
+name: olasm_mobile
+description: "OlaSM AI Voice Assistant Mobile Application"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # LiveKit Realtime Voice Communication
+  livekit_client: ^2.4.5
+
+  # State Management & DI
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Native Audio & Route Management
+  audio_session: ^0.1.22
+  permission_handler: ^11.3.1
+
+  # Networking & Serialization
+  dio: ^5.7.0
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+  uuid: ^4.5.1
+
+  # UI, Animation & Haptics
+  flutter_animate: ^4.5.2
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.15
+  freezed: ^2.5.8
+  json_serializable: ^6.9.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/models/
+    - assets/sounds/
