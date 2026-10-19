@@ -122,3 +122,33 @@ infra/maps/nominatim/data/
 
 # Local manual-review screenshots and notes are evidence artifacts, not source.
 test_cases/
+
+# Flutter & Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+**/build/
+
+# Android build & cache
+.gradle/
+**/.gradle/
+**/android/.gradle/
+**/android/app/build/
+**/android/build/
+**/android/captures/
+**/android/*.iml
+**/android/.cxx/
+local.properties
+
+# iOS build & pods
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/App.framework
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+
